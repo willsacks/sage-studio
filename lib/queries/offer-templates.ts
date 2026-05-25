@@ -1,31 +1,32 @@
+import { createClient } from "@/lib/supabase/server";
+import type { Tables } from "@/lib/db";
 import type { PageData, PageTheme } from "@/lib/types/builder";
 
-// Stub type for offer templates — stubbed since templates come from site page templates in Sage Studio
-export type OfferTemplate = {
-  id: string;
-  owner_id: string | null;
-  owner_type: string;
-  name: string;
-  description: string | null;
-  category: string | null;
+export type OfferTemplate = Tables<"offer_templates"> & {
   page_data: PageData;
   theme: PageTheme | null;
-  promoted: boolean;
-  use_count: number;
-  created_at: string;
-  updated_at: string;
-  // Extended fields used by Builder
   template_key?: string | null;
   thumbnail_url?: string | null;
-  status?: string;
-  is_promoted?: boolean;
+  name: string; // alias for title — components reference .name
+  is_promoted?: boolean; // alias for promoted
 };
 
-// Stubbed — Sage Studio does not use platform/personal offer templates
-export async function getPlatformTemplates(): Promise<OfferTemplate[]> {
-  return [];
+export async function getMyTemplates(): Promise<OfferTemplate[]> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data } = await supabase
+    .from("offer_templates")
+    .select("*")
+    .eq("owner_id", user.id)
+    .eq("owner_type", "member")
+    .order("created_at", { ascending: false });
+
+  return (data ?? []) as unknown as OfferTemplate[];
 }
 
-export async function getMyTemplates(): Promise<OfferTemplate[]> {
+// Stub — platform templates not used in Sage Studio
+export async function getPlatformTemplates(): Promise<OfferTemplate[]> {
   return [];
 }
