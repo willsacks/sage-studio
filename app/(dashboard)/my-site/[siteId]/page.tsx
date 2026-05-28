@@ -3,7 +3,9 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getSiteById, getPagesForSite } from "@/lib/queries/sites";
+import { getFormSubmissionsForSite } from "@/lib/queries/form-submissions";
 import { toggleSitePublished, togglePagePublished, updatePageVisibility } from "@/lib/actions/sites";
+import { MarkSubmissionsReadOnMount } from "@/components/site/MarkSubmissionsReadOnMount";
 import { ArrowLeft, Globe, Pencil, ExternalLink, Settings, Eye, EyeOff, Palette, Home, Navigation, PanelTop } from "lucide-react";
 import { format } from "date-fns";
 import { PageTypePicker } from "@/components/site/PageTypePicker";
@@ -31,6 +33,9 @@ export default async function SitePageManagerPage({ params }: { params: Promise<
     getPagesForSite(siteId),
   ]);
   if (!site || site.user_id !== user.id) notFound();
+
+  const submissions = await getFormSubmissionsForSite(site.slug);
+  const unreadSubmissions = submissions.filter((s) => !s.is_read).length;
 
   const homePageId = site.home_page_id ?? pages.find((p) => p.page_type === "home")?.id ?? pages[0]?.id;
 
@@ -220,6 +225,70 @@ export default async function SitePageManagerPage({ params }: { params: Promise<
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* Form Submissions */}
+      <div>
+        {unreadSubmissions > 0 && <MarkSubmissionsReadOnMount siteSlug={site.slug} />}
+        <div className="flex items-center gap-3 mb-4">
+          <h2 className="font-semibold text-[var(--foreground)]">Form Submissions</h2>
+          {unreadSubmissions > 0 && (
+            <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-[var(--primary)] text-[var(--primary-foreground)] text-[10px] font-bold">
+              {unreadSubmissions} new
+            </span>
+          )}
+        </div>
+
+        {submissions.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-10 border border-dashed border-[var(--border)] rounded-xl text-center">
+            <p className="text-sm text-[var(--muted-foreground)]">No submissions yet.</p>
+            <p className="text-xs text-[var(--muted-foreground)] opacity-70">Applications submitted through your form blocks will appear here.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {submissions.map((sub) => {
+              const pairs = sub.questions.map((q) => ({
+                label: q.label,
+                type: q.type,
+                answer: sub.answers[q.id] ?? "",
+              })).filter((p) => p.answer);
+              return (
+                <details
+                  key={sub.id}
+                  className="group rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-hidden"
+                >
+                  <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none list-none">
+                    {!sub.is_read && (
+                      <span className="w-2 h-2 rounded-full bg-[var(--primary)] flex-shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-[var(--foreground)] truncate">
+                        {sub.answers[sub.questions.find((q) => q.type === "short_text")?.id ?? ""] ||
+                          sub.answers[sub.questions[0]?.id ?? ""] ||
+                          "Anonymous"}
+                      </p>
+                      <p className="text-xs text-[var(--muted-foreground)]">
+                        {sub.form_title} · {format(new Date(sub.created_at), "MMM d, yyyy 'at' h:mm a")}
+                      </p>
+                    </div>
+                    <span className="text-[var(--muted-foreground)] text-xs group-open:hidden">View</span>
+                    <span className="text-[var(--muted-foreground)] text-xs hidden group-open:inline">Close</span>
+                  </summary>
+                  <div className="px-4 pb-4 pt-1 border-t border-[var(--border)] space-y-3">
+                    {pairs.map(({ label, type, answer }) => (
+                      <div key={label}>
+                        <p className="text-[11px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-0.5">{label}</p>
+                        <p className="text-sm text-[var(--foreground)] whitespace-pre-wrap">
+                          {type === "select_multiple" ? answer.split("|||").join(", ") : answer}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              );
+            })}
           </div>
         )}
       </div>

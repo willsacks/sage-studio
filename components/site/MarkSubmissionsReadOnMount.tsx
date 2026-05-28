@@ -1,7 +1,11 @@
 "use client";
 
-// Stub: form submission read-tracking is not implemented in Sage Studio.
+import { useEffect } from "react";
+import { markSiteSubmissionsRead } from "@/lib/queries/form-submissions";
+
 export function MarkSubmissionsReadOnMount({ siteSlug }: { siteSlug: string }) {
-  void siteSlug;
+  useEffect(() => {
+    markSiteSubmissionsRead(siteSlug).catch(() => {});
+  }, [siteSlug]);
   return null;
 }

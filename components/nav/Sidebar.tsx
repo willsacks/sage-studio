@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Globe, Timer, Store, CreditCard, Settings, Leaf, LogOut, ExternalLink } from "lucide-react";
+import { Globe, Timer, Store, CreditCard, Settings, Leaf, LogOut, ExternalLink, LayoutDashboard } from "lucide-react";
 import { signOut } from "@/lib/actions/auth";
 
 interface SidebarProps {
   displayName: string | null;
   plan: "free" | "pro";
+  isAdmin?: boolean;
 }
 
 const NAV = [
@@ -39,7 +40,7 @@ function NavItem({ href, label, icon: Icon }: { href: string; label: string; ico
   );
 }
 
-export function Sidebar({ displayName, plan }: SidebarProps) {
+export function Sidebar({ displayName, plan, isAdmin }: SidebarProps) {
   return (
     <aside className="hidden lg:flex flex-col w-56 flex-shrink-0 bg-[var(--sidebar-background)] border-r border-[var(--sidebar-border)] h-screen sticky top-0">
       {/* Logo */}
@@ -66,6 +67,17 @@ export function Sidebar({ displayName, plan }: SidebarProps) {
         {SETTINGS_NAV.map((item) => (
           <NavItem key={item.href} {...item} />
         ))}
+
+        {isAdmin && (
+          <>
+            <div className="pt-4 pb-1">
+              <p className="px-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+                Admin
+              </p>
+            </div>
+            <NavItem href="/admin" label="Platform Admin" icon={LayoutDashboard} />
+          </>
+        )}
 
         {/* CC crosslink */}
         <div className="pt-4">

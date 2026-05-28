@@ -85,14 +85,35 @@ export function SiteStyleSelector({ selectedKey, onSelect }: SiteStyleSelectorPr
                     : "border-[var(--border)] hover:border-[var(--primary)]/50"
                 )}
               >
-                {/* Thumbnail */}
-                <div className="relative h-28 w-full overflow-hidden bg-[var(--muted)]">
-                  <img
-                    src={`/style-thumbnails/${style.styleKey}.svg`}
-                    alt={style.name}
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                  />
+                {/* Thumbnail — CSS preview from theme tokens */}
+                <div
+                  className="relative h-28 w-full overflow-hidden flex flex-col"
+                  style={{ backgroundColor: tokens.colorBackground, fontFamily: tokens.fontBody }}
+                >
+                  {/* Simulated nav bar */}
+                  <div className="flex items-center justify-between px-3 pt-2.5 pb-1.5" style={{ borderBottom: `1px solid ${tokens.colorAccent}22` }}>
+                    <div className="text-[8px] font-bold tracking-wide" style={{ color: tokens.colorText, fontFamily: tokens.fontDisplay }}>SITE</div>
+                    <div className="flex gap-1.5">
+                      {["About", "Work"].map((l) => (
+                        <div key={l} className="text-[6px]" style={{ color: tokens.colorText, opacity: 0.5 }}>{l}</div>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Simulated hero */}
+                  <div className="flex-1 flex flex-col justify-center px-3 gap-1">
+                    <div className="text-[11px] font-bold leading-tight" style={{ color: tokens.colorText, fontFamily: tokens.fontDisplay }}>
+                      Artist Name
+                    </div>
+                    <div className="text-[7px] leading-snug" style={{ color: tokens.colorText, opacity: 0.6 }}>
+                      A short tagline about the work
+                    </div>
+                    <div
+                      className="mt-1 self-start text-[6px] px-2 py-0.5 rounded-sm font-medium"
+                      style={{ backgroundColor: tokens.colorAccent, color: tokens.colorBackground }}
+                    >
+                      View Work
+                    </div>
+                  </div>
                   {isSelected && (
                     <div className="absolute inset-0 bg-[var(--primary)]/20 flex items-center justify-center">
                       <div className="bg-[var(--primary)] text-[var(--primary-foreground)] rounded-full p-1">

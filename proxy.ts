@@ -73,7 +73,8 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/my-templates") ||
     pathname.startsWith("/settings") ||
     pathname.startsWith("/billing") ||
-    pathname.startsWith("/onboarding");
+    pathname.startsWith("/onboarding") ||
+    pathname.startsWith("/admin");
 
   if (isProtected && !user) {
     const loginUrl = new URL("/login", request.url);

@@ -9,10 +9,11 @@ export type ActionResult<T = void> =
 
 export async function signInWithMagicLink(email: string): Promise<ActionResult> {
   const supabase = await createClient();
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://sagestudio.org";
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/callback`,
+      emailRedirectTo: `${appUrl}/api/auth/callback`,
     },
   });
   if (error) return { success: false, error: error.message };
@@ -21,10 +22,11 @@ export async function signInWithMagicLink(email: string): Promise<ActionResult> 
 
 export async function signInWithGoogle(): Promise<ActionResult<{ url: string }>> {
   const supabase = await createClient();
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://sagestudio.org";
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/callback`,
+      redirectTo: `${appUrl}/api/auth/callback`,
     },
   });
   if (error) return { success: false, error: error.message };

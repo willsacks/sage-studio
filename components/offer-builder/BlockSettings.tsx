@@ -487,6 +487,7 @@ function CornerNavSettings({ data, update }: { data: CornerNavBlockData; update:
   const socialLinks = data.socialLinks ?? [];
   const bgType = data.backgroundType ?? "color";
   const siteContext = useBuilderStore((s) => s.siteContext);
+  const [manualKeys, setManualKeys] = useState<Set<string>>(new Set());
 
   function addSocialLink() {
     const used = new Set(socialLinks.map((l) => l.platform));
@@ -574,12 +575,20 @@ function CornerNavSettings({ data, update }: { data: CornerNavBlockData; update:
                   currentUrl === `/sites/${siteContext.siteSlug}/${p.slug}`
                 );
                 const normalizedUrl = currentUrl.replace(`/sites/${siteContext.siteSlug}`, "");
-                const selectVal = currentUrl === "" ? "" : isPageUrl ? normalizedUrl : "__custom__";
+                const isManual = manualKeys.has(urlKey) || (!isPageUrl && currentUrl !== "");
+                const selectVal = isManual ? "__custom__" : (currentUrl === "" ? "" : normalizedUrl);
                 return (
                   <>
                     <select
                       value={selectVal}
-                      onChange={(e) => { if (e.target.value !== "__custom__") update({ [urlKey]: e.target.value }); }}
+                      onChange={(e) => {
+                        if (e.target.value === "__custom__") {
+                          setManualKeys((prev) => new Set([...prev, urlKey]));
+                        } else {
+                          setManualKeys((prev) => { const next = new Set(prev); next.delete(urlKey); return next; });
+                          update({ [urlKey]: e.target.value });
+                        }
+                      }}
                       className="w-full px-2 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)]"
                     >
                       <option value="">— no link —</option>

@@ -126,7 +126,7 @@ export function Builder({ page, artistUsername, isAdmin, templates, saveAction, 
     : null;
 
   return (
-    <div className="h-screen flex flex-col bg-[var(--background)] text-[var(--foreground)]">
+    <div className="fixed inset-0 z-50 flex flex-col bg-[var(--background)] text-[var(--foreground)]">
       {/* Top Bar */}
       <header className="flex items-center gap-3 px-4 h-14 border-b border-[var(--border)] bg-[var(--card)] flex-shrink-0">
         {/* Back link */}

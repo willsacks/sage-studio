@@ -1,41 +1,50 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Leaf, ArrowRight, Loader2 } from "lucide-react";
-import { signInWithMagicLink, signInWithGoogle } from "@/lib/actions/auth";
+import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
 
   async function handleMagicLink(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const result = await signInWithMagicLink(email);
+    const supabase = createClient();
+    const { error: err } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: `${window.location.origin}/api/auth/callback`,
+      },
+    });
     setLoading(false);
-    if (result.success) {
-      setSent(true);
+    if (err) {
+      setError(err.message);
     } else {
-      setError(result.error);
+      setSent(true);
     }
   }
 
   async function handleGoogle() {
     setLoading(true);
     setError(null);
-    const result = await signInWithGoogle();
-    if (result.success && result.data?.url) {
-      router.push(result.data.url);
-    } else if (!result.success) {
-      setError(result.error);
+    const supabase = createClient();
+    const { error: err } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/api/auth/callback`,
+      },
+    });
+    if (err) {
+      setError(err.message);
       setLoading(false);
     }
+    // On success Supabase redirects the browser automatically
   }
 
   return (

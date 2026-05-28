@@ -32,11 +32,11 @@ export default function HomePage() {
       <section className="max-w-5xl mx-auto px-6 pt-20 pb-24 text-center">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--accent)] text-[var(--primary)] text-xs font-medium mb-8">
           <Heart size={11} fill="currentColor" />
-          Half of Pro revenue goes to arts advocacy
+          Half of Pro profits go to arts advocacy organizations
         </div>
         <h1 className="text-5xl sm:text-6xl font-bold tracking-tight leading-tight max-w-3xl mx-auto">
-          Free tools for artists.{" "}
-          <span className="text-[var(--primary)]">Built by an artist.</span>
+          Free tools for artists{" "}
+          <span className="text-[var(--primary)]">built by artists.</span>
         </h1>
         <p className="mt-6 text-lg text-[var(--muted-foreground)] max-w-xl mx-auto leading-relaxed">
           Build your artist website, track your creative time, and publish your work — free, forever. No credit card, no catch.
@@ -140,7 +140,7 @@ export default function HomePage() {
             <div>
               <p className="font-semibold">Pro</p>
               <p className="text-4xl font-bold mt-2">$5 <span className="text-base font-normal text-[var(--muted-foreground)]">/ month</span></p>
-              <p className="text-xs text-[var(--muted-foreground)] mt-1">Half goes to arts advocacy.</p>
+              <p className="text-xs text-[var(--muted-foreground)] mt-1">Half of profits go to arts advocacy organizations.</p>
             </div>
             <ul className="space-y-2">
               {["Everything in Free", "Custom domain", "Unlimited sites", "Unlimited pages", "Support an arts advocate"].map((f) => (
@@ -167,7 +167,7 @@ export default function HomePage() {
           </div>
           <h3 className="font-semibold text-lg">Artists helping artists</h3>
           <p className="text-sm text-[var(--muted-foreground)] max-w-md mx-auto leading-relaxed">
-            Sage Studio was built by Will Sage — musician, producer, creator. Half of every Pro subscription goes to arts advocacy organizations fighting to keep the arts alive and accessible.
+            Sage Studio was built by Will Sage — musician, producer, creator. Half of every Pro subscription's profits go to arts advocacy organizations fighting to keep the arts alive and accessible.
           </p>
           <p className="text-xs text-[var(--muted-foreground)]">
             Interested in joining Creator Circle, Will's artist accountability community?{" "}
