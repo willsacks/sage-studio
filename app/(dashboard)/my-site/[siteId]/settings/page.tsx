@@ -20,8 +20,8 @@ export default async function SiteSettingsPage({ params }: { params: Promise<{ s
   const site = await getSiteById(siteId);
   if (!site || site.user_id !== user.id) notFound();
 
-  const { data: profile } = await supabase.from("profiles").select("tier_key").eq("id", user.id).single();
-  const isPro = isProPlan(profile?.tier_key ?? "");
+  const { data: profile } = await supabase.from("profiles").select("tier_key, role").eq("id", user.id).single();
+  const isPro = isProPlan(profile?.tier_key ?? "", profile?.role);
 
   return (
     <div className="max-w-2xl space-y-6">

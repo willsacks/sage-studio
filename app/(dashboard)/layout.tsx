@@ -16,7 +16,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   if (!profile?.onboarding_done) redirect("/onboarding");
 
-  const plan = isProPlan(profile?.tier_key ?? "") ? "pro" : "free";
+  const plan = isProPlan(profile?.tier_key ?? "", profile?.role) ? "pro" : "free";
   const isAdmin = profile?.role === "admin";
 
   return (

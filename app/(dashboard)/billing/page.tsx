@@ -12,11 +12,11 @@ export default async function BillingPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("tier_key")
+    .select("tier_key, role")
     .eq("id", user.id)
     .single();
 
-  const isPro = isProPlan(profile?.tier_key ?? "");
+  const isPro = isProPlan(profile?.tier_key ?? "", profile?.role);
 
   return (
     <div className="space-y-6">

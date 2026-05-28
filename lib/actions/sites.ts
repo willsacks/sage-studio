@@ -43,10 +43,10 @@ export async function createSiteWithStyle(name: string, styleKey: string): Promi
     .select("*", { count: "exact", head: true })
     .eq("user_id", user.id);
   const { data: profile } = await supabase
-    .from("profiles").select("tier_key").eq("id", user.id).single();
+    .from("profiles").select("tier_key, role").eq("id", user.id).single();
   const { isProPlan } = await import("@/lib/plan-gates");
   const { canCreateSite } = await import("@/lib/plan-gates");
-  const plan = isProPlan(profile?.tier_key ?? "") ? "pro" as const : "free" as const;
+  const plan = isProPlan(profile?.tier_key ?? "", profile?.role) ? "pro" as const : "free" as const;
   if (!canCreateSite(plan, siteCount ?? 0)) {
     return { error: "Upgrade to Pro to create more than 1 site" };
   }
@@ -177,9 +177,9 @@ export async function addSitePage(
   const { supabase, user } = await requireAuth();
 
   const { data: profile } = await supabase
-    .from("profiles").select("tier_key").eq("id", user.id).single();
+    .from("profiles").select("tier_key, role").eq("id", user.id).single();
   const { isProPlan, canAddPage } = await import("@/lib/plan-gates");
-  const plan = isProPlan(profile?.tier_key ?? "") ? "pro" as const : "free" as const;
+  const plan = isProPlan(profile?.tier_key ?? "", profile?.role) ? "pro" as const : "free" as const;
 
   const baseSlug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   const slug = pageType === "home" ? "home" : `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`;
@@ -259,9 +259,9 @@ export async function setCustomDomain(siteId: string, domain: string) {
   const { supabase, user } = await requireAuth();
 
   const { data: profile } = await supabase
-    .from("profiles").select("tier_key").eq("id", user.id).single();
+    .from("profiles").select("tier_key, role").eq("id", user.id).single();
   const { isProPlan } = await import("@/lib/plan-gates");
-  if (!isProPlan(profile?.tier_key ?? "")) {
+  if (!isProPlan(profile?.tier_key ?? "", profile?.role)) {
     return { error: "Custom domains require a Pro plan. Upgrade to unlock." };
   }
 

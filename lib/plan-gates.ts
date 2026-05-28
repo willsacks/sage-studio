@@ -1,11 +1,12 @@
 // Sage Studio Free vs Pro gates
 // Free: 1 site, 5 pages, sagestudio.org subdomain, all features
 // Pro ($5/mo): custom domain, unlimited sites, unlimited pages
+// Admin: all Pro features, no paywall
 
 export type StudioPlan = "free" | "pro";
 
-export function isProPlan(tierKey: string): boolean {
-  return tierKey === "studio_pro";
+export function isProPlan(tierKey: string, role?: string | null): boolean {
+  return tierKey === "studio_pro" || role === "admin";
 }
 
 export function canUseCustomDomain(plan: StudioPlan): boolean {
