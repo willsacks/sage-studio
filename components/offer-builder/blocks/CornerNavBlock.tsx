@@ -1,22 +1,26 @@
 "use client";
 
-import { Globe, Music, Music2 } from "lucide-react";
+import { Globe } from "lucide-react";
+import {
+  FaInstagram, FaSpotify, FaYoutube, FaTiktok, FaXTwitter,
+  FaFacebook, FaSoundcloud, FaApple, FaBandcamp,
+} from "react-icons/fa6";
 import type { CornerNavBlockData, SocialPlatform } from "@/lib/types/builder";
 import type React from "react";
 
-type IconComponent = React.ComponentType<{ size?: number; strokeWidth?: number }>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type IconComponent = React.ComponentType<any>;
 
-// Social icons removed from lucide-react v1 — using Music/Globe fallbacks
 const PLATFORM_ICONS: Record<SocialPlatform, IconComponent> = {
-  instagram: Globe,
-  spotify: Music,
-  youtube: Music2,
-  tiktok: Music2,
-  twitter: Globe,
-  facebook: Globe,
-  soundcloud: Music2,
-  apple_music: Music,
-  bandcamp: Music,
+  instagram: FaInstagram,
+  spotify: FaSpotify,
+  youtube: FaYoutube,
+  tiktok: FaTiktok,
+  twitter: FaXTwitter,
+  facebook: FaFacebook,
+  soundcloud: FaSoundcloud,
+  apple_music: FaApple,
+  bandcamp: FaBandcamp,
   website: Globe,
 };
 
