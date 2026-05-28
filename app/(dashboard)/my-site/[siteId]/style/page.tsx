@@ -5,7 +5,9 @@ import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getSiteById } from "@/lib/queries/sites";
 import { SiteStyleEditor } from "@/components/site/SiteStyleEditor";
+import { OrnamentSelector } from "@/components/site/OrnamentSelector";
 import { DEFAULT_STYLE_KEY } from "@/lib/styles";
+import { DEFAULT_ORNAMENT_KEY } from "@/lib/ornaments";
 
 export const metadata: Metadata = { title: "Site Style" };
 
@@ -20,6 +22,7 @@ export default async function SiteStylePage({ params }: { params: Promise<{ site
 
   const currentStyleKey = site.style_key ?? DEFAULT_STYLE_KEY;
   const currentFontScale = site.font_scale ?? 1;
+  const currentOrnamentKey = (site as { ornamentation_key?: string | null }).ornamentation_key ?? DEFAULT_ORNAMENT_KEY;
 
   return (
     <div className="space-y-6">
@@ -36,6 +39,16 @@ export default async function SiteStylePage({ params }: { params: Promise<{ site
         </p>
       </div>
       <SiteStyleEditor siteId={siteId} currentStyleKey={currentStyleKey} currentFontScale={currentFontScale} />
+
+      <div className="space-y-3 pt-2">
+        <div>
+          <h2 className="text-lg font-semibold">Ornamentation</h2>
+          <p className="text-sm text-[var(--muted-foreground)] mt-0.5">
+            Decorative characters used for dividers and accents throughout your site. Mix with any style.
+          </p>
+        </div>
+        <OrnamentSelector siteId={siteId} currentKey={currentOrnamentKey} />
+      </div>
     </div>
   );
 }

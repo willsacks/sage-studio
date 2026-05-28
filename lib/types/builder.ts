@@ -169,7 +169,7 @@ export interface SpacerBlockData {
 }
 
 export interface DividerBlockData {
-  style: "line" | "dotted" | "gradient";
+  style: "line" | "dotted" | "gradient" | "ornament";
   width?: "full" | "centered";
 }
 

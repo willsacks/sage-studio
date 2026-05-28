@@ -88,3 +88,10 @@
     -moz-osx-font-smoothing: grayscale;
   }
 }
+
+/* Ornamentation — divider char rendered via CSS custom property */
+.st-ornament-divider::before {
+  content: var(--st-ornament-divider, "◎");
+  display: block;
+  text-align: center;
+}

@@ -11,6 +11,26 @@ export function DividerBlock({
   const widthClass =
     data.width === "centered" ? "w-1/2 mx-auto" : "w-full";
 
+  if (data.style === "ornament") {
+    return (
+      <div
+        className="w-full px-8 py-6 flex items-center justify-center"
+        style={{ backgroundColor: "var(--st-color-background, #0E0C09)" }}
+      >
+        <div
+          className={`st-ornament-divider ${data.width === "centered" ? "w-1/2" : "w-full"}`}
+          style={{
+            color: "var(--st-color-accent, #C9A84C)",
+            opacity: 0.6,
+            fontSize: "1.1em",
+            letterSpacing: "0.5em",
+          }}
+          role="separator"
+        />
+      </div>
+    );
+  }
+
   let ruleStyle: React.CSSProperties;
 
   switch (data.style) {

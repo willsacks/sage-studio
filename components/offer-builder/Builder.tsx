@@ -31,6 +31,7 @@ interface BuilderProps {
   saveSettingsAction?: (id: string, data: { slug: string; publish_mode: string; custom_domain?: string; og_image?: string | null; og_title?: string | null; og_description?: string | null }) => Promise<void>;
   siteContext?: { siteSlug: string; pages: SitePageRef[] };
   siteStyleVars?: string;
+  ornamentStyleVars?: string;
   previewUrlOverride?: string | null;
   backUrl?: string;
 }
@@ -44,7 +45,7 @@ const VIEWPORT_BUTTONS: { id: Viewport; icon: typeof Monitor; label: string }[] 
   { id: "mobile", icon: Smartphone, label: "Mobile" },
 ];
 
-export function Builder({ page, artistUsername, isAdmin, templates, saveAction, publishAction, saveSettingsAction, siteContext, siteStyleVars, previewUrlOverride, backUrl }: BuilderProps) {
+export function Builder({ page, artistUsername, isAdmin, templates, saveAction, publishAction, saveSettingsAction, siteContext, siteStyleVars, ornamentStyleVars, previewUrlOverride, backUrl }: BuilderProps) {
   const { reset, blocks, theme, isDirty, markSaved, selectedBlockId, setSiteContext } = useBuilderStore();
 
   const [modal, setModal] = useState<Modal>(null);
@@ -243,8 +244,8 @@ export function Builder({ page, artistUsername, isAdmin, templates, saveAction, 
       <div className="flex flex-1 overflow-hidden">
         <BlockLibrary selectedBlockId={selectedBlockId} />
         <main className="flex-1 overflow-hidden" data-builder-canvas>
-          {siteStyleVars && (
-            <style>{`[data-builder-canvas] { ${siteStyleVars} }`}</style>
+          {(siteStyleVars || ornamentStyleVars) && (
+            <style>{`[data-builder-canvas] { ${siteStyleVars ?? ""} ${ornamentStyleVars ?? ""} }`}</style>
           )}
           <Canvas viewport={viewport} />
         </main>

@@ -75,6 +75,18 @@ export async function setSiteStyle(siteId: string, styleKey: string) {
   return { success: true };
 }
 
+export async function setSiteOrnamentation(siteId: string, ornamentKey: string) {
+  const { supabase, user } = await requireAuth();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (supabase as any)
+    .from("artist_sites")
+    .update({ ornamentation_key: ornamentKey, updated_at: new Date().toISOString() })
+    .eq("id", siteId)
+    .eq("user_id", user.id);
+  revalidatePath(`/my-site/${siteId}/style`);
+  return { success: true };
+}
+
 export async function setSiteFontScale(siteId: string, fontScale: number) {
   const { supabase, user } = await requireAuth();
   await supabase

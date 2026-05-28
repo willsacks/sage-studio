@@ -1236,7 +1236,7 @@ export function BlockSettings() {
           <div className="space-y-4">
             <Field label="Style">
               <Select value={(block.data as DividerBlockData).style} onChange={(v) => update({ style: v })}
-                options={[{ value: "line", label: "Solid Line" }, { value: "dotted", label: "Dotted" }, { value: "gradient", label: "Gradient" }]}
+                options={[{ value: "line", label: "Solid Line" }, { value: "dotted", label: "Dotted" }, { value: "gradient", label: "Gradient" }, { value: "ornament", label: "Ornament" }]}
               />
             </Field>
             <Field label="Width">

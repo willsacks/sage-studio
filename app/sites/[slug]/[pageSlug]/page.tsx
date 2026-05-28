@@ -6,6 +6,7 @@ import { SiteNav } from "@/components/site/SiteNav";
 import type { PageData } from "@/lib/types/builder";
 import { THEMES_BY_KEY, DEFAULT_STYLE_KEY, buildStyleCssVars, buildGoogleFontsUrl, getFontsForTokens } from "@/lib/styles";
 import type { StyleTokens } from "@/lib/styles";
+import { ORNAMENTS_BY_KEY, DEFAULT_ORNAMENT_KEY, buildOrnamentCssVars } from "@/lib/ornaments";
 
 export async function generateMetadata({
   params,
@@ -62,6 +63,9 @@ export default async function PublicSitePageRoute({
   const { tokens } = siteStyle;
 
   const cssVars = buildStyleCssVars(tokens);
+  const ornamentKey = (site as { ornamentation_key?: string | null }).ornamentation_key ?? DEFAULT_ORNAMENT_KEY;
+  const ornamentTokens = (ORNAMENTS_BY_KEY[ornamentKey] ?? ORNAMENTS_BY_KEY[DEFAULT_ORNAMENT_KEY]).tokens;
+  const ornamentVars = buildOrnamentCssVars(ornamentTokens);
   const fontsUrl = buildGoogleFontsUrl(getFontsForTokens(tokens));
   const fontScale = site.font_scale ?? 1;
   const blocks = (page.page_data as unknown as PageData) ?? [];
@@ -76,7 +80,7 @@ export default async function PublicSitePageRoute({
       <style>{`
         @import url('${fontsUrl}');
         html { font-size: calc(16px * ${fontScale}); }
-        :root { ${cssVars} }
+        :root { ${cssVars} ${ornamentVars} }
         body { font-family: "${tokens.fontBody}", serif; color: ${tokens.colorText}; }
       `}</style>
 

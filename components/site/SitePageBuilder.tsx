@@ -7,6 +7,7 @@ import type { OfferTemplate } from "@/lib/queries/offer-templates";
 import type { OfferPage } from "@/lib/queries/offer-pages";
 import type { PageData, PageTheme } from "@/lib/types/builder";
 import { THEMES_BY_KEY, DEFAULT_STYLE_KEY, buildStyleCssVars } from "@/lib/styles";
+import { ORNAMENTS_BY_KEY, DEFAULT_ORNAMENT_KEY, buildOrnamentCssVars } from "@/lib/ornaments";
 
 interface SitePageBuilderProps {
   page: SitePage;
@@ -48,6 +49,9 @@ export function SitePageBuilder({ page, site, allPages, username, isAdmin, templ
   const styleKey = site.style_key ?? DEFAULT_STYLE_KEY;
   const { tokens } = THEMES_BY_KEY[styleKey] ?? THEMES_BY_KEY[DEFAULT_STYLE_KEY];
   const siteStyleVars = buildStyleCssVars(tokens);
+  const ornamentKey = (site as { ornamentation_key?: string | null }).ornamentation_key ?? DEFAULT_ORNAMENT_KEY;
+  const ornamentTokens = (ORNAMENTS_BY_KEY[ornamentKey] ?? ORNAMENTS_BY_KEY[DEFAULT_ORNAMENT_KEY]).tokens;
+  const ornamentStyleVars = buildOrnamentCssVars(ornamentTokens);
 
   const previewUrl = `/sites/${site.slug}/${page.slug}`;
 
@@ -67,6 +71,7 @@ export function SitePageBuilder({ page, site, allPages, username, isAdmin, templ
       saveSettingsAction={handleSaveSettings}
       siteContext={siteContext}
       siteStyleVars={siteStyleVars}
+      ornamentStyleVars={ornamentStyleVars}
       previewUrlOverride={previewUrl}
       backUrl={`/my-site/${site.id}`}
     />
