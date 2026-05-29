@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 
 const GOLD = "#C9A84C";
 const BG = "#0E0C09";
@@ -16,6 +16,7 @@ const PACKAGES = [
     key: "3mo",
     name: "3-Month Forge",
     months: 3,
+    highlight: false,
     full: { key: "3mo-full", price: "$1,250", note: "one-time" },
     monthly: { key: "3mo-monthly", price: "$475", note: "/mo for 3 months" },
     features: ["Weekly group coaching calls", "Accountability partner pairing", "Private Guild community", "Monthly 1:1 check-in"],
@@ -24,20 +25,21 @@ const PACKAGES = [
     key: "6mo",
     name: "6-Month Forge",
     months: 6,
+    highlight: true,
     full: { key: "6mo-full", price: "$2,100", note: "one-time" },
     monthly: { key: "6mo-monthly", price: "$400", note: "/mo for 6 months" },
-    highlight: true,
     features: ["Everything in 3-Month", "Deeper creative transformation", "Extended accountability arc", "Access to Guild archives"],
   },
   {
     key: "12mo",
     name: "12-Month Forge",
     months: 12,
+    highlight: false,
     full: { key: "12mo-full", price: "$3,750", note: "one-time" },
     monthly: { key: "12mo-monthly", price: "$350", note: "/mo for 12 months" },
     features: ["Everything in 6-Month", "Full year of creative momentum", "Priority access to new programs", "Lifetime Guild alumni status"],
   },
-] as const;
+];
 
 function Spinner() {
   return (
