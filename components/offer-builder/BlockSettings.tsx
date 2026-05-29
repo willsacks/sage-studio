@@ -4,7 +4,7 @@ import { useBuilderStore } from "@/lib/store/builder";
 import { BLOCK_LABELS } from "@/lib/types/builder";
 import type {
   HeroBlockData, TextBlockData, FeatureGridBlockData, TestimonialBlockData,
-  PricingCardBlockData, PricingTier, ImageTextBlockData, GuaranteeBlockData,
+  PricingCardBlockData, PricingTier, ImageBlockData, ImageTextBlockData, GuaranteeBlockData,
   CTABannerBlockData, VideoEmbedBlockData, SpacerBlockData, DividerBlockData,
   CornerNavBlockData, SocialPlatform, ApplicationFormBlockData, FormField, FormFieldType,
   MusicEmbedBlockData, AlbumShowcaseBlockData, DiscographyBlockData, MusicPlatform,
@@ -1158,6 +1158,73 @@ export function BlockSettings() {
         {block.type === "feature_grid" && <FeatureGridSettings data={block.data as FeatureGridBlockData} update={update} />}
         {block.type === "testimonial" && <TestimonialSettings data={block.data as TestimonialBlockData} update={update} />}
         {block.type === "pricing_card" && <PricingSettings data={block.data as PricingCardBlockData} update={update} />}
+        {block.type === "image" && (() => {
+          const d = block.data as ImageBlockData;
+          return (
+            <div className="space-y-4">
+              <Field label="Image">
+                <ImageUploader
+                  bucket="offering-media"
+                  folder="image-block"
+                  value={d.image ?? null}
+                  onChange={(url) => update({ image: url ?? undefined })}
+                  aspectRatio="wide"
+                />
+                {d.image && (
+                  <FocusPointPicker
+                    imageUrl={d.image}
+                    focusX={d.imageFocusX ?? 50}
+                    focusY={d.imageFocusY ?? 50}
+                    onChange={(x, y) => update({ imageFocusX: x, imageFocusY: y })}
+                    aspectRatio="wide"
+                  />
+                )}
+              </Field>
+              <Field label="Width">
+                <div className="flex rounded-lg border border-[var(--border)] overflow-hidden text-xs font-medium">
+                  {(["full", "wide", "medium", "small"] as const).map((w) => (
+                    <button key={w} type="button" onClick={() => update({ width: w })}
+                      className={cn("flex-1 py-1.5 capitalize transition-colors",
+                        (d.width ?? "wide") === w
+                          ? "bg-[var(--primary)] text-[var(--primary-foreground)]"
+                          : "text-[var(--muted-foreground)] hover:bg-[var(--muted)]"
+                      )}
+                    >{w}</button>
+                  ))}
+                </div>
+              </Field>
+              {(d.width ?? "wide") !== "full" && (
+                <Field label="Alignment">
+                  <div className="flex rounded-lg border border-[var(--border)] overflow-hidden text-xs font-medium">
+                    {(["left", "center", "right"] as const).map((a) => (
+                      <button key={a} type="button" onClick={() => update({ alignment: a })}
+                        className={cn("flex-1 py-1.5 capitalize transition-colors",
+                          (d.alignment ?? "center") === a
+                            ? "bg-[var(--primary)] text-[var(--primary-foreground)]"
+                            : "text-[var(--muted-foreground)] hover:bg-[var(--muted)]"
+                        )}
+                      >{a}</button>
+                    ))}
+                  </div>
+                </Field>
+              )}
+              <Field label="Padding">
+                <div className="flex rounded-lg border border-[var(--border)] overflow-hidden text-xs font-medium">
+                  {(["none", "sm", "md", "lg"] as const).map((p) => (
+                    <button key={p} type="button" onClick={() => update({ padding: p })}
+                      className={cn("flex-1 py-1.5 capitalize transition-colors",
+                        (d.padding ?? "md") === p
+                          ? "bg-[var(--primary)] text-[var(--primary-foreground)]"
+                          : "text-[var(--muted-foreground)] hover:bg-[var(--muted)]"
+                      )}
+                    >{p}</button>
+                  ))}
+                </div>
+              </Field>
+              <Field label="Caption"><Input value={d.caption ?? ""} onChange={(v) => update({ caption: v || undefined })} placeholder="Optional caption" /></Field>
+            </div>
+          );
+        })()}
         {block.type === "image_text" && (() => {
           const d = block.data as ImageTextBlockData;
           return (
@@ -1182,7 +1249,7 @@ export function BlockSettings() {
               </Field>
               <Field label="Image position">
                 <div className="flex rounded-lg border border-[var(--border)] overflow-hidden text-xs font-medium">
-                  {(["left", "right"] as const).map((pos) => (
+                  {(["left", "right", "centered"] as const).map((pos) => (
                     <button key={pos} type="button" onClick={() => update({ imagePosition: pos })}
                       className={cn("flex-1 py-1.5 capitalize transition-colors",
                         (d.imagePosition ?? "left") === pos

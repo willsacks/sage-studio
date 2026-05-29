@@ -48,6 +48,7 @@ function SortableBlock({ block }: { block: Block }) {
       const map: Record<string, React.ComponentType<{ data: typeof block.data; isEditing?: boolean }>> = {
         hero: m.HeroBlock as never,
         text: m.TextBlock as never,
+        image: m.ImageBlock as never,
         feature_grid: m.FeatureGridBlock as never,
         testimonial: m.TestimonialBlock as never,
         pricing_card: m.PricingCardBlock as never,

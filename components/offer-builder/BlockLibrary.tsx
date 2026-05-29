@@ -12,6 +12,7 @@ import {
 const BLOCK_ICONS: Record<BlockType, React.ReactNode> = {
   hero: <Image size={16} />,
   text: <Type size={16} />,
+  image: <Image size={16} />,
   feature_grid: <LayoutGrid size={16} />,
   testimonial: <MessageSquare size={16} />,
   pricing_card: <CreditCard size={16} />,
@@ -30,7 +31,7 @@ const BLOCK_ICONS: Record<BlockType, React.ReactNode> = {
 };
 
 const BLOCK_GROUPS: { label: string; blocks: BlockType[] }[] = [
-  { label: "Content", blocks: ["hero", "text", "image_text", "video_embed"] },
+  { label: "Content", blocks: ["hero", "text", "image", "image_text", "video_embed"] },
   { label: "Social Proof", blocks: ["testimonial", "feature_grid"] },
   { label: "Conversion", blocks: ["pricing_card", "cta_banner", "guarantee", "application_form", "simple_form"] },
   { label: "Music", blocks: ["music_embed", "album_showcase", "discography"] },

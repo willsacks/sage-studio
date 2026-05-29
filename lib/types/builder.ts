@@ -1,6 +1,7 @@
 export type BlockType =
   | "hero"
   | "text"
+  | "image"
   | "feature_grid"
   | "testimonial"
   | "pricing_card"
@@ -133,8 +134,18 @@ export interface PricingCardBlockData {
   buttonStyle?: "solid" | "outline";
 }
 
+export interface ImageBlockData {
+  image?: string;
+  imageFocusX?: number;
+  imageFocusY?: number;
+  width: "full" | "wide" | "medium" | "small";
+  alignment: "left" | "center" | "right";
+  padding: "none" | "sm" | "md" | "lg";
+  caption?: string;
+}
+
 export interface ImageTextBlockData {
-  imagePosition: "left" | "right";
+  imagePosition: "left" | "right" | "centered";
   image?: string;
   imageFocusX?: number;
   imageFocusY?: number;
@@ -276,6 +287,7 @@ export interface ApplicationFormBlockData {
 export type BlockData =
   | HeroBlockData
   | TextBlockData
+  | ImageBlockData
   | FeatureGridBlockData
   | TestimonialBlockData
   | PricingCardBlockData
@@ -316,6 +328,7 @@ export const DEFAULT_THEME: PageTheme = {
 export const BLOCK_LABELS: Record<BlockType, string> = {
   hero: "Hero",
   text: "Text Block",
+  image: "Image",
   feature_grid: "Feature Grid",
   testimonial: "Testimonials",
   pricing_card: "Pricing Card",
@@ -350,6 +363,11 @@ export function createBlock(type: BlockType): Block {
       size: "base",
       maxWidth: true,
     } as TextBlockData,
+    image: {
+      width: "wide",
+      alignment: "center",
+      padding: "md",
+    } as ImageBlockData,
     feature_grid: {
       columns: 3,
       heading: "Everything You Get",

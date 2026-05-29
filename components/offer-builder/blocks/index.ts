@@ -5,6 +5,7 @@ import type { Block } from "@/lib/types/builder";
 
 export { HeroBlock } from "./HeroBlock";
 export { TextBlock } from "./TextBlock";
+export { ImageBlock } from "./ImageBlock";
 export { FeatureGridBlock } from "./FeatureGridBlock";
 export { TestimonialBlock } from "./TestimonialBlock";
 export { PricingCardBlock } from "./PricingCardBlock";
@@ -23,6 +24,7 @@ export { SimpleFormBlock } from "./SimpleFormBlock";
 
 import { HeroBlock } from "./HeroBlock";
 import { TextBlock } from "./TextBlock";
+import { ImageBlock } from "./ImageBlock";
 import { FeatureGridBlock } from "./FeatureGridBlock";
 import { TestimonialBlock } from "./TestimonialBlock";
 import { PricingCardBlock } from "./PricingCardBlock";
@@ -42,6 +44,7 @@ import { SimpleFormBlock } from "./SimpleFormBlock";
 import type {
   HeroBlockData,
   TextBlockData,
+  ImageBlockData,
   FeatureGridBlockData,
   TestimonialBlockData,
   PricingCardBlockData,
@@ -81,6 +84,13 @@ export function renderBlock(
       return React.createElement(TextBlock, {
         key: block.id,
         data: block.data as TextBlockData,
+        isEditing,
+      });
+
+    case "image":
+      return React.createElement(ImageBlock, {
+        key: block.id,
+        data: block.data as ImageBlockData,
         isEditing,
       });
 
