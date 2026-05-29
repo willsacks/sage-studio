@@ -39,6 +39,11 @@ export async function proxy(request: NextRequest) {
 
   // Custom domain routing for Pro artist sites — runs before auth
   if (!isStudioHost(hostname)) {
+    // App-level routes that should always be served directly, even on custom domains
+    if (pathname.startsWith("/guild/") || pathname.startsWith("/api/")) {
+      return supabaseResponse;
+    }
+
     const { data: site } = await supabase
       .from("artist_sites")
       .select("slug")
