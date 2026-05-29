@@ -19,16 +19,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid package" }, { status: 400 });
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://sagestudio.org";
-
   try {
     const session = await stripe.checkout.sessions.create({
       mode: pkg.mode,
       line_items: [{ price: pkg.priceId, quantity: 1 }],
       allow_promotion_codes: true,
       billing_address_collection: "auto",
-      success_url: `${baseUrl}/guild/success`,
-      cancel_url: `${baseUrl}/guild/join`,
+      success_url: "https://willsage.com/guild/success",
+      cancel_url: "https://willsage.com/guild/join",
       metadata: {
         checkout_type: "guild",
         tier_key: pkg.tierKey,
