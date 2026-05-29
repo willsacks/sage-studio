@@ -21,19 +21,24 @@ export async function POST(request: NextRequest) {
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://sagestudio.org";
 
-  const session = await stripe.checkout.sessions.create({
-    mode: pkg.mode,
-    line_items: [{ price: pkg.priceId, quantity: 1 }],
-    allow_promotion_codes: true,
-    billing_address_collection: "auto",
-    success_url: `${baseUrl}/guild/success`,
-    cancel_url: `${baseUrl}/guild/join`,
-    metadata: {
-      checkout_type: "guild",
-      tier_key: pkg.tierKey,
-      tier_level: String(pkg.tierLevel),
-    },
-  });
-
-  return NextResponse.json({ url: session.url });
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: pkg.mode,
+      line_items: [{ price: pkg.priceId, quantity: 1 }],
+      allow_promotion_codes: true,
+      billing_address_collection: "auto",
+      success_url: `${baseUrl}/guild/success`,
+      cancel_url: `${baseUrl}/guild/join`,
+      metadata: {
+        checkout_type: "guild",
+        tier_key: pkg.tierKey,
+        tier_level: String(pkg.tierLevel),
+      },
+    });
+    return NextResponse.json({ url: session.url });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[guild-checkout]", message);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
