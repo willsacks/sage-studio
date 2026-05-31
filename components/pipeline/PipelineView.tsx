@@ -5,32 +5,37 @@ import { Plus, Users, Calendar, ChevronRight } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { createContact } from "@/lib/actions/pipeline";
 import { ContactDrawer } from "./ContactDrawer";
-import type { Stage, Contact } from "@/app/(dashboard)/pipeline/page";
+import type { Stage, Contact, Tag } from "@/app/(dashboard)/pipeline/page";
 
 interface Props {
   stages: Stage[];
   contacts: Contact[];
+  tags: Tag[];
 }
 
-export function PipelineView({ stages: initialStages, contacts: initialContacts }: Props) {
+export function PipelineView({ stages: initialStages, contacts: initialContacts, tags: initialTags }: Props) {
   const [stages, setStages] = useState<Stage[]>(initialStages);
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
+  const [tags, setTags] = useState<Tag[]>(initialTags);
   const [activeContact, setActiveContact] = useState<Contact | null>(null);
   const [filterStageId, setFilterStageId] = useState<string | "all">("all");
+  const [filterTagId, setFilterTagId] = useState<string | "all">("all");
   const [addingName, setAddingName] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const stageMap = Object.fromEntries(stages.map((s) => [s.id, s]));
+  const tagMap = Object.fromEntries(tags.map((t) => [t.id, t]));
 
-  const filteredContacts = (filterStageId === "all"
-    ? contacts
-    : contacts.filter((c) => c.stage_id === filterStageId)
-  ).slice().sort((a, b) => {
-    const posA = a.stage_id ? (stageMap[a.stage_id]?.position ?? Infinity) : Infinity;
-    const posB = b.stage_id ? (stageMap[b.stage_id]?.position ?? Infinity) : Infinity;
-    return posA - posB;
-  });
+  const filteredContacts = contacts
+    .filter((c) => filterStageId === "all" || c.stage_id === filterStageId)
+    .filter((c) => filterTagId === "all" || c.tag_ids.includes(filterTagId))
+    .slice()
+    .sort((a, b) => {
+      const posA = a.stage_id ? (stageMap[a.stage_id]?.position ?? Infinity) : Infinity;
+      const posB = b.stage_id ? (stageMap[b.stage_id]?.position ?? Infinity) : Infinity;
+      return posA - posB;
+    });
 
   function handleAdd() {
     if (!addingName.trim()) return;
@@ -46,6 +51,7 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts 
           collaborators: null,
           next_session: null,
           next_action: null,
+          tag_ids: [],
           created_at: new Date().toISOString(),
         };
         setContacts((prev) => [newContact, ...prev]);
@@ -83,8 +89,27 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts 
     setStages(reordered);
   }
 
+  function handleTagCreated(tag: Tag) {
+    setTags((prev) => [...prev, tag]);
+  }
+
+  function handleTagUpdated(updated: Tag) {
+    setTags((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+  }
+
+  function handleTagDeleted(id: string) {
+    setTags((prev) => prev.filter((t) => t.id !== id));
+    setContacts((prev) => prev.map((c) => ({ ...c, tag_ids: c.tag_ids.filter((tid) => tid !== id) })));
+    if (filterTagId === id) setFilterTagId("all");
+  }
+
+  function handleContactTagsChanged(contactId: string, tagIds: string[]) {
+    setContacts((prev) => prev.map((c) => c.id === contactId ? { ...c, tag_ids: tagIds } : c));
+    if (activeContact?.id === contactId) setActiveContact((prev) => prev ? { ...prev, tag_ids: tagIds } : prev);
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -102,35 +127,71 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts 
         </button>
       </div>
 
-      {/* Stage filter tabs */}
-      <div className="flex gap-1.5 flex-wrap">
-        <button
-          onClick={() => setFilterStageId("all")}
-          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
-            filterStageId === "all"
-              ? "bg-[var(--foreground)] text-[var(--background)] border-[var(--foreground)]"
-              : "border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--foreground)] hover:text-[var(--foreground)]"
-          }`}
-        >
-          All ({contacts.length})
-        </button>
-        {stages.map((stage) => {
-          const count = contacts.filter((c) => c.stage_id === stage.id).length;
-          return (
+      {/* Filters */}
+      <div className="space-y-2">
+        {/* Stage filters */}
+        <div className="flex gap-1.5 flex-wrap">
+          <button
+            onClick={() => setFilterStageId("all")}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
+              filterStageId === "all"
+                ? "bg-[var(--foreground)] text-[var(--background)] border-[var(--foreground)]"
+                : "border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--foreground)] hover:text-[var(--foreground)]"
+            }`}
+          >
+            All stages
+          </button>
+          {stages.map((stage) => {
+            const count = contacts.filter((c) => c.stage_id === stage.id).length;
+            return (
+              <button
+                key={stage.id}
+                onClick={() => setFilterStageId(filterStageId === stage.id ? "all" : stage.id)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border"
+                style={
+                  filterStageId === stage.id
+                    ? { backgroundColor: stage.color, borderColor: stage.color, color: "#fff" }
+                    : { borderColor: stage.color, color: stage.color, backgroundColor: `${stage.color}15` }
+                }
+              >
+                {stage.name} ({count})
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Tag filters — only shown when tags exist */}
+        {tags.length > 0 && (
+          <div className="flex gap-1.5 flex-wrap">
             <button
-              key={stage.id}
-              onClick={() => setFilterStageId(stage.id)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border"
-              style={
-                filterStageId === stage.id
-                  ? { backgroundColor: stage.color, borderColor: stage.color, color: "#fff" }
-                  : { borderColor: stage.color, color: stage.color, backgroundColor: `${stage.color}15` }
-              }
+              onClick={() => setFilterTagId("all")}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
+                filterTagId === "all"
+                  ? "bg-[var(--foreground)] text-[var(--background)] border-[var(--foreground)]"
+                  : "border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--foreground)] hover:text-[var(--foreground)]"
+              }`}
             >
-              {stage.name} ({count})
+              All tags
             </button>
-          );
-        })}
+            {tags.map((tag) => {
+              const count = contacts.filter((c) => c.tag_ids.includes(tag.id)).length;
+              return (
+                <button
+                  key={tag.id}
+                  onClick={() => setFilterTagId(filterTagId === tag.id ? "all" : tag.id)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border"
+                  style={
+                    filterTagId === tag.id
+                      ? { backgroundColor: tag.color, borderColor: tag.color, color: "#fff" }
+                      : { borderColor: tag.color, color: tag.color, backgroundColor: `${tag.color}15` }
+                  }
+                >
+                  {tag.name} ({count})
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Add contact inline form */}
@@ -167,11 +228,14 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts 
       <div className="space-y-1">
         {filteredContacts.length === 0 && (
           <div className="text-center py-12 text-[var(--muted-foreground)] text-sm">
-            {filterStageId === "all" ? "No contacts yet — add your first one above." : "No contacts in this stage."}
+            {filterStageId === "all" && filterTagId === "all"
+              ? "No contacts yet — add your first one above."
+              : "No contacts match the current filters."}
           </div>
         )}
         {filteredContacts.map((contact) => {
           const stage = contact.stage_id ? stageMap[contact.stage_id] : null;
+          const contactTags = contact.tag_ids.map((id) => tagMap[id]).filter(Boolean) as Tag[];
           const isActive = activeContact?.id === contact.id;
 
           return (
@@ -190,13 +254,26 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts 
                 style={{ backgroundColor: stage?.color ?? "#E2E8F0" }}
               />
 
-              {/* Name + next action */}
+              {/* Name + next action + tags */}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{contact.name}</p>
                 {contact.next_action && (
                   <p className="text-xs text-[var(--muted-foreground)] truncate mt-0.5">
                     <span className="text-[var(--primary)] font-medium">→</span> {contact.next_action}
                   </p>
+                )}
+                {contactTags.length > 0 && (
+                  <div className="flex gap-1 mt-1 flex-wrap">
+                    {contactTags.map((tag) => (
+                      <span
+                        key={tag.id}
+                        className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+                        style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
+                      >
+                        {tag.name}
+                      </span>
+                    ))}
+                  </div>
                 )}
               </div>
 
@@ -236,10 +313,10 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts 
         })}
       </div>
 
-      {/* Drawer */}
       <ContactDrawer
         contact={activeContact}
         stages={stages}
+        tags={tags}
         onClose={() => setActiveContact(null)}
         onContactDeleted={handleContactDeleted}
         onContactUpdated={handleContactUpdated}
@@ -247,6 +324,10 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts 
         onStageUpdated={handleStageUpdated}
         onStageDeleted={handleStageDeleted}
         onStagesReordered={handleStagesReordered}
+        onTagCreated={handleTagCreated}
+        onTagUpdated={handleTagUpdated}
+        onTagDeleted={handleTagDeleted}
+        onContactTagsChanged={handleContactTagsChanged}
       />
     </div>
   );

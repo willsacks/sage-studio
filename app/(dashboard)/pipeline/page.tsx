@@ -4,13 +4,19 @@ import { createClient } from "@/lib/supabase/server";
 import { ensureDefaultStages } from "@/lib/actions/pipeline";
 import { PipelineView } from "@/components/pipeline/PipelineView";
 
-export const metadata: Metadata = { title: "Producer Pipeline" };
+export const metadata: Metadata = { title: "Pipeline" };
 
 export type Stage = {
   id: string;
   name: string;
   color: string;
   position: number;
+};
+
+export type Tag = {
+  id: string;
+  name: string;
+  color: string;
 };
 
 export type Contact = {
@@ -21,6 +27,7 @@ export type Contact = {
   collaborators: string | null;
   next_session: string | null;
   next_action: string | null;
+  tag_ids: string[];
   created_at: string;
 };
 
@@ -34,21 +41,27 @@ export default async function PipelinePage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = supabase as any;
 
-  const [{ data: stagesRaw }, { data: contactsRaw }] = await Promise.all([
-    db
-      .from("pipeline_stages")
-      .select("id, name, color, position")
-      .eq("user_id", user.id)
-      .order("position", { ascending: true }),
-    db
-      .from("pipeline_contacts")
-      .select("id, name, stage_id, notes, collaborators, next_session, next_action, created_at")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false }),
-  ]);
+  const [{ data: stagesRaw }, { data: contactsRaw }, { data: tagsRaw }, { data: contactTagsRaw }] =
+    await Promise.all([
+      db.from("pipeline_stages").select("id, name, color, position").eq("user_id", user.id).order("position", { ascending: true }),
+      db.from("pipeline_contacts").select("id, name, stage_id, notes, collaborators, next_session, next_action, created_at").eq("user_id", user.id).order("created_at", { ascending: false }),
+      db.from("pipeline_tags").select("id, name, color").eq("user_id", user.id).order("created_at", { ascending: true }),
+      db.from("pipeline_contact_tags").select("contact_id, tag_id"),
+    ]);
 
   const stages = (stagesRaw ?? []) as Stage[];
-  const contacts = (contactsRaw ?? []) as Contact[];
+  const tags = (tagsRaw ?? []) as Tag[];
 
-  return <PipelineView stages={stages} contacts={contacts} />;
+  // Build contact_id → tag_ids[] map
+  const tagMap: Record<string, string[]> = {};
+  for (const row of (contactTagsRaw ?? []) as { contact_id: string; tag_id: string }[]) {
+    (tagMap[row.contact_id] ??= []).push(row.tag_id);
+  }
+
+  const contacts: Contact[] = (contactsRaw ?? []).map((c: Omit<Contact, "tag_ids">) => ({
+    ...c,
+    tag_ids: tagMap[c.id] ?? [],
+  }));
+
+  return <PipelineView stages={stages} contacts={contacts} tags={tags} />;
 }

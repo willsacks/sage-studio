@@ -91,6 +91,67 @@ export async function deleteStage(id: string) {
   return { success: true };
 }
 
+// ── Tags ──────────────────────────────────────────────────────────────────────
+
+export async function createTag(name: string, color: string) {
+  const { supabase, user } = await requireAuth();
+  const { data, error } = await supabase
+    .from("pipeline_tags")
+    .insert({ user_id: user.id, name: name.trim(), color })
+    .select()
+    .single();
+  if (error) return { error: error.message };
+  revalidatePath("/pipeline");
+  return { tag: data };
+}
+
+export async function updateTag(id: string, name: string, color: string) {
+  const { supabase, user } = await requireAuth();
+  const { error } = await supabase
+    .from("pipeline_tags")
+    .update({ name: name.trim(), color })
+    .eq("id", id)
+    .eq("user_id", user.id);
+  if (error) return { error: error.message };
+  revalidatePath("/pipeline");
+  return { success: true };
+}
+
+export async function deleteTag(id: string) {
+  const { supabase, user } = await requireAuth();
+  await supabase
+    .from("pipeline_tags")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
+  revalidatePath("/pipeline");
+  return { success: true };
+}
+
+export async function setContactTags(contactId: string, tagIds: string[]) {
+  const { supabase, user } = await requireAuth();
+
+  // Verify ownership
+  const { data: contact } = await supabase
+    .from("pipeline_contacts")
+    .select("id")
+    .eq("id", contactId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!contact) return { error: "Not found" };
+
+  // Replace all tags atomically
+  await supabase.from("pipeline_contact_tags").delete().eq("contact_id", contactId);
+  if (tagIds.length > 0) {
+    await supabase.from("pipeline_contact_tags").insert(
+      tagIds.map((tag_id) => ({ contact_id: contactId, tag_id }))
+    );
+  }
+
+  revalidatePath("/pipeline");
+  return { success: true };
+}
+
 export async function reorderStages(orderedIds: string[]) {
   const { supabase, user } = await requireAuth();
 
