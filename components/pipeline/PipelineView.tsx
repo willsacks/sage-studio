@@ -23,9 +23,14 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts 
 
   const stageMap = Object.fromEntries(stages.map((s) => [s.id, s]));
 
-  const filteredContacts = filterStageId === "all"
+  const filteredContacts = (filterStageId === "all"
     ? contacts
-    : contacts.filter((c) => c.stage_id === filterStageId);
+    : contacts.filter((c) => c.stage_id === filterStageId)
+  ).slice().sort((a, b) => {
+    const posA = a.stage_id ? (stageMap[a.stage_id]?.position ?? Infinity) : Infinity;
+    const posB = b.stage_id ? (stageMap[b.stage_id]?.position ?? Infinity) : Infinity;
+    return posA - posB;
+  });
 
   function handleAdd() {
     if (!addingName.trim()) return;
