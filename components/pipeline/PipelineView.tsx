@@ -45,6 +45,7 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts 
           notes: null,
           collaborators: null,
           next_session: null,
+          next_action: null,
           created_at: new Date().toISOString(),
         };
         setContacts((prev) => [newContact, ...prev]);
@@ -189,11 +190,13 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts 
                 style={{ backgroundColor: stage?.color ?? "#E2E8F0" }}
               />
 
-              {/* Name + notes */}
+              {/* Name + next action */}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{contact.name}</p>
-                {contact.notes && (
-                  <p className="text-xs text-[var(--muted-foreground)] truncate mt-0.5">{contact.notes}</p>
+                {contact.next_action && (
+                  <p className="text-xs text-[var(--muted-foreground)] truncate mt-0.5">
+                    <span className="text-[var(--primary)] font-medium">→</span> {contact.next_action}
+                  </p>
                 )}
               </div>
 

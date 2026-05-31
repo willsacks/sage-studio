@@ -20,6 +20,7 @@ export type Contact = {
   notes: string | null;
   collaborators: string | null;
   next_session: string | null;
+  next_action: string | null;
   created_at: string;
 };
 
@@ -41,7 +42,7 @@ export default async function PipelinePage() {
       .order("position", { ascending: true }),
     db
       .from("pipeline_contacts")
-      .select("id, name, stage_id, notes, collaborators, next_session, created_at")
+      .select("id, name, stage_id, notes, collaborators, next_session, next_action, created_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false }),
   ]);

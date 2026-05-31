@@ -276,6 +276,7 @@ export function ContactDrawer({
   const [tab, setTab] = useState<"contact" | "stages">("contact");
   const [name, setName] = useState(contact?.name ?? "");
   const [stageId, setStageId] = useState<string | null>(contact?.stage_id ?? null);
+  const [nextAction, setNextAction] = useState(contact?.next_action ?? "");
   const [notes, setNotes] = useState(contact?.notes ?? "");
   const [collaborators, setCollaborators] = useState(contact?.collaborators ?? "");
   const [nextSession, setNextSession] = useState(contact?.next_session ?? "");
@@ -287,6 +288,7 @@ export function ContactDrawer({
   useEffect(() => {
     setName(contact?.name ?? "");
     setStageId(contact?.stage_id ?? null);
+    setNextAction(contact?.next_action ?? "");
     setNotes(contact?.notes ?? "");
     setCollaborators(contact?.collaborators ?? "");
     setNextSession(contact?.next_session ?? "");
@@ -300,6 +302,7 @@ export function ContactDrawer({
       await updateContact(contact.id, {
         name,
         stage_id: stageId,
+        next_action: nextAction || null,
         notes,
         collaborators,
         next_session: nextSession || null,
@@ -308,6 +311,7 @@ export function ContactDrawer({
         ...contact,
         name,
         stage_id: stageId,
+        next_action: nextAction || null,
         notes,
         collaborators,
         next_session: nextSession || null,
@@ -387,6 +391,18 @@ export function ContactDrawer({
                     />
                   </div>
 
+                  {/* Next Action */}
+                  <div className="bg-[var(--accent)] rounded-xl px-4 py-3">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-1.5 block">Next Action</label>
+                    <input
+                      value={nextAction}
+                      onChange={(e) => setNextAction(e.target.value)}
+                      onBlur={save}
+                      placeholder="What needs to happen next?"
+                      className="w-full text-sm bg-transparent focus:outline-none placeholder:text-[var(--muted-foreground)]"
+                    />
+                  </div>
+
                   {/* Stage selector */}
                   <div>
                     <label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-2 block">Stage</label>
@@ -400,7 +416,7 @@ export function ContactDrawer({
                             if (!contact) return;
                             startTransition(async () => {
                               await updateContact(contact.id, { stage_id: stage.id });
-                              onContactUpdated({ ...contact, name, stage_id: stage.id, notes, collaborators, next_session: nextSession || null });
+                              onContactUpdated({ ...contact, name, stage_id: stage.id, next_action: nextAction || null, notes, collaborators, next_session: nextSession || null });
                             });
                           }}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border"
@@ -421,7 +437,7 @@ export function ContactDrawer({
                           if (!contact) return;
                           startTransition(async () => {
                             await updateContact(contact.id, { stage_id: null });
-                            onContactUpdated({ ...contact, name, stage_id: null, notes, collaborators, next_session: nextSession || null });
+                            onContactUpdated({ ...contact, name, stage_id: null, next_action: nextAction || null, notes, collaborators, next_session: nextSession || null });
                           });
                         }}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border border-[var(--border)] ${stageId === null ? "bg-[var(--muted)] font-semibold" : "text-[var(--muted-foreground)] hover:bg-[var(--accent)]"}`}

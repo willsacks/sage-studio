@@ -132,6 +132,7 @@ export async function updateContact(
     notes?: string;
     collaborators?: string;
     next_session?: string | null;
+    next_action?: string | null;
   }
 ) {
   const { supabase, user } = await requireAuth();
@@ -142,6 +143,7 @@ export async function updateContact(
   if (fields.notes !== undefined) update.notes = fields.notes;
   if (fields.collaborators !== undefined) update.collaborators = fields.collaborators;
   if ("next_session" in fields) update.next_session = fields.next_session;
+  if ("next_action" in fields) update.next_action = fields.next_action;
 
   const { error } = await supabase
     .from("pipeline_contacts")
