@@ -73,12 +73,16 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts 
     setContacts((prev) => prev.map((c) => c.stage_id === id ? { ...c, stage_id: null } : c));
   }
 
+  function handleStagesReordered(reordered: Stage[]) {
+    setStages(reordered);
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Producer Pipeline</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Pipeline</h1>
           <p className="text-sm text-[var(--muted-foreground)] mt-1">
             {contacts.length} {contacts.length === 1 ? "contact" : "contacts"} tracked
           </p>
@@ -234,6 +238,7 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts 
         onStageCreated={handleStageCreated}
         onStageUpdated={handleStageUpdated}
         onStageDeleted={handleStageDeleted}
+        onStagesReordered={handleStagesReordered}
       />
     </div>
   );

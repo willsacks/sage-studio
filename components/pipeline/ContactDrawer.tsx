@@ -2,8 +2,12 @@
 
 import { useState, useTransition, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Trash2, Plus, Check, ChevronDown } from "lucide-react";
-import { updateContact, deleteContact, createStage, updateStage, deleteStage } from "@/lib/actions/pipeline";
+import { X, Trash2, Plus, Check, GripVertical } from "lucide-react";
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import type { DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { updateContact, deleteContact, createStage, updateStage, deleteStage, reorderStages } from "@/lib/actions/pipeline";
 import type { Stage, Contact } from "@/app/(dashboard)/pipeline/page";
 
 interface Props {
@@ -15,6 +19,7 @@ interface Props {
   onStageCreated: (stage: Stage) => void;
   onStageUpdated: (stage: Stage) => void;
   onStageDeleted: (id: string) => void;
+  onStagesReordered: (stages: Stage[]) => void;
 }
 
 const PRESET_COLORS = [
@@ -42,12 +47,105 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (c: string)
   );
 }
 
+function SortableStageRow({
+  stage,
+  editing,
+  editName,
+  editColor,
+  pending,
+  setEditName,
+  setEditColor,
+  setEditing,
+  onEditSave,
+  onDelete,
+}: {
+  stage: Stage;
+  editing: string | null;
+  editName: string;
+  editColor: string;
+  pending: boolean;
+  setEditName: (v: string) => void;
+  setEditColor: (v: string) => void;
+  setEditing: (id: string | null) => void;
+  onEditSave: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stage.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
+
+  if (editing === stage.id) {
+    return (
+      <div ref={setNodeRef} style={style} className="border border-[var(--border)] rounded-lg p-3 space-y-2">
+        <input
+          className="w-full text-sm bg-[var(--input)] border border-[var(--border)] rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+          value={editName}
+          onChange={(e) => setEditName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") onEditSave(stage.id); if (e.key === "Escape") setEditing(null); }}
+          autoFocus
+        />
+        <ColorPicker value={editColor} onChange={setEditColor} />
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => onEditSave(stage.id)}
+            disabled={pending}
+            className="flex items-center gap-1 text-xs px-3 py-1 rounded-md bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 transition-opacity disabled:opacity-50"
+          >
+            <Check size={12} /> Save
+          </button>
+          <button type="button" onClick={() => setEditing(null)} className="text-xs px-3 py-1 rounded-md border border-[var(--border)] hover:bg-[var(--accent)] transition-colors">
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete(stage.id)}
+            disabled={pending}
+            className="ml-auto flex items-center gap-1 text-xs px-2 py-1 rounded-md text-[var(--destructive)] hover:bg-[var(--destructive)]/10 transition-colors"
+          >
+            <Trash2 size={12} /> Delete
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-center gap-1 rounded-lg hover:bg-[var(--accent)] transition-colors group">
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        className="p-2 cursor-grab active:cursor-grabbing text-[var(--muted-foreground)] opacity-0 group-hover:opacity-100 transition-opacity touch-none"
+        tabIndex={-1}
+      >
+        <GripVertical size={14} />
+      </button>
+      <button
+        type="button"
+        onClick={() => { setEditing(stage.id); setEditName(stage.name); setEditColor(stage.color); }}
+        className="flex-1 flex items-center gap-2 px-2 py-2 text-left"
+      >
+        <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: stage.color }} />
+        <span className="text-sm flex-1">{stage.name}</span>
+        <span className="text-xs text-[var(--muted-foreground)]">Edit</span>
+      </button>
+    </div>
+  );
+}
+
 function StageManager({
   stages,
   onStageCreated,
   onStageUpdated,
   onStageDeleted,
-}: Pick<Props, "stages" | "onStageCreated" | "onStageUpdated" | "onStageDeleted">) {
+  onStagesReordered,
+}: Pick<Props, "stages" | "onStageCreated" | "onStageUpdated" | "onStageDeleted" | "onStagesReordered">) {
+  const [orderedStages, setOrderedStages] = useState<Stage[]>(stages);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState(PRESET_COLORS[0]);
@@ -55,6 +153,25 @@ function StageManager({
   const [editName, setEditName] = useState("");
   const [editColor, setEditColor] = useState("");
   const [pending, startTransition] = useTransition();
+
+  useEffect(() => { setOrderedStages(stages); }, [stages]);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = orderedStages.findIndex((s) => s.id === active.id);
+    const newIndex = orderedStages.findIndex((s) => s.id === over.id);
+    const reordered = arrayMove(orderedStages, oldIndex, newIndex).map((s, i) => ({ ...s, position: i }));
+
+    setOrderedStages(reordered);
+    onStagesReordered(reordered);
+    startTransition(async () => {
+      await reorderStages(reordered.map((s) => s.id));
+    });
+  }
 
   function handleAdd() {
     if (!newName.trim()) return;
@@ -73,7 +190,7 @@ function StageManager({
     if (!editName.trim()) return;
     startTransition(async () => {
       await updateStage(id, editName, editColor);
-      onStageUpdated({ ...stages.find((s) => s.id === id)!, name: editName, color: editColor });
+      onStageUpdated({ ...orderedStages.find((s) => s.id === id)!, name: editName, color: editColor });
       setEditing(null);
     });
   }
@@ -86,56 +203,29 @@ function StageManager({
   }
 
   return (
-    <div className="space-y-2">
-      {stages.map((stage) =>
-        editing === stage.id ? (
-          <div key={stage.id} className="border border-[var(--border)] rounded-lg p-3 space-y-2">
-            <input
-              className="w-full text-sm bg-[var(--input)] border border-[var(--border)] rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleEditSave(stage.id); if (e.key === "Escape") setEditing(null); }}
-              autoFocus
+    <div className="space-y-1">
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={orderedStages.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+          {orderedStages.map((stage) => (
+            <SortableStageRow
+              key={stage.id}
+              stage={stage}
+              editing={editing}
+              editName={editName}
+              editColor={editColor}
+              pending={pending}
+              setEditName={setEditName}
+              setEditColor={setEditColor}
+              setEditing={setEditing}
+              onEditSave={handleEditSave}
+              onDelete={handleDelete}
             />
-            <ColorPicker value={editColor} onChange={setEditColor} />
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => handleEditSave(stage.id)}
-                disabled={pending}
-                className="flex items-center gap-1 text-xs px-3 py-1 rounded-md bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 transition-opacity disabled:opacity-50"
-              >
-                <Check size={12} /> Save
-              </button>
-              <button type="button" onClick={() => setEditing(null)} className="text-xs px-3 py-1 rounded-md border border-[var(--border)] hover:bg-[var(--accent)] transition-colors">
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDelete(stage.id)}
-                disabled={pending}
-                className="ml-auto flex items-center gap-1 text-xs px-2 py-1 rounded-md text-[var(--destructive)] hover:bg-[var(--destructive)]/10 transition-colors"
-              >
-                <Trash2 size={12} /> Delete
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button
-            key={stage.id}
-            type="button"
-            onClick={() => { setEditing(stage.id); setEditName(stage.name); setEditColor(stage.color); }}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-[var(--accent)] transition-colors text-left"
-          >
-            <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: stage.color }} />
-            <span className="text-sm flex-1">{stage.name}</span>
-            <span className="text-xs text-[var(--muted-foreground)]">Edit</span>
-          </button>
-        )
-      )}
+          ))}
+        </SortableContext>
+      </DndContext>
 
       {adding ? (
-        <div className="border border-[var(--border)] rounded-lg p-3 space-y-2">
+        <div className="border border-[var(--border)] rounded-lg p-3 space-y-2 mt-2">
           <input
             className="w-full text-sm bg-[var(--input)] border border-[var(--border)] rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
             placeholder="Stage name"
@@ -163,7 +253,7 @@ function StageManager({
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-[var(--border)] hover:border-[var(--primary)] hover:text-[var(--primary)] text-[var(--muted-foreground)] transition-colors text-sm"
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-[var(--border)] hover:border-[var(--primary)] hover:text-[var(--primary)] text-[var(--muted-foreground)] transition-colors text-sm mt-2"
         >
           <Plus size={14} /> Add stage
         </button>
@@ -181,6 +271,7 @@ export function ContactDrawer({
   onStageCreated,
   onStageUpdated,
   onStageDeleted,
+  onStagesReordered,
 }: Props) {
   const [tab, setTab] = useState<"contact" | "stages">("contact");
   const [name, setName] = useState(contact?.name ?? "");
@@ -405,6 +496,7 @@ export function ContactDrawer({
                   onStageCreated={onStageCreated}
                   onStageUpdated={onStageUpdated}
                   onStageDeleted={onStageDeleted}
+                  onStagesReordered={onStagesReordered}
                 />
               )}
             </div>

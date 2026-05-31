@@ -91,6 +91,23 @@ export async function deleteStage(id: string) {
   return { success: true };
 }
 
+export async function reorderStages(orderedIds: string[]) {
+  const { supabase, user } = await requireAuth();
+
+  await Promise.all(
+    orderedIds.map((id, position) =>
+      supabase
+        .from("pipeline_stages")
+        .update({ position })
+        .eq("id", id)
+        .eq("user_id", user.id)
+    )
+  );
+
+  revalidatePath("/pipeline");
+  return { success: true };
+}
+
 // ── Contacts ──────────────────────────────────────────────────────────────────
 
 export async function createContact(name: string, stageId: string | null) {
