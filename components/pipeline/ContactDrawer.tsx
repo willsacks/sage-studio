@@ -1,0 +1,423 @@
+"use client";
+
+import { useState, useTransition, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { X, Trash2, Plus, Check, ChevronDown } from "lucide-react";
+import { updateContact, deleteContact, createStage, updateStage, deleteStage } from "@/lib/actions/pipeline";
+import type { Stage, Contact } from "@/app/(dashboard)/pipeline/page";
+
+interface Props {
+  contact: Contact | null;
+  stages: Stage[];
+  onClose: () => void;
+  onContactDeleted: (id: string) => void;
+  onContactUpdated: (contact: Contact) => void;
+  onStageCreated: (stage: Stage) => void;
+  onStageUpdated: (stage: Stage) => void;
+  onStageDeleted: (id: string) => void;
+}
+
+const PRESET_COLORS = [
+  "#64748B", "#8B5CF6", "#F59E0B", "#F97316", "#10B981",
+  "#3B82F6", "#EC4899", "#EF4444", "#06B6D4", "#84CC16",
+];
+
+function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  return (
+    <div className="flex gap-1.5 flex-wrap">
+      {PRESET_COLORS.map((c) => (
+        <button
+          key={c}
+          type="button"
+          onClick={() => onChange(c)}
+          className="w-6 h-6 rounded-full transition-transform hover:scale-110 focus:outline-none"
+          style={{
+            backgroundColor: c,
+            outline: value === c ? `2px solid ${c}` : "none",
+            outlineOffset: 2,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function StageManager({
+  stages,
+  onStageCreated,
+  onStageUpdated,
+  onStageDeleted,
+}: Pick<Props, "stages" | "onStageCreated" | "onStageUpdated" | "onStageDeleted">) {
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newColor, setNewColor] = useState(PRESET_COLORS[0]);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editColor, setEditColor] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  function handleAdd() {
+    if (!newName.trim()) return;
+    startTransition(async () => {
+      const res = await createStage(newName, newColor);
+      if (res.stage) {
+        onStageCreated(res.stage as unknown as Stage);
+        setNewName("");
+        setNewColor(PRESET_COLORS[0]);
+        setAdding(false);
+      }
+    });
+  }
+
+  function handleEditSave(id: string) {
+    if (!editName.trim()) return;
+    startTransition(async () => {
+      await updateStage(id, editName, editColor);
+      onStageUpdated({ ...stages.find((s) => s.id === id)!, name: editName, color: editColor });
+      setEditing(null);
+    });
+  }
+
+  function handleDelete(id: string) {
+    startTransition(async () => {
+      await deleteStage(id);
+      onStageDeleted(id);
+    });
+  }
+
+  return (
+    <div className="space-y-2">
+      {stages.map((stage) =>
+        editing === stage.id ? (
+          <div key={stage.id} className="border border-[var(--border)] rounded-lg p-3 space-y-2">
+            <input
+              className="w-full text-sm bg-[var(--input)] border border-[var(--border)] rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleEditSave(stage.id); if (e.key === "Escape") setEditing(null); }}
+              autoFocus
+            />
+            <ColorPicker value={editColor} onChange={setEditColor} />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => handleEditSave(stage.id)}
+                disabled={pending}
+                className="flex items-center gap-1 text-xs px-3 py-1 rounded-md bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                <Check size={12} /> Save
+              </button>
+              <button type="button" onClick={() => setEditing(null)} className="text-xs px-3 py-1 rounded-md border border-[var(--border)] hover:bg-[var(--accent)] transition-colors">
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDelete(stage.id)}
+                disabled={pending}
+                className="ml-auto flex items-center gap-1 text-xs px-2 py-1 rounded-md text-[var(--destructive)] hover:bg-[var(--destructive)]/10 transition-colors"
+              >
+                <Trash2 size={12} /> Delete
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            key={stage.id}
+            type="button"
+            onClick={() => { setEditing(stage.id); setEditName(stage.name); setEditColor(stage.color); }}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-[var(--accent)] transition-colors text-left"
+          >
+            <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: stage.color }} />
+            <span className="text-sm flex-1">{stage.name}</span>
+            <span className="text-xs text-[var(--muted-foreground)]">Edit</span>
+          </button>
+        )
+      )}
+
+      {adding ? (
+        <div className="border border-[var(--border)] rounded-lg p-3 space-y-2">
+          <input
+            className="w-full text-sm bg-[var(--input)] border border-[var(--border)] rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+            placeholder="Stage name"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); if (e.key === "Escape") setAdding(false); }}
+            autoFocus
+          />
+          <ColorPicker value={newColor} onChange={setNewColor} />
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleAdd}
+              disabled={pending || !newName.trim()}
+              className="flex items-center gap-1 text-xs px-3 py-1 rounded-md bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              <Check size={12} /> Add
+            </button>
+            <button type="button" onClick={() => setAdding(false)} className="text-xs px-3 py-1 rounded-md border border-[var(--border)] hover:bg-[var(--accent)] transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-[var(--border)] hover:border-[var(--primary)] hover:text-[var(--primary)] text-[var(--muted-foreground)] transition-colors text-sm"
+        >
+          <Plus size={14} /> Add stage
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function ContactDrawer({
+  contact,
+  stages,
+  onClose,
+  onContactDeleted,
+  onContactUpdated,
+  onStageCreated,
+  onStageUpdated,
+  onStageDeleted,
+}: Props) {
+  const [tab, setTab] = useState<"contact" | "stages">("contact");
+  const [name, setName] = useState(contact?.name ?? "");
+  const [stageId, setStageId] = useState<string | null>(contact?.stage_id ?? null);
+  const [notes, setNotes] = useState(contact?.notes ?? "");
+  const [collaborators, setCollaborators] = useState(contact?.collaborators ?? "");
+  const [nextSession, setNextSession] = useState(contact?.next_session ?? "");
+  const [pending, startTransition] = useTransition();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const nameRef = useRef<HTMLInputElement>(null);
+
+  // Sync form when contact changes
+  useEffect(() => {
+    setName(contact?.name ?? "");
+    setStageId(contact?.stage_id ?? null);
+    setNotes(contact?.notes ?? "");
+    setCollaborators(contact?.collaborators ?? "");
+    setNextSession(contact?.next_session ?? "");
+    setConfirmDelete(false);
+    setTab("contact");
+  }, [contact?.id]);
+
+  function save() {
+    if (!contact) return;
+    startTransition(async () => {
+      await updateContact(contact.id, {
+        name,
+        stage_id: stageId,
+        notes,
+        collaborators,
+        next_session: nextSession || null,
+      });
+      onContactUpdated({
+        ...contact,
+        name,
+        stage_id: stageId,
+        notes,
+        collaborators,
+        next_session: nextSession || null,
+      });
+    });
+  }
+
+  function handleDelete() {
+    if (!contact) return;
+    if (!confirmDelete) { setConfirmDelete(true); return; }
+    startTransition(async () => {
+      await deleteContact(contact.id);
+      onContactDeleted(contact.id);
+      onClose();
+    });
+  }
+
+  const currentStage = stages.find((s) => s.id === stageId);
+
+  return (
+    <AnimatePresence>
+      {contact && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            key="backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/20 z-40"
+            onClick={onClose}
+          />
+
+          {/* Drawer */}
+          <motion.div
+            key="drawer"
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", stiffness: 400, damping: 40 }}
+            className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-[var(--card)] shadow-2xl z-50 flex flex-col"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
+              <div className="flex gap-1 text-sm">
+                <button
+                  onClick={() => setTab("contact")}
+                  className={`px-3 py-1 rounded-md transition-colors ${tab === "contact" ? "bg-[var(--accent)] font-medium" : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"}`}
+                >
+                  Contact
+                </button>
+                <button
+                  onClick={() => setTab("stages")}
+                  className={`px-3 py-1 rounded-md transition-colors ${tab === "stages" ? "bg-[var(--accent)] font-medium" : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"}`}
+                >
+                  Stages
+                </button>
+              </div>
+              <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--accent)] transition-colors text-[var(--muted-foreground)]">
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+              {tab === "contact" ? (
+                <>
+                  {/* Name */}
+                  <div>
+                    <input
+                      ref={nameRef}
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      onBlur={save}
+                      className="w-full text-xl font-semibold bg-transparent border-b-2 border-transparent focus:border-[var(--primary)] focus:outline-none transition-colors py-1"
+                      placeholder="Contact name"
+                    />
+                  </div>
+
+                  {/* Stage selector */}
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-2 block">Stage</label>
+                    <div className="flex flex-wrap gap-2">
+                      {stages.map((stage) => (
+                        <button
+                          key={stage.id}
+                          type="button"
+                          onClick={() => {
+                            setStageId(stage.id);
+                            if (!contact) return;
+                            startTransition(async () => {
+                              await updateContact(contact.id, { stage_id: stage.id });
+                              onContactUpdated({ ...contact, name, stage_id: stage.id, notes, collaborators, next_session: nextSession || null });
+                            });
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border"
+                          style={
+                            stageId === stage.id
+                              ? { backgroundColor: stage.color, borderColor: stage.color, color: "#fff" }
+                              : { borderColor: stage.color, color: stage.color, backgroundColor: `${stage.color}15` }
+                          }
+                        >
+                          {stageId === stage.id && <Check size={11} />}
+                          {stage.name}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStageId(null);
+                          if (!contact) return;
+                          startTransition(async () => {
+                            await updateContact(contact.id, { stage_id: null });
+                            onContactUpdated({ ...contact, name, stage_id: null, notes, collaborators, next_session: nextSession || null });
+                          });
+                        }}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border border-[var(--border)] ${stageId === null ? "bg-[var(--muted)] font-semibold" : "text-[var(--muted-foreground)] hover:bg-[var(--accent)]"}`}
+                      >
+                        None
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Collaborators */}
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-2 block">Collaborators</label>
+                    <input
+                      value={collaborators}
+                      onChange={(e) => setCollaborators(e.target.value)}
+                      onBlur={save}
+                      placeholder="e.g. with Sean, mixed by Jahleel"
+                      className="w-full text-sm bg-[var(--input)] border border-[var(--border)] rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--ring)] placeholder:text-[var(--muted-foreground)]"
+                    />
+                  </div>
+
+                  {/* Next session */}
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-2 block">Next Session</label>
+                    <input
+                      type="date"
+                      value={nextSession}
+                      onChange={(e) => setNextSession(e.target.value)}
+                      onBlur={save}
+                      className="w-full text-sm bg-[var(--input)] border border-[var(--border)] rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+                    />
+                  </div>
+
+                  {/* Notes */}
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-2 block">Notes</label>
+                    <textarea
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      onBlur={save}
+                      rows={5}
+                      placeholder="Project notes, references, ideas..."
+                      className="w-full text-sm bg-[var(--input)] border border-[var(--border)] rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--ring)] placeholder:text-[var(--muted-foreground)] resize-none"
+                    />
+                  </div>
+
+                  {/* Delete */}
+                  <div className="pt-2 border-t border-[var(--border)]">
+                    <button
+                      type="button"
+                      onClick={handleDelete}
+                      disabled={pending}
+                      className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg transition-colors ${
+                        confirmDelete
+                          ? "bg-[var(--destructive)] text-white"
+                          : "text-[var(--destructive)] hover:bg-[var(--destructive)]/10"
+                      }`}
+                    >
+                      <Trash2 size={14} />
+                      {confirmDelete ? "Confirm delete" : "Delete contact"}
+                    </button>
+                    {confirmDelete && (
+                      <button type="button" onClick={() => setConfirmDelete(false)} className="ml-2 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <StageManager
+                  stages={stages}
+                  onStageCreated={onStageCreated}
+                  onStageUpdated={onStageUpdated}
+                  onStageDeleted={onStageDeleted}
+                />
+              )}
+            </div>
+
+            {/* Saving indicator */}
+            {pending && (
+              <div className="px-5 py-2 border-t border-[var(--border)] text-xs text-[var(--muted-foreground)]">
+                Saving…
+              </div>
+            )}
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
