@@ -74,6 +74,7 @@ export async function proxy(request: NextRequest) {
 
   const isProtected =
     pathname.startsWith("/my-site") ||
+    pathname.startsWith("/todos") ||
     pathname.startsWith("/tasks") ||
     pathname.startsWith("/my-templates") ||
     pathname.startsWith("/settings") ||

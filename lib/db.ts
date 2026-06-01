@@ -372,6 +372,30 @@ export type Database = {
         };
         Relationships: [];
       };
+      todos: {
+        Row: {
+          id: string;
+          user_id: string;
+          title: string;
+          completed: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          title: string;
+          completed?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          title?: string;
+          completed?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {};
     Functions: {};
