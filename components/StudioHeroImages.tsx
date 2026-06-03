@@ -3,11 +3,15 @@
 import { useState, useEffect } from "react";
 import { STUDIO_HERO_IMAGES } from "@/lib/studio-hero-images";
 
-const INTERVAL_MS = 4500;
-const TRANSITION_MS = 1000;
+const INTERVAL_MS = 5000;
+const TRANSITION_MS = 1200;
 
 export function StudioHeroImages() {
-  const [current, setCurrent] = useState(0);
+  const [current, setCurrent] = useState(() =>
+    STUDIO_HERO_IMAGES.length > 1
+      ? Math.floor(Math.random() * STUDIO_HERO_IMAGES.length)
+      : 0
+  );
 
   useEffect(() => {
     if (STUDIO_HERO_IMAGES.length <= 1) return;
@@ -17,14 +21,8 @@ export function StudioHeroImages() {
     return () => clearInterval(timer);
   }, []);
 
-  if (STUDIO_HERO_IMAGES.length === 0) {
-    return (
-      <div className="w-full aspect-[4/5] rounded-2xl bg-[var(--accent)]" />
-    );
-  }
-
   return (
-    <div className="relative w-full aspect-[4/5] rounded-2xl overflow-hidden">
+    <div className="absolute inset-0">
       {STUDIO_HERO_IMAGES.map((src, i) => (
         <img
           key={src}
@@ -37,8 +35,9 @@ export function StudioHeroImages() {
           }}
         />
       ))}
-      {/* Subtle gradient overlay at the bottom */}
-      <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+      {STUDIO_HERO_IMAGES.length === 0 && (
+        <div className="absolute inset-0 bg-[var(--primary)]/20" />
+      )}
     </div>
   );
 }

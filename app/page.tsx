@@ -29,43 +29,39 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* Hero */}
-      <section className="max-w-5xl mx-auto px-6 pt-12 pb-20">
-        <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-          {/* Left: text */}
-          <div className="space-y-6">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--accent)] text-[var(--primary)] text-xs font-medium">
-              <Heart size={11} fill="currentColor" />
-              Half of Pro profits go to arts advocacy organizations
-            </div>
-            <h1 className="text-5xl sm:text-6xl font-bold tracking-tight leading-tight">
-              Free tools for artists{" "}
-              <span className="text-[var(--primary)]">built by artists.</span>
-            </h1>
-            <p className="text-lg text-[var(--muted-foreground)] leading-relaxed max-w-lg">
-              Build your artist website, track your creative time, and publish your work — free, forever. No credit card, no catch.
-            </p>
-            <div className="flex flex-wrap items-center gap-4">
-              <Link
-                href="/login"
-                className="flex items-center gap-2 px-6 py-3 rounded-xl bg-[var(--primary)] text-[var(--primary-foreground)] font-medium hover:opacity-90 transition-opacity"
-              >
-                Create your free site <ArrowRight size={16} />
-              </Link>
-              <a
-                href="#features"
-                className="px-6 py-3 rounded-xl border border-[var(--border)] text-sm font-medium text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors"
-              >
-                See what's included
-              </a>
-            </div>
-            <p className="text-xs text-[var(--muted-foreground)]">Free forever. Upgrade to Pro for $5/month to use your own domain.</p>
+      {/* Hero — full-width with rotating background */}
+      <section className="relative min-h-[88vh] flex items-center justify-center overflow-hidden">
+        <StudioHeroImages />
+        {/* Dark overlay */}
+        <div className="absolute inset-0 bg-black/55" />
+        {/* Content */}
+        <div className="relative z-10 text-center px-6 py-24 max-w-3xl mx-auto">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 text-white text-xs font-medium mb-8 backdrop-blur-sm">
+            <Heart size={11} fill="currentColor" />
+            Half of Pro profits go to arts advocacy organizations
           </div>
-
-          {/* Right: rotating images */}
-          <div className="hidden lg:block">
-            <StudioHeroImages />
+          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight leading-tight text-white">
+            Free tools for artists{" "}
+            <span className="text-[var(--primary)]">built by artists.</span>
+          </h1>
+          <p className="mt-6 text-lg text-white/75 max-w-xl mx-auto leading-relaxed">
+            Build your artist website, track your creative time, and publish your work — free, forever. No credit card, no catch.
+          </p>
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+            <Link
+              href="/login"
+              className="flex items-center gap-2 px-6 py-3 rounded-xl bg-[var(--primary)] text-[var(--primary-foreground)] font-medium hover:opacity-90 transition-opacity"
+            >
+              Create your free site <ArrowRight size={16} />
+            </Link>
+            <a
+              href="#features"
+              className="px-6 py-3 rounded-xl border border-white/30 text-sm font-medium text-white hover:bg-white/10 transition-colors"
+            >
+              See what's included
+            </a>
           </div>
+          <p className="mt-5 text-xs text-white/40">Free forever. Upgrade to Pro for $5/month to use your own domain.</p>
         </div>
       </section>
 
