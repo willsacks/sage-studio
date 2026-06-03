@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Leaf, Globe, Timer, Check, ArrowRight, Heart } from "lucide-react";
+import { Leaf, Globe, Timer, Check, ArrowRight, Heart, GitBranch, Gamepad2 } from "lucide-react";
 
 export default function HomePage() {
   return (
@@ -100,6 +100,46 @@ export default function HomePage() {
               ))}
             </ul>
           </div>
+
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-8 space-y-4">
+            <div className="w-11 h-11 rounded-xl bg-[var(--accent)] flex items-center justify-center">
+              <GitBranch size={20} className="text-[var(--primary)]" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold">Producer Pipeline</h2>
+              <p className="text-sm text-[var(--muted-foreground)] mt-1 leading-relaxed">
+                Track every artist and collaboration from first conversation to finished project. Know who's in what stage, what's needed next, and never let a promising relationship fall through the cracks.
+              </p>
+            </div>
+            <ul className="space-y-1.5">
+              {["Visual stage-by-stage contact tracking", "Next action on every contact", "Tag contacts by offer or project type", "Log completed actions with one click"].map((f) => (
+                <li key={f} className="flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
+                  <Check size={13} className="text-[var(--primary)] flex-shrink-0" />
+                  {f}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-8 space-y-4">
+            <div className="w-11 h-11 rounded-xl bg-[var(--accent)] flex items-center justify-center">
+              <Gamepad2 size={20} className="text-[var(--primary)]" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold">Process Game</h2>
+              <p className="text-sm text-[var(--muted-foreground)] mt-1 leading-relaxed">
+                Stop chasing results — focus on the process. Play the 100 Meeting Game: fill one cell per conversation, watch the yeses fill your spots. The process gets the outcome.
+              </p>
+            </div>
+            <ul className="space-y-1.5">
+              {["100-cell meeting game with milestone markers", "Track yeses across all your offers", "Visual momentum you can feel every day", "Focus on showing up, not outcomes"].map((f) => (
+                <li key={f} className="flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
+                  <Check size={13} className="text-[var(--primary)] flex-shrink-0" />
+                  {f}
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </section>
 
@@ -107,7 +147,7 @@ export default function HomePage() {
       <section className="max-w-5xl mx-auto px-6 pb-24">
         <div className="text-center mb-10">
           <h2 className="text-3xl font-bold tracking-tight">Simple pricing</h2>
-          <p className="text-[var(--muted-foreground)] mt-2">Unreasonable value for free. Pay only when you're serious.</p>
+          <p className="text-[var(--muted-foreground)] mt-2">Unreasonable value for free. Only 5 bucks for serious pro features. Half of profits for arts advocacy.</p>
         </div>
         <div className="grid sm:grid-cols-2 gap-6 max-w-2xl mx-auto">
           <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-8 space-y-6">
@@ -168,12 +208,6 @@ export default function HomePage() {
           <h3 className="font-semibold text-lg">Artists helping artists</h3>
           <p className="text-sm text-[var(--muted-foreground)] max-w-md mx-auto leading-relaxed">
             Sage Studio was built by Will Sage — musician, producer, creator. Half of every Pro subscription's profits go to arts advocacy organizations fighting to keep the arts alive and accessible.
-          </p>
-          <p className="text-xs text-[var(--muted-foreground)]">
-            Interested in joining Creator Circle, Will's artist accountability community?{" "}
-            <a href="https://creatorscircle.art" className="text-[var(--primary)] hover:underline">
-              Learn more →
-            </a>
           </p>
         </div>
       </section>
