@@ -324,6 +324,19 @@ function PricingSettings({ data, update }: { data: PricingCardBlockData; update:
       <Field label="Heading"><Input value={data.sectionHeading ?? ""} onChange={(v) => update({ sectionHeading: v })} placeholder="Simple, transparent pricing" /></Field>
       <Field label="Subheading"><Input value={data.sectionSubheading ?? ""} onChange={(v) => update({ sectionSubheading: v })} placeholder="Optional tagline below heading" /></Field>
       <Field label="Footer Text"><Input value={data.footerText ?? ""} onChange={(v) => update({ footerText: v })} placeholder="e.g. All prices in USD. Cancel anytime." /></Field>
+
+      <p className="text-[10px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wide pt-1">Global CTA (optional)</p>
+      <label className="flex items-center gap-2 text-sm cursor-pointer">
+        <input type="checkbox" checked={data.hidePerTierCta ?? false} onChange={(e) => update({ hidePerTierCta: e.target.checked })}
+          className="rounded border-[var(--border)]" />
+        Hide buttons on each tier card
+      </label>
+      {data.hidePerTierCta && (
+        <>
+          <Field label="Button text"><Input value={data.globalCtaText ?? ""} onChange={(v) => update({ globalCtaText: v })} placeholder="Apply Now" /></Field>
+          <Field label="Button link"><Input value={data.globalCtaLink ?? ""} onChange={(v) => update({ globalCtaLink: v })} placeholder="https://..." /></Field>
+        </>
+      )}
       <Field label="Layout">
         <div className="flex rounded-lg border border-[var(--border)] overflow-hidden text-xs font-medium">
           {(["center", "left"] as const).map((v) => (

@@ -109,6 +109,9 @@ export interface PricingCardBlockData {
   footerText?: string;
   layout?: "center" | "left";
   cardWidth?: "sm" | "md" | "lg"; // used only when tiers.length === 1
+  hidePerTierCta?: boolean;
+  globalCtaText?: string;
+  globalCtaLink?: string;
   // Tiers (new format)
   tiers?: PricingTier[];
   // Legacy single-tier fields (migration fallback — not written by new code)

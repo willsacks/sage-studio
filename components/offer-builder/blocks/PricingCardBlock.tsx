@@ -36,11 +36,12 @@ function getTiers(data: PricingCardBlockData): PricingTier[] {
   }];
 }
 
-function TierCard({ tier, isEditing, scale = 1, useSubgrid = false }: {
+function TierCard({ tier, isEditing, scale = 1, useSubgrid = false, hidePerTierCta = false }: {
   tier: PricingTier;
   isEditing?: boolean;
   scale?: number;
   useSubgrid?: boolean;
+  hidePerTierCta?: boolean;
 }) {
   const [loading, setLoading] = useState(false);
 
@@ -197,9 +198,9 @@ function TierCard({ tier, isEditing, scale = 1, useSubgrid = false }: {
           )}
         </div>
 
-        {/* Row 4: CTA — extra bottom padding provides spacing between wrapping card rows */}
+        {/* Row 4: CTA — rendered even when hidden so subgrid rows stay aligned */}
         <div className={useSubgrid ? "px-6 pt-2 pb-10 flex-shrink-0" : "px-6 pb-6 flex-shrink-0"}>
-          <a
+          {!hidePerTierCta && (<><a
             href={ctaHref}
             onClick={ctaHandler}
             className="block w-full text-center px-5 py-3 font-bold text-sm transition-all hover:opacity-90 active:opacity-80"
@@ -254,6 +255,7 @@ function TierCard({ tier, isEditing, scale = 1, useSubgrid = false }: {
               {tier.guarantee}
             </p>
           )}
+          </>)}
         </div>
       </div>
     </div>
@@ -308,7 +310,7 @@ export function PricingCardBlock({ data, isEditing }: { data: PricingCardBlockDa
 
         {count === 1 ? (
           <div className={`${CARD_WIDTHS[data.cardWidth ?? "md"]} ${isLeft ? "" : "mx-auto"} relative pt-4`}>
-            <TierCard tier={tiers[0]} isEditing={isEditing} scale={scale} />
+            <TierCard tier={tiers[0]} isEditing={isEditing} scale={scale} hidePerTierCta={data.hidePerTierCta} />
           </div>
         ) : (
           // column-gap only — row-gap is 0 so subgrid rows share heights without added gaps
@@ -336,11 +338,32 @@ export function PricingCardBlock({ data, isEditing }: { data: PricingCardBlockDa
                   className="relative pt-4 cc-pricing-card"
                   style={{ gridRow: "span 4", display: "grid", gridTemplateRows: "subgrid", gap: 0 }}
                 >
-                  <TierCard tier={tier} isEditing={isEditing} scale={scale} useSubgrid />
+                  <TierCard tier={tier} isEditing={isEditing} scale={scale} useSubgrid hidePerTierCta={data.hidePerTierCta} />
                 </div>
               ))}
             </div>
           </>
+        )}
+
+        {data.hidePerTierCta && data.globalCtaText && (
+          <div className={`mt-8 ${isLeft ? "" : "text-center"}`}>
+            <a
+              href={data.globalCtaLink ?? "#"}
+              onClick={isEditing ? (e) => e.preventDefault() : undefined}
+              className="inline-block px-10 py-4 font-bold text-sm transition-all hover:opacity-90 active:opacity-80"
+              style={{
+                backgroundColor: "var(--st-color-accent, #C9A84C)",
+                color: "var(--st-color-text-inverse, #0E0C09)",
+                border: "2px solid transparent",
+                borderRadius: "var(--st-border-radius-button, 2px)",
+                fontFamily: `var(--st-font-display, "Playfair Display"), serif`,
+                textTransform: "var(--st-button-text-transform, uppercase)" as React.CSSProperties["textTransform"],
+                letterSpacing: "var(--st-button-letter-spacing, 0.05em)",
+              }}
+            >
+              {data.globalCtaText}
+            </a>
+          </div>
         )}
 
         {data.footerText && (
