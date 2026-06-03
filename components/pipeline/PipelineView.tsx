@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus, Users, Calendar, ChevronRight } from "lucide-react";
+import { Plus, Users, Calendar, ChevronRight, CheckCircle2 } from "lucide-react";
 import { format, parseISO } from "date-fns";
-import { createContact } from "@/lib/actions/pipeline";
+import { createContact, updateContact } from "@/lib/actions/pipeline";
 import { ContactDrawer } from "./ContactDrawer";
 import type { Stage, Contact, Tag } from "@/app/(dashboard)/pipeline/page";
 
@@ -87,6 +87,18 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts,
 
   function handleStagesReordered(reordered: Stage[]) {
     setStages(reordered);
+  }
+
+  function handleCompleteNextAction(contact: Contact) {
+    if (!contact.next_action?.trim()) return;
+    const date = format(new Date(), "MMM d, yyyy");
+    const entry = `✓ ${date}: ${contact.next_action.trim()}`;
+    const newNotes = contact.notes ? `${contact.notes}\n${entry}` : entry;
+    const updated = { ...contact, next_action: null, notes: newNotes };
+    handleContactUpdated(updated);
+    startTransition(async () => {
+      await updateContact(contact.id, { next_action: null, notes: newNotes });
+    });
   }
 
   function handleTagCreated(tag: Tag) {
@@ -239,10 +251,10 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts,
           const isActive = activeContact?.id === contact.id;
 
           return (
-            <button
+            <div
               key={contact.id}
               onClick={() => setActiveContact(isActive ? null : contact)}
-              className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl text-left transition-all border ${
+              className={`group w-full flex items-center gap-4 px-4 py-3 rounded-xl text-left transition-all border cursor-pointer ${
                 isActive
                   ? "bg-[var(--accent)] border-[var(--primary)]/30"
                   : "bg-[var(--card)] border-[var(--border)] hover:border-[var(--primary)]/20 hover:bg-[var(--accent)]/50"
@@ -267,9 +279,16 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts,
                   </span>
                 ))}
                 {contact.next_action && (
-                  <span className="text-xs text-[var(--muted-foreground)] basis-full sm:basis-auto sm:flex-1 truncate">
-                    <span className="text-[var(--primary)] font-medium">→</span>{" "}
-                    {contact.next_action}
+                  <span className="text-xs text-[var(--muted-foreground)] basis-full sm:basis-auto sm:flex-1 flex items-center gap-1 min-w-0">
+                    <span className="text-[var(--primary)] font-medium flex-shrink-0">→</span>
+                    <span className="truncate">{contact.next_action}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleCompleteNextAction(contact); }}
+                      title="Mark done"
+                      className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-[var(--muted-foreground)] hover:text-[var(--primary)] p-0.5 rounded"
+                    >
+                      <CheckCircle2 size={13} />
+                    </button>
                   </span>
                 )}
               </div>
@@ -305,7 +324,7 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts,
               )}
 
               <ChevronRight size={14} className={`flex-shrink-0 text-[var(--muted-foreground)] transition-transform ${isActive ? "rotate-90" : ""}`} />
-            </button>
+            </div>
           );
         })}
       </div>

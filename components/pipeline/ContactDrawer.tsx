@@ -2,7 +2,8 @@
 
 import { useState, useTransition, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Trash2, Plus, Check, GripVertical } from "lucide-react";
+import { X, Trash2, Plus, Check, GripVertical, CheckCircle2 } from "lucide-react";
+import { format } from "date-fns";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import type { DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
@@ -409,9 +410,32 @@ export function ContactDrawer({
                   {/* Next Action */}
                   <div className="bg-[var(--accent)] rounded-xl px-4 py-3">
                     <label className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)] mb-1.5 block">Next Action</label>
-                    <input value={nextAction} onChange={(e) => setNextAction(e.target.value)} onBlur={save}
-                      placeholder="What needs to happen next?"
-                      className="w-full text-sm bg-transparent focus:outline-none placeholder:text-[var(--muted-foreground)]" />
+                    <div className="flex items-center gap-2">
+                      <input value={nextAction} onChange={(e) => setNextAction(e.target.value)} onBlur={save}
+                        placeholder="What needs to happen next?"
+                        className="flex-1 text-sm bg-transparent focus:outline-none placeholder:text-[var(--muted-foreground)]" />
+                      {nextAction.trim() && (
+                        <button
+                          type="button"
+                          title="Mark done"
+                          onClick={() => {
+                            if (!contact || !nextAction.trim()) return;
+                            const date = format(new Date(), "MMM d, yyyy");
+                            const entry = `✓ ${date}: ${nextAction.trim()}`;
+                            const newNotes = notes ? `${notes}\n${entry}` : entry;
+                            setNotes(newNotes);
+                            setNextAction("");
+                            startTransition(async () => {
+                              await updateContact(contact.id, { next_action: null, notes: newNotes });
+                              onContactUpdated({ ...contact, name, stage_id: stageId, next_action: null, notes: newNotes, collaborators, next_session: nextSession || null });
+                            });
+                          }}
+                          className="flex-shrink-0 p-1 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--primary)] hover:bg-[var(--primary)]/10 transition-colors"
+                        >
+                          <CheckCircle2 size={16} />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* Stage */}
