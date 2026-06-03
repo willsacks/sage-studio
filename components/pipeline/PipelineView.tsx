@@ -254,26 +254,23 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts,
                 style={{ backgroundColor: stage?.color ?? "#E2E8F0" }}
               />
 
-              {/* Name + next action + tags */}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{contact.name}</p>
+              {/* Name + tags + next action — single row on wide screens */}
+              <div className="flex-1 min-w-0 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span className="text-sm font-medium flex-none">{contact.name}</span>
+                {contactTags.map((tag) => (
+                  <span
+                    key={tag.id}
+                    className="text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-none"
+                    style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
+                  >
+                    {tag.name}
+                  </span>
+                ))}
                 {contact.next_action && (
-                  <p className="text-xs text-[var(--muted-foreground)] truncate mt-0.5">
-                    <span className="text-[var(--primary)] font-medium">→</span> {contact.next_action}
-                  </p>
-                )}
-                {contactTags.length > 0 && (
-                  <div className="flex gap-1 mt-1 flex-wrap">
-                    {contactTags.map((tag) => (
-                      <span
-                        key={tag.id}
-                        className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
-                        style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
-                      >
-                        {tag.name}
-                      </span>
-                    ))}
-                  </div>
+                  <span className="text-xs text-[var(--muted-foreground)] basis-full sm:basis-auto sm:flex-1 truncate">
+                    <span className="text-[var(--primary)] font-medium">→</span>{" "}
+                    {contact.next_action}
+                  </span>
                 )}
               </div>
 
