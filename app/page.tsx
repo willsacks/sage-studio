@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Leaf, Globe, Timer, Check, ArrowRight, Heart, GitBranch, Gamepad2 } from "lucide-react";
+import { Leaf, Globe, Timer, Check, ArrowRight, Heart, GitBranch, Gamepad2, ListChecks } from "lucide-react";
 
 export default function HomePage() {
   return (
@@ -133,6 +133,25 @@ export default function HomePage() {
             </div>
             <ul className="space-y-1.5">
               {["100-cell meeting game with milestone markers", "Track yeses across all your offers", "Visual momentum you can feel every day", "Focus on showing up, not outcomes"].map((f) => (
+                <li key={f} className="flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
+                  <Check size={13} className="text-[var(--primary)] flex-shrink-0" />
+                  {f}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-8 space-y-4">
+            <div className="w-11 h-11 rounded-xl bg-[var(--accent)] flex items-center justify-center">
+              <ListChecks size={20} className="text-[var(--primary)]" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold">Beautiful progressive forms</h2>
+              <p className="text-sm text-[var(--muted-foreground)] mt-1 leading-relaxed">
+                Embed multi-step forms directly into your site pages. Guide visitors through a thoughtful sequence of questions that feels effortless — and lands in your inbox ready to act on.
+              </p>
+            </div>
+            <ul className="space-y-1.5">
+              {["Multi-step progressive flow", "Embeds seamlessly in any page", "Customizable questions and fields", "Submissions straight to your dashboard"].map((f) => (
                 <li key={f} className="flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
                   <Check size={13} className="text-[var(--primary)] flex-shrink-0" />
                   {f}
