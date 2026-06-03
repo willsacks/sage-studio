@@ -15,6 +15,7 @@ export function SiteSettingsForm({ siteId, site }: { siteId: string; site: Artis
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [logoUrl, setLogoUrl] = useState<string | null>(site.logo_url);
+  const [faviconUrl, setFaviconUrl] = useState<string | null>(site.favicon_url ?? null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -24,6 +25,7 @@ export function SiteSettingsForm({ siteId, site }: { siteId: string; site: Artis
     setSaved(false);
     const formData = new FormData(e.currentTarget);
     formData.set("logo_url", logoUrl ?? "");
+    formData.set("favicon_url", faviconUrl ?? "");
 
     startTransition(async () => {
       const result = await updateSite(siteId, formData);
@@ -48,6 +50,12 @@ export function SiteSettingsForm({ siteId, site }: { siteId: string; site: Artis
         <Label>Logo</Label>
         <p className="text-xs text-[var(--muted-foreground)]">Appears in the site nav. Leave blank to use the site title as text.</p>
         <ImageUploader bucket="offering-media" folder="site-logos" value={logoUrl} onChange={setLogoUrl} />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Favicon</Label>
+        <p className="text-xs text-[var(--muted-foreground)]">Browser tab icon. Square image, recommended 64×64px or larger.</p>
+        <ImageUploader bucket="offering-media" folder="site-favicons" value={faviconUrl} onChange={setFaviconUrl} aspectRatio="square" className="max-w-[96px]" />
       </div>
 
       <div className="space-y-2">

@@ -109,6 +109,7 @@ export async function updateSite(siteId: string, formData: FormData) {
       site_title: (formData.get("site_title") as string)?.trim() || null,
       site_tagline: (formData.get("site_tagline") as string)?.trim() || null,
       logo_url: (formData.get("logo_url") as string) || null,
+      favicon_url: (formData.get("favicon_url") as string) || null,
       footer_text: (formData.get("footer_text") as string)?.trim() || null,
       updated_at: new Date().toISOString(),
     })
@@ -263,6 +264,46 @@ export async function saveSitePage(
     .eq("user_id", user.id);
 
   if (error) return { error: error.message };
+
+  // When a slug changes, update all other pages in the site that link to the old slug
+  if (data.slug && data.siteId) {
+    const { data: currentPage } = await supabase
+      .from("site_pages")
+      .select("slug")
+      .eq("id", pageId)
+      .single();
+
+    const oldSlug = (currentPage as { slug?: string } | null)?.slug;
+    if (oldSlug && oldSlug !== data.slug) {
+      const { data: otherPages } = await supabase
+        .from("site_pages")
+        .select("id, page_data")
+        .eq("site_id", data.siteId)
+        .neq("id", pageId);
+
+      if (otherPages && otherPages.length > 0) {
+        const oldToken = `"/${oldSlug}"`;
+        const newToken = `"/${data.slug}"`;
+        const escaped = oldToken.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+        await Promise.all(
+          (otherPages as { id: string; page_data: unknown }[])
+            .filter((p) => p.page_data && JSON.stringify(p.page_data).includes(oldToken))
+            .map((p) => {
+              const updated = JSON.parse(
+                JSON.stringify(p.page_data).replace(new RegExp(escaped, "g"), newToken)
+              );
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              return (supabase as any)
+                .from("site_pages")
+                .update({ page_data: updated, updated_at: new Date().toISOString() })
+                .eq("id", p.id);
+            })
+        );
+      }
+    }
+  }
+
   if (data.siteId) revalidatePath(`/my-site/${data.siteId}`);
   return { success: true };
 }

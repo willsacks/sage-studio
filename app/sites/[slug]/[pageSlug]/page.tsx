@@ -27,6 +27,9 @@ export async function generateMetadata({
   return {
     title: page.meta_title ?? page.title,
     description: page.meta_description ?? undefined,
+    icons: (site as { favicon_url?: string | null })?.favicon_url
+      ? { icon: (site as { favicon_url?: string | null }).favicon_url! }
+      : undefined,
     openGraph: {
       title: ogTitle,
       description: ogDescription,

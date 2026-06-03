@@ -7,6 +7,7 @@ export type ArtistSite = Tables<"artist_sites"> & {
   home_page_id?: string | null;
   footer_text?: string | null;
   ornamentation_key?: string | null;
+  favicon_url?: string | null;
 };
 export type SitePage = Tables<"site_pages"> & {
   show_in_nav?: boolean | null;
