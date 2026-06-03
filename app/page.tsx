@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Leaf, Globe, Timer, Check, ArrowRight, Heart, GitBranch, Gamepad2, ListChecks } from "lucide-react";
+import { StudioHeroImages } from "@/components/StudioHeroImages";
 
 export default function HomePage() {
   return (
@@ -29,33 +30,43 @@ export default function HomePage() {
       </header>
 
       {/* Hero */}
-      <section className="max-w-5xl mx-auto px-6 pt-20 pb-24 text-center">
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--accent)] text-[var(--primary)] text-xs font-medium mb-8">
-          <Heart size={11} fill="currentColor" />
-          Half of Pro profits go to arts advocacy organizations
+      <section className="max-w-5xl mx-auto px-6 pt-12 pb-20">
+        <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+          {/* Left: text */}
+          <div className="space-y-6">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--accent)] text-[var(--primary)] text-xs font-medium">
+              <Heart size={11} fill="currentColor" />
+              Half of Pro profits go to arts advocacy organizations
+            </div>
+            <h1 className="text-5xl sm:text-6xl font-bold tracking-tight leading-tight">
+              Free tools for artists{" "}
+              <span className="text-[var(--primary)]">built by artists.</span>
+            </h1>
+            <p className="text-lg text-[var(--muted-foreground)] leading-relaxed max-w-lg">
+              Build your artist website, track your creative time, and publish your work — free, forever. No credit card, no catch.
+            </p>
+            <div className="flex flex-wrap items-center gap-4">
+              <Link
+                href="/login"
+                className="flex items-center gap-2 px-6 py-3 rounded-xl bg-[var(--primary)] text-[var(--primary-foreground)] font-medium hover:opacity-90 transition-opacity"
+              >
+                Create your free site <ArrowRight size={16} />
+              </Link>
+              <a
+                href="#features"
+                className="px-6 py-3 rounded-xl border border-[var(--border)] text-sm font-medium text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors"
+              >
+                See what's included
+              </a>
+            </div>
+            <p className="text-xs text-[var(--muted-foreground)]">Free forever. Upgrade to Pro for $5/month to use your own domain.</p>
+          </div>
+
+          {/* Right: rotating images */}
+          <div className="hidden lg:block">
+            <StudioHeroImages />
+          </div>
         </div>
-        <h1 className="text-5xl sm:text-6xl font-bold tracking-tight leading-tight max-w-3xl mx-auto">
-          Free tools for artists{" "}
-          <span className="text-[var(--primary)]">built by artists.</span>
-        </h1>
-        <p className="mt-6 text-lg text-[var(--muted-foreground)] max-w-xl mx-auto leading-relaxed">
-          Build your artist website, track your creative time, and publish your work — free, forever. No credit card, no catch.
-        </p>
-        <div className="mt-10 flex items-center justify-center gap-4">
-          <Link
-            href="/login"
-            className="flex items-center gap-2 px-6 py-3 rounded-xl bg-[var(--primary)] text-[var(--primary-foreground)] font-medium hover:opacity-90 transition-opacity"
-          >
-            Create your free site <ArrowRight size={16} />
-          </Link>
-          <a
-            href="#features"
-            className="px-6 py-3 rounded-xl border border-[var(--border)] text-sm font-medium text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors"
-          >
-            See what's included
-          </a>
-        </div>
-        <p className="mt-4 text-xs text-[var(--muted-foreground)]">Free forever. Upgrade to Pro for $5/month to use your own domain.</p>
       </section>
 
       {/* Features */}
