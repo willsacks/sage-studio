@@ -33,6 +33,8 @@ export function PublishSettingsModal({
   const [ogImage, setOgImage] = useState<string | null>(pageAny.og_image ?? null);
   const [ogTitle, setOgTitle] = useState<string>(pageAny.og_title ?? "");
   const [ogDescription, setOgDescription] = useState<string>(pageAny.og_description ?? "");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const theme = useBuilderStore((s) => s.theme);
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://sagestudio.org";
@@ -44,14 +46,23 @@ export function PublishSettingsModal({
   };
 
   async function handleSave() {
-    const ogData = { og_image: ogImage, og_title: ogTitle || null, og_description: ogDescription || null };
-    if (saveSettingsAction) {
-      await saveSettingsAction(page.id, { slug, publish_mode: tab, custom_domain: customDomain || undefined, ...ogData });
-    } else {
-      await saveOfferPage(page.id, { slug, publish_mode: tab, custom_domain: customDomain || undefined });
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const ogData = { og_image: ogImage, og_title: ogTitle || null, og_description: ogDescription || null };
+      if (saveSettingsAction) {
+        await saveSettingsAction(page.id, { slug, publish_mode: tab, custom_domain: customDomain || undefined, ...ogData });
+      } else {
+        const result = await saveOfferPage(page.id, { slug, publish_mode: tab, custom_domain: customDomain || undefined });
+        if (result && "error" in result) { setSaveError(result.error); setSaving(false); return; }
+      }
+      onSlugChange?.(slug);
+      onClose();
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Failed to save settings");
+    } finally {
+      setSaving(false);
     }
-    onSlugChange?.(slug);
-    onClose();
   }
 
   async function handleVerify() {
@@ -223,11 +234,15 @@ export function PublishSettingsModal({
             </div>
           </div>
 
+          {saveError && (
+            <p className="text-xs text-[var(--destructive)] text-center">{saveError}</p>
+          )}
           <button
             onClick={handleSave}
-            className="w-full py-2.5 rounded-lg text-sm font-semibold bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 transition-colors"
+            disabled={saving}
+            className="w-full py-2.5 rounded-lg text-sm font-semibold bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 transition-colors disabled:opacity-60"
           >
-            Save Settings
+            {saving ? "Saving…" : "Save Settings"}
           </button>
         </div>
       </div>
