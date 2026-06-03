@@ -92,6 +92,23 @@ export async function deleteProgram(id: string) {
   return { success: true };
 }
 
+export async function reorderPrograms(orderedIds: string[]) {
+  const { supabase, user } = await requireAuth();
+
+  await Promise.all(
+    orderedIds.map((id, position) =>
+      supabase
+        .from("process_game_programs")
+        .update({ position })
+        .eq("id", id)
+        .eq("user_id", user.id)
+    )
+  );
+
+  revalidatePath("/process-game");
+  return { success: true };
+}
+
 // ── Spots ─────────────────────────────────────────────────────────────────────
 
 export async function upsertSpot(programId: string, position: number, label: string, color: string | null) {

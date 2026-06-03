@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Pencil, Trash2, Check } from "lucide-react";
+import { Pencil, Trash2, Check, GripVertical } from "lucide-react";
 import { Cell, CELL_COLORS } from "./Cell";
 import type { Program, Spot } from "@/app/(dashboard)/process-game/page";
 
@@ -11,9 +11,10 @@ interface Props {
   onSpotSave: (position: number, label: string, color: string | null) => void;
   onProgramUpdate: (name: string, totalSpots: number, color: string) => void;
   onProgramDelete: () => void;
+  dragHandleProps?: React.HTMLAttributes<HTMLButtonElement>;
 }
 
-export function ProgramSection({ program, spots, onSpotSave, onProgramUpdate, onProgramDelete }: Props) {
+export function ProgramSection({ program, spots, onSpotSave, onProgramUpdate, onProgramDelete, dragHandleProps }: Props) {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(program.name);
   const [editSpots, setEditSpots] = useState(String(program.total_spots));
@@ -85,6 +86,14 @@ export function ProgramSection({ program, spots, onSpotSave, onProgramUpdate, on
         </div>
       ) : (
         <div className="flex items-center gap-2 group">
+          <button
+            type="button"
+            {...dragHandleProps}
+            className="p-1 cursor-grab active:cursor-grabbing text-[var(--muted-foreground)] opacity-0 group-hover:opacity-100 transition-opacity touch-none flex-shrink-0"
+            tabIndex={-1}
+          >
+            <GripVertical size={15} />
+          </button>
           <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: program.color }} />
           <h3 className="text-base font-semibold flex-1">{program.name}</h3>
           <span className="text-sm text-[var(--muted-foreground)]">

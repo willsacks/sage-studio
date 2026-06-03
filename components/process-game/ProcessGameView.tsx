@@ -2,11 +2,27 @@
 
 import { useState, useTransition } from "react";
 import { Plus, Check } from "lucide-react";
-import { upsertCell, upsertSpot, createProgram, updateProgram, deleteProgram } from "@/lib/actions/process-game";
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import type { DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { upsertCell, upsertSpot, createProgram, updateProgram, deleteProgram, reorderPrograms } from "@/lib/actions/process-game";
 import { GameGrid } from "./GameGrid";
 import { ProgramSection } from "./ProgramSection";
 import { CELL_COLORS } from "./Cell";
 import type { GameCell, Program, Spot } from "@/app/(dashboard)/process-game/page";
+
+function SortableProgramSection(props: React.ComponentProps<typeof ProgramSection>) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.program.id });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
+    >
+      <ProgramSection {...props} dragHandleProps={{ ...attributes, ...listeners }} />
+    </div>
+  );
+}
 
 interface Props {
   cells: Record<number, GameCell>;
@@ -23,6 +39,18 @@ export function ProcessGameView({ cells: initialCells, programs: initialPrograms
   const [newSpots, setNewSpots] = useState("10");
   const [newColor, setNewColor] = useState(CELL_COLORS[1]);
   const [pending, startTransition] = useTransition();
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = programs.findIndex((p) => p.id === active.id);
+    const newIndex = programs.findIndex((p) => p.id === over.id);
+    const reordered = arrayMove(programs, oldIndex, newIndex).map((p, i) => ({ ...p, position: i }));
+    setPrograms(reordered);
+    startTransition(async () => { await reorderPrograms(reordered.map((p) => p.id)); });
+  }
 
   function handleCellSave(position: number, label: string, color: string | null) {
     setCells((prev) => {
@@ -113,16 +141,20 @@ export function ProcessGameView({ cells: initialCells, programs: initialPrograms
           </p>
         )}
 
-        {programs.map((program) => (
-          <ProgramSection
-            key={program.id}
-            program={program}
-            spots={spotMap[program.id] ?? {}}
-            onSpotSave={(pos, label, color) => handleSpotSave(program.id, pos, label, color)}
-            onProgramUpdate={(name, total, color) => handleProgramUpdate(program.id, name, total, color)}
-            onProgramDelete={() => handleProgramDelete(program.id)}
-          />
-        ))}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={programs.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+            {programs.map((program) => (
+              <SortableProgramSection
+                key={program.id}
+                program={program}
+                spots={spotMap[program.id] ?? {}}
+                onSpotSave={(pos, label, color) => handleSpotSave(program.id, pos, label, color)}
+                onProgramUpdate={(name, total, color) => handleProgramUpdate(program.id, name, total, color)}
+                onProgramDelete={() => handleProgramDelete(program.id)}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
 
         {/* Add program */}
         {addingProgram ? (
