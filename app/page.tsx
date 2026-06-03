@@ -241,8 +241,9 @@ export default function HomePage() {
             <span className="text-sm font-medium">Sage Studio</span>
           </div>
           <p className="text-xs text-[var(--muted-foreground)]">
-            Free tools for artists. Built by{" "}
+            Free tools for artists. Founded by{" "}
             <a href="https://creatorscircle.art" className="hover:underline">Will Sage</a>.
+            {" "}The Sage Studio team is based in Music City, Nashville, Tennessee.
           </p>
         </div>
       </footer>
