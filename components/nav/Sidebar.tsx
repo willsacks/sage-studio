@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Globe, Timer, Store, CreditCard, Settings, Leaf, LogOut, ExternalLink, LayoutDashboard, GitBranch, CheckSquare, Gamepad2 } from "lucide-react";
+import { Globe, Timer, CreditCard, Settings, Leaf, LogOut, ExternalLink, LayoutDashboard, GitBranch, CheckSquare, Gamepad2 } from "lucide-react";
 import { signOut } from "@/lib/actions/auth";
 
 interface SidebarProps {
@@ -15,7 +15,6 @@ const NAV = [
   { href: "/my-site", label: "My Websites", icon: Globe },
   { href: "/todos", label: "To Do's", icon: CheckSquare },
   { href: "/tasks", label: "Time Tracker", icon: Timer },
-  { href: "/my-templates", label: "My Templates", icon: Store },
   { href: "/pipeline", label: "Pipeline", icon: GitBranch },
   { href: "/process-game", label: "Process Game", icon: Gamepad2 },
 ];
