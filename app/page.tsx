@@ -41,8 +41,7 @@ export default function HomePage() {
             Half of Pro profits go to arts advocacy organizations
           </div>
           <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight leading-tight text-white">
-            Free tools for artists{" "}
-            <span className="text-[var(--primary)]">built by artists.</span>
+            Free tools for artists built by artists.
           </h1>
           <p className="mt-6 text-lg text-white/75 max-w-xl mx-auto leading-relaxed">
             Build your artist website, track your creative time, and publish your work — free, forever. No credit card, no catch.
@@ -67,6 +66,9 @@ export default function HomePage() {
 
       {/* Features */}
       <section id="features" className="max-w-5xl mx-auto px-6 pb-24">
+        <div className="text-center mb-10 pt-16">
+          <h2 className="text-3xl font-bold tracking-tight">Save hundreds with our suite of tools</h2>
+        </div>
         <div className="grid sm:grid-cols-2 gap-6">
           <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-8 space-y-4">
             <div className="w-11 h-11 rounded-xl bg-[var(--accent)] flex items-center justify-center">
