@@ -21,8 +21,8 @@ export function EntryEditor({ entry, allSections, onEntryUpdated, onEntryDeleted
   const [, startTransition] = useTransition();
 
   const titleRef = useRef<HTMLInputElement>(null);
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
-  const savedTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const entryRef = useRef(entry);
   entryRef.current = entry;
 
