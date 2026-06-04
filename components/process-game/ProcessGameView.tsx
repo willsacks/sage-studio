@@ -9,6 +9,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { upsertCell, upsertSpot, createProgram, updateProgram, deleteProgram, reorderPrograms } from "@/lib/actions/process-game";
 import { GameGrid } from "./GameGrid";
 import { ProgramSection } from "./ProgramSection";
+import { Reflections } from "./Reflections";
 import { CELL_COLORS } from "./Cell";
 import type { GameCell, Program, Spot } from "@/app/(dashboard)/process-game/page";
 
@@ -28,9 +29,11 @@ interface Props {
   cells: Record<number, GameCell>;
   programs: Program[];
   spotMap: Record<string, Record<number, Spot>>;
+  learnings: string[];
+  conclusionsActions: string[];
 }
 
-export function ProcessGameView({ cells: initialCells, programs: initialPrograms, spotMap: initialSpotMap }: Props) {
+export function ProcessGameView({ cells: initialCells, programs: initialPrograms, spotMap: initialSpotMap, learnings, conclusionsActions }: Props) {
   const [cells, setCells] = useState(initialCells);
   const [programs, setPrograms] = useState(initialPrograms);
   const [spotMap, setSpotMap] = useState(initialSpotMap);
@@ -216,6 +219,8 @@ export function ProcessGameView({ cells: initialCells, programs: initialPrograms
           </button>
         )}
       </div>
+
+      <Reflections initialLearnings={learnings} initialConclusions={conclusionsActions} />
     </div>
   );
 }

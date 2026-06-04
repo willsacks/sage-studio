@@ -34,10 +34,11 @@ export default async function ProcessGamePage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = supabase as any;
 
-  const [{ data: cellsRaw }, { data: programsRaw }, { data: spotsRaw }] = await Promise.all([
+  const [{ data: cellsRaw }, { data: programsRaw }, { data: spotsRaw }, { data: journalRaw }] = await Promise.all([
     db.from("process_game_cells").select("position, label, color").eq("user_id", user.id),
     db.from("process_game_programs").select("id, name, total_spots, color, position").eq("user_id", user.id).order("position", { ascending: true }),
     db.from("process_game_spots").select("program_id, position, label, color").eq("user_id", user.id),
+    db.from("process_game_journal").select("learnings, conclusions_actions").eq("user_id", user.id).single(),
   ]);
 
   const cellMap: Record<number, GameCell> = {};
@@ -52,5 +53,8 @@ export default async function ProcessGamePage() {
     (spotMap[s.program_id] ??= {})[s.position] = s;
   }
 
-  return <ProcessGameView cells={cellMap} programs={programs} spotMap={spotMap} />;
+  const learnings: string[] = (journalRaw as any)?.learnings ?? [];
+  const conclusionsActions: string[] = (journalRaw as any)?.conclusions_actions ?? [];
+
+  return <ProcessGameView cells={cellMap} programs={programs} spotMap={spotMap} learnings={learnings} conclusionsActions={conclusionsActions} />;
 }
