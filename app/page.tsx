@@ -233,7 +233,7 @@ export default function HomePage() {
           </div>
           <h3 className="font-semibold text-lg">Artists helping artists</h3>
           <p className="text-sm text-[var(--muted-foreground)] max-w-md mx-auto leading-relaxed">
-            Sage Studio was built by Will Sage — musician, producer, creator. Half of every Pro subscription's profits go to arts advocacy organizations fighting to keep the arts alive and accessible.
+            Sage Studio was founded by Will Sage — musician, producer, creator. The Sage Studio team is based in Music City, Nashville, Tennessee. Half of every Pro subscription's profits go to arts advocacy organizations fighting to keep the arts alive and accessible.
           </p>
         </div>
       </section>
