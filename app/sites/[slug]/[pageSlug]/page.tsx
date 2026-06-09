@@ -4,7 +4,7 @@ import { getSiteBySlug, getPublishedPageBySlug, getPublishedPagesForSite } from 
 import { OfferPageBlocks } from "@/components/offer-builder/OfferPageBlocks";
 import { SiteNav } from "@/components/site/SiteNav";
 import type { PageData } from "@/lib/types/builder";
-import { THEMES_BY_KEY, DEFAULT_STYLE_KEY, buildStyleCssVars, buildGoogleFontsUrl, getFontsForTokens } from "@/lib/styles";
+import { buildStyleCssVars, buildGoogleFontsUrl, getFontsForTokens, resolveStyleTokens } from "@/lib/styles";
 import type { StyleTokens } from "@/lib/styles";
 import { ORNAMENTS_BY_KEY, DEFAULT_ORNAMENT_KEY, buildOrnamentCssVars } from "@/lib/ornaments";
 
@@ -61,9 +61,20 @@ export default async function PublicSitePageRoute({
 
   if (!site || !site.is_published || !page) notFound();
 
-  const styleKey = site.style_key ?? DEFAULT_STYLE_KEY;
-  const siteStyle = THEMES_BY_KEY[styleKey] ?? THEMES_BY_KEY[DEFAULT_STYLE_KEY];
-  const { tokens } = siteStyle;
+  // Standalone HTML page — render the uploaded HTML in a full-viewport iframe
+  if (page.page_type === "html") {
+    const htmlContent = (page as unknown as { html_content?: string | null }).html_content ?? "";
+    return (
+      <iframe
+        srcDoc={htmlContent}
+        style={{ width: "100vw", height: "100vh", border: "none", display: "block" }}
+        sandbox="allow-scripts allow-same-origin"
+        title={page.title}
+      />
+    );
+  }
+
+  const tokens = resolveStyleTokens(site);
 
   const cssVars = buildStyleCssVars(tokens);
   const ornamentKey = (site as { ornamentation_key?: string | null }).ornamentation_key ?? DEFAULT_ORNAMENT_KEY;

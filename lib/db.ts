@@ -90,6 +90,7 @@ export type Database = {
           custom_domain: string | null;
           custom_domain_verified: boolean;
           is_published: boolean;
+          custom_style: Json | null;
           created_at: string;
           updated_at: string;
         };
@@ -107,6 +108,7 @@ export type Database = {
           custom_domain?: string | null;
           custom_domain_verified?: boolean;
           is_published?: boolean;
+          custom_style?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -124,6 +126,7 @@ export type Database = {
           custom_domain?: string | null;
           custom_domain_verified?: boolean;
           is_published?: boolean;
+          custom_style?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -143,6 +146,7 @@ export type Database = {
           sort_order: number;
           meta_title: string | null;
           meta_description: string | null;
+          html_content: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -159,6 +163,7 @@ export type Database = {
           sort_order?: number;
           meta_title?: string | null;
           meta_description?: string | null;
+          html_content?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -175,6 +180,7 @@ export type Database = {
           sort_order?: number;
           meta_title?: string | null;
           meta_description?: string | null;
+          html_content?: string | null;
           created_at?: string;
           updated_at?: string;
         };

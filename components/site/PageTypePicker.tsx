@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Plus, FileText, Sparkles, Home, User, Grid3x3, Mail, ShoppingBag } from "lucide-react";
+import { Loader2, Plus, FileText, Sparkles, Home, User, Grid3x3, Mail, ShoppingBag, Code2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,10 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils/cn";
 import { addSitePage } from "@/lib/actions/sites";
+import { createHtmlPage, applyCustomStyle } from "@/lib/actions/html-pages";
+import { extractStyleFromHtml } from "@/lib/utils/extract-html-style";
+import { THEMES_BY_KEY, DEFAULT_STYLE_KEY } from "@/lib/styles";
+import type { StyleTokens } from "@/lib/styles/types";
 import type { OfferTemplate } from "@/lib/queries/offer-templates";
 import type { PageData, PageTheme } from "@/lib/types/builder";
 import {
@@ -31,6 +35,7 @@ import {
 type Selection =
   | { kind: "site-template"; template: SitePageTemplate }
   | { kind: "custom" }
+  | { kind: "html-import" }
   | { kind: "offer-blank" }
   | { kind: "offer-template"; template: OfferTemplate };
 
@@ -135,6 +140,9 @@ export function PageTypePicker({ siteId, templates }: PageTypePickerProps) {
   const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [htmlContent, setHtmlContent] = useState("");
+  const [applyStyle, setApplyStyle] = useState(true);
+  const htmlFileRef = useRef<HTMLInputElement>(null);
 
   const allOfferTemplates = [
     ...(templates?.platform ?? []),
@@ -150,6 +158,9 @@ export function PageTypePicker({ siteId, templates }: PageTypePickerProps) {
       setTitle(sel.template.name);
     } else if (sel.kind === "custom") {
       setTitle("Custom Page");
+    } else if (sel.kind === "html-import") {
+      setTitle("Imported Page");
+      setHtmlContent("");
     } else {
       setTitle("Offer Page");
     }
@@ -169,6 +180,29 @@ export function PageTypePicker({ siteId, templates }: PageTypePickerProps) {
     if (!selection) return;
     setError(null);
     const resolvedTitle = title.trim() || "Untitled Page";
+
+    if (selection.kind === "html-import") {
+      if (!htmlContent.trim()) { setError("Please paste or upload HTML content."); return; }
+      startTransition(async () => {
+        const result = await createHtmlPage(siteId, resolvedTitle, htmlContent);
+        if (result.error) { setError(result.error); return; }
+        if (applyStyle && htmlContent) {
+          const extracted = extractStyleFromHtml(htmlContent);
+          if (Object.keys(extracted).length > 0) {
+            const base = THEMES_BY_KEY[DEFAULT_STYLE_KEY].tokens;
+            const merged: StyleTokens = { ...base, ...extracted };
+            await applyCustomStyle(siteId, merged);
+          }
+        }
+        setOpen(false);
+        setSelection(null);
+        setTitle("");
+        setHtmlContent("");
+        if (result.pageId) router.push(`/my-site/${siteId}/pages/${result.pageId}/edit`);
+        else router.refresh();
+      });
+      return;
+    }
 
     let pageType: string;
     let pageData: PageData | undefined;
@@ -308,8 +342,66 @@ export function PageTypePicker({ siteId, templates }: PageTypePickerProps) {
                 isSelected={isSelected({ kind: "custom" })}
                 onClick={() => handleSelect({ kind: "custom" })}
               />
+              <TemplateCard
+                preview={
+                  <div className="w-full h-full flex items-center justify-center">
+                    <div className="flex flex-col items-center gap-1 opacity-30">
+                      <Code2 size={18} />
+                      <div className="h-px w-8 bg-current" />
+                    </div>
+                  </div>
+                }
+                name="Import HTML"
+                description="Upload or paste a page built in Claude Code"
+                isSelected={isSelected({ kind: "html-import" })}
+                onClick={() => handleSelect({ kind: "html-import" })}
+              />
             </div>
           </div>
+
+          {/* ── HTML input (shown when html-import is selected) ── */}
+          {selection?.kind === "html-import" && (
+            <div className="space-y-3 rounded-xl border border-[var(--border)] p-4 bg-[var(--card)]">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold">Paste or upload your HTML</p>
+                <label className="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer transition-colors">
+                  <Upload size={12} /> Upload .html file
+                  <input
+                    ref={htmlFileRef}
+                    type="file"
+                    accept=".html,.htm"
+                    className="sr-only"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = (ev) => setHtmlContent(ev.target?.result as string ?? "");
+                      reader.readAsText(file);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+              <textarea
+                value={htmlContent}
+                onChange={(e) => setHtmlContent(e.target.value)}
+                placeholder="Paste your full HTML document here..."
+                className="w-full h-36 resize-none rounded-lg border border-[var(--border)] bg-[var(--background)] font-mono text-[11px] p-3 focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/30 placeholder:text-[var(--muted-foreground)]"
+                spellCheck={false}
+              />
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={applyStyle}
+                  onChange={(e) => setApplyStyle(e.target.checked)}
+                  className="rounded border-[var(--border)]"
+                />
+                <span className="text-xs text-[var(--muted-foreground)]">
+                  Extract colors &amp; fonts from this HTML and apply as site style
+                </span>
+              </label>
+            </div>
+          )}
 
           {/* ── Offer Pages ── */}
           <div>

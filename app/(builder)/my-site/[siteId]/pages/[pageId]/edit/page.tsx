@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getSiteById, getSitePageById, getPagesForSite } from "@/lib/queries/sites";
 import { SitePageBuilder } from "@/components/site/SitePageBuilder";
+import { HtmlPageEditor } from "@/components/site/HtmlPageEditor";
 
 export default async function SitePageEditPage({
   params,
@@ -30,6 +31,10 @@ export default async function SitePageEditPage({
 
   if (!site || site.user_id !== user.id) notFound();
   if (!page || page.user_id !== user.id) notFound();
+
+  if (page.page_type === "html") {
+    return <HtmlPageEditor page={page as Parameters<typeof HtmlPageEditor>[0]["page"]} siteId={siteId} />;
+  }
 
   return (
     <SitePageBuilder

@@ -4,7 +4,7 @@ import { getSiteBySlug, getPublishedPagesForSite } from "@/lib/queries/sites";
 import { OfferPageBlocks } from "@/components/offer-builder/OfferPageBlocks";
 import { SiteNav } from "@/components/site/SiteNav";
 import type { PageData } from "@/lib/types/builder";
-import { THEMES_BY_KEY, DEFAULT_STYLE_KEY, buildStyleCssVars, buildGoogleFontsUrl, getFontsForTokens } from "@/lib/styles";
+import { buildStyleCssVars, buildGoogleFontsUrl, getFontsForTokens, resolveStyleTokens } from "@/lib/styles";
 import type { StyleTokens } from "@/lib/styles";
 import { ORNAMENTS_BY_KEY, DEFAULT_ORNAMENT_KEY, buildOrnamentCssVars } from "@/lib/ornaments";
 
@@ -70,9 +70,7 @@ export default async function SiteRootPage({ params }: { params: Promise<{ slug:
     );
   }
 
-  const styleKey = site.style_key ?? DEFAULT_STYLE_KEY;
-  const siteStyle = THEMES_BY_KEY[styleKey] ?? THEMES_BY_KEY[DEFAULT_STYLE_KEY];
-  const { tokens } = siteStyle;
+  const tokens = resolveStyleTokens(site);
   const cssVars = buildStyleCssVars(tokens);
   const ornamentKey = (site as { ornamentation_key?: string | null }).ornamentation_key ?? DEFAULT_ORNAMENT_KEY;
   const ornamentTokens = (ORNAMENTS_BY_KEY[ornamentKey] ?? ORNAMENTS_BY_KEY[DEFAULT_ORNAMENT_KEY]).tokens;
