@@ -33,7 +33,7 @@ export default async function SitePageEditPage({
   if (!page || page.user_id !== user.id) notFound();
 
   if (page.page_type === "html") {
-    return <HtmlPageEditor page={page as Parameters<typeof HtmlPageEditor>[0]["page"]} siteId={siteId} />;
+    return <HtmlPageEditor page={page as Parameters<typeof HtmlPageEditor>[0]["page"]} siteId={siteId} siteSlug={site.slug} />;
   }
 
   return (

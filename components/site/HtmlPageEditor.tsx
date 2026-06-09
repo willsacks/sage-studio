@@ -2,10 +2,10 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Upload, Code2, Eye, ExternalLink, Wand2, Save, Loader2, Check, Globe } from "lucide-react";
+import { ArrowLeft, Upload, Code2, Eye, ExternalLink, Wand2, Save, Loader2, Check, Globe, Settings } from "lucide-react";
 import Link from "next/link";
 import { updateHtmlPage, applyCustomStyle } from "@/lib/actions/html-pages";
-import { togglePagePublished } from "@/lib/actions/sites";
+import { togglePagePublished, saveSitePage } from "@/lib/actions/sites";
 import { extractStyleFromHtml } from "@/lib/utils/extract-html-style";
 import type { Tables } from "@/lib/db";
 import type { StyleTokens } from "@/lib/styles/types";
@@ -16,9 +16,10 @@ type Page = Tables<"site_pages"> & { html_content?: string | null };
 interface HtmlPageEditorProps {
   page: Page;
   siteId: string;
+  siteSlug: string;
 }
 
-export function HtmlPageEditor({ page, siteId }: HtmlPageEditorProps) {
+export function HtmlPageEditor({ page, siteId, siteSlug }: HtmlPageEditorProps) {
   const router = useRouter();
   const [html, setHtml] = useState(page.html_content ?? "");
   const [isDirty, setIsDirty] = useState(false);
@@ -26,6 +27,10 @@ export function HtmlPageEditor({ page, siteId }: HtmlPageEditorProps) {
   const [isPublishing, startPublish] = useTransition();
   const [saved, setSaved] = useState(false);
   const [view, setView] = useState<"preview" | "html">("preview");
+  const [pageTitle, setPageTitle] = useState(page.title);
+  const [pageSlug, setPageSlug] = useState(page.slug);
+  const [isSavingSettings, startSaveSettings] = useTransition();
+  const [settingsSaved, setSettingsSaved] = useState(false);
   const [extractedTokens, setExtractedTokens] = useState<Partial<StyleTokens> | null>(null);
   const [isApplying, startApply] = useTransition();
   const [styleApplied, setStyleApplied] = useState(false);
@@ -92,6 +97,21 @@ export function HtmlPageEditor({ page, siteId }: HtmlPageEditorProps) {
     });
   }
 
+  function handleSaveSettings() {
+    const slug = pageSlug.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    startSaveSettings(async () => {
+      await saveSitePage(page.id, {
+        title: pageTitle.trim() || page.title,
+        slug: slug || page.slug,
+        siteId,
+      });
+      setPageSlug(slug || page.slug);
+      setSettingsSaved(true);
+      setTimeout(() => setSettingsSaved(false), 2000);
+      router.refresh();
+    });
+  }
+
   const extractedColorKeys = extractedTokens
     ? (["colorBackground", "colorText", "colorAccent", "colorBorder"] as const).filter(
         (k) => extractedTokens[k]
@@ -110,7 +130,7 @@ export function HtmlPageEditor({ page, siteId }: HtmlPageEditorProps) {
             <ArrowLeft size={14} /> Back
           </Link>
           <span className="text-[var(--border)]">/</span>
-          <span className="text-sm font-medium truncate max-w-[200px]">{page.title}</span>
+          <span className="text-sm font-medium truncate max-w-[200px]">{pageTitle}</span>
           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--muted)] text-[var(--muted-foreground)] font-medium">
             HTML Page
           </span>
@@ -221,8 +241,58 @@ export function HtmlPageEditor({ page, siteId }: HtmlPageEditorProps) {
           )}
         </div>
 
-        {/* Style panel */}
-        <div className="w-64 flex-shrink-0 border-l border-[var(--border)] flex flex-col bg-[var(--card)]">
+        {/* Settings + Style panel */}
+        <div className="w-64 flex-shrink-0 border-l border-[var(--border)] flex flex-col bg-[var(--card)] overflow-y-auto">
+          {/* Page settings */}
+          <div className="p-4 border-b border-[var(--border)] space-y-3">
+            <div className="flex items-center gap-1.5">
+              <Settings size={12} className="text-[var(--muted-foreground)]" />
+              <p className="text-xs font-semibold text-[var(--foreground)]">Page Settings</p>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase tracking-wider">
+                Title
+              </label>
+              <input
+                type="text"
+                value={pageTitle}
+                onChange={(e) => setPageTitle(e.target.value)}
+                className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/30"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase tracking-wider">
+                URL slug
+              </label>
+              <input
+                type="text"
+                value={pageSlug}
+                onChange={(e) => setPageSlug(e.target.value)}
+                className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] font-mono text-xs px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/30"
+              />
+              <p className="text-[10px] text-[var(--muted-foreground)] truncate">
+                sagestudio.org/sites/{siteSlug}/{pageSlug.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "..."}
+              </p>
+            </div>
+
+            <button
+              onClick={handleSaveSettings}
+              disabled={isSavingSettings}
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs hover:bg-[var(--accent)] transition-colors disabled:opacity-50"
+            >
+              {isSavingSettings ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : settingsSaved ? (
+                <Check size={12} />
+              ) : (
+                <Save size={12} />
+              )}
+              {settingsSaved ? "Saved" : "Save Settings"}
+            </button>
+          </div>
+
           <div className="p-4 border-b border-[var(--border)]">
             <p className="text-xs font-semibold text-[var(--foreground)] mb-1">Site Style</p>
             <p className="text-[11px] text-[var(--muted-foreground)] leading-snug">
