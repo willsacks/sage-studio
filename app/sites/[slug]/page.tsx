@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getSiteBySlug, getPublishedPagesForSite } from "@/lib/queries/sites";
 import { OfferPageBlocks } from "@/components/offer-builder/OfferPageBlocks";
 import { SiteNav } from "@/components/site/SiteNav";
+import { SiteUnpublishedMessage } from "@/components/site/SiteUnpublishedMessage";
 import type { PageData } from "@/lib/types/builder";
 import { buildStyleCssVars, buildGoogleFontsUrl, getFontsForTokens, resolveStyleTokens } from "@/lib/styles";
 import type { StyleTokens } from "@/lib/styles";
@@ -50,7 +51,8 @@ export default async function SiteRootPage({ params }: { params: Promise<{ slug:
     getPublishedPagesForSite(slug),
   ]);
 
-  if (!site || !site.is_published) notFound();
+  if (!site) notFound();
+  if (!site.is_published) return <SiteUnpublishedMessage siteName={site.site_title ?? site.name} />;
 
   const homePage =
     (site.home_page_id ? pages.find((p) => p.id === site.home_page_id) : null) ??
