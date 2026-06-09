@@ -9,6 +9,7 @@ import { MarkSubmissionsReadOnMount } from "@/components/site/MarkSubmissionsRea
 import { ArrowLeft, Globe, Pencil, ExternalLink, Settings, Eye, EyeOff, Palette, Home, Navigation, PanelTop } from "lucide-react";
 import { format } from "date-fns";
 import { PageTypePicker } from "@/components/site/PageTypePicker";
+import { ImportHtmlButton } from "@/components/site/ImportHtmlButton";
 import { SetHomePageButton } from "@/components/site/SetHomePageButton";
 import { DeletePageDialog } from "@/components/site/DeletePageDialog";
 
@@ -121,7 +122,10 @@ export default async function SitePageManagerPage({ params }: { params: Promise<
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-[var(--foreground)]">Pages</h2>
-          <PageTypePicker siteId={siteId} existingTypes={pages.map((p) => p.page_type as "home" | "about" | "work" | "contact" | "custom")} templates={{ platform: platformTemplates, personal: personalTemplates }} />
+          <div className="flex items-center gap-2">
+            <ImportHtmlButton siteId={siteId} />
+            <PageTypePicker siteId={siteId} existingTypes={pages.map((p) => p.page_type as "home" | "about" | "work" | "contact" | "custom")} templates={{ platform: platformTemplates, personal: personalTemplates }} />
+          </div>
         </div>
 
         {pages.length === 0 ? (
@@ -131,7 +135,10 @@ export default async function SitePageManagerPage({ params }: { params: Promise<
               <p className="font-medium text-[var(--foreground)]">No pages yet</p>
               <p className="text-sm text-[var(--muted-foreground)] mt-1">Add your first page to get started.</p>
             </div>
-            <PageTypePicker siteId={siteId} existingTypes={[]} />
+            <div className="flex items-center gap-2">
+              <ImportHtmlButton siteId={siteId} />
+              <PageTypePicker siteId={siteId} existingTypes={[]} />
+            </div>
           </div>
         ) : (
           <div className="space-y-2">

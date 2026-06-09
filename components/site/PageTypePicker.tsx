@@ -141,7 +141,6 @@ export function PageTypePicker({ siteId, templates }: PageTypePickerProps) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [htmlContent, setHtmlContent] = useState("");
-  const [applyStyle, setApplyStyle] = useState(true);
   const htmlFileRef = useRef<HTMLInputElement>(null);
 
   const allOfferTemplates = [
@@ -186,13 +185,11 @@ export function PageTypePicker({ siteId, templates }: PageTypePickerProps) {
       startTransition(async () => {
         const result = await createHtmlPage(siteId, resolvedTitle, htmlContent);
         if (result.error) { setError(result.error); return; }
-        if (applyStyle && htmlContent) {
-          const extracted = extractStyleFromHtml(htmlContent);
-          if (Object.keys(extracted).length > 0) {
-            const base = THEMES_BY_KEY[DEFAULT_STYLE_KEY].tokens;
-            const merged: StyleTokens = { ...base, ...extracted };
-            await applyCustomStyle(siteId, merged);
-          }
+        const extracted = extractStyleFromHtml(htmlContent);
+        if (Object.keys(extracted).length > 0) {
+          const base = THEMES_BY_KEY[DEFAULT_STYLE_KEY].tokens;
+          const merged: StyleTokens = { ...base, ...extracted };
+          await applyCustomStyle(siteId, merged);
         }
         setOpen(false);
         setSelection(null);
@@ -389,17 +386,9 @@ export function PageTypePicker({ siteId, templates }: PageTypePickerProps) {
                 className="w-full h-36 resize-none rounded-lg border border-[var(--border)] bg-[var(--background)] font-mono text-[11px] p-3 focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/30 placeholder:text-[var(--muted-foreground)]"
                 spellCheck={false}
               />
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={applyStyle}
-                  onChange={(e) => setApplyStyle(e.target.checked)}
-                  className="rounded border-[var(--border)]"
-                />
-                <span className="text-xs text-[var(--muted-foreground)]">
-                  Extract colors &amp; fonts from this HTML and apply as site style
-                </span>
-              </label>
+              <p className="text-xs text-[var(--muted-foreground)]">
+                Colors and fonts will be extracted automatically and applied to this site.
+              </p>
             </div>
           )}
 
