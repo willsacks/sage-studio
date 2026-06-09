@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Upload, Eye, Wand2, Save, Loader2, Check, Globe } from "lucide-react";
+import { ArrowLeft, Upload, Code2, Eye, ExternalLink, Wand2, Save, Loader2, Check, Globe } from "lucide-react";
 import Link from "next/link";
 import { updateHtmlPage, applyCustomStyle } from "@/lib/actions/html-pages";
 import { togglePagePublished } from "@/lib/actions/sites";
@@ -25,6 +25,7 @@ export function HtmlPageEditor({ page, siteId }: HtmlPageEditorProps) {
   const [isSaving, startSave] = useTransition();
   const [isPublishing, startPublish] = useTransition();
   const [saved, setSaved] = useState(false);
+  const [view, setView] = useState<"preview" | "html">("preview");
   const [extractedTokens, setExtractedTokens] = useState<Partial<StyleTokens> | null>(null);
   const [isApplying, startApply] = useTransition();
   const [styleApplied, setStyleApplied] = useState(false);
@@ -118,9 +119,10 @@ export function HtmlPageEditor({ page, siteId }: HtmlPageEditorProps) {
         <div className="flex items-center gap-2">
           <button
             onClick={handlePreview}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-[var(--border)] hover:bg-[var(--accent)] transition-colors"
+            title="Open in new tab"
+            className="flex items-center gap-1.5 px-2 py-1.5 text-xs rounded-lg border border-[var(--border)] hover:bg-[var(--accent)] transition-colors"
           >
-            <Eye size={13} /> Preview
+            <ExternalLink size={13} />
           </button>
 
           <button
@@ -159,28 +161,64 @@ export function HtmlPageEditor({ page, siteId }: HtmlPageEditorProps) {
 
       {/* Main layout */}
       <div className="flex flex-1 min-h-0">
-        {/* Editor */}
+        {/* Editor / Preview */}
         <div className="flex-1 flex flex-col min-w-0">
-          <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--border)] bg-[var(--card)]">
-            <span className="text-xs text-[var(--muted-foreground)] font-mono">HTML</span>
-            <label className="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer transition-colors">
-              <Upload size={12} /> Upload .html file
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".html,.htm"
-                className="sr-only"
-                onChange={handleFileUpload}
-              />
-            </label>
+          {/* Toggle bar */}
+          <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--border)] bg-[var(--card)] flex-shrink-0">
+            <div className="flex items-center gap-0.5 bg-[var(--muted)] rounded-lg p-0.5">
+              <button
+                onClick={() => setView("preview")}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs transition-colors ${
+                  view === "preview"
+                    ? "bg-[var(--background)] text-[var(--foreground)] shadow-sm font-medium"
+                    : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                }`}
+              >
+                <Eye size={12} /> Preview
+              </button>
+              <button
+                onClick={() => setView("html")}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs transition-colors ${
+                  view === "html"
+                    ? "bg-[var(--background)] text-[var(--foreground)] shadow-sm font-medium"
+                    : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                }`}
+              >
+                <Code2 size={12} /> HTML
+              </button>
+            </div>
+
+            {view === "html" && (
+              <label className="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer transition-colors">
+                <Upload size={12} /> Upload .html file
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept=".html,.htm"
+                  className="sr-only"
+                  onChange={handleFileUpload}
+                />
+              </label>
+            )}
           </div>
-          <textarea
-            value={html}
-            onChange={(e) => handleChange(e.target.value)}
-            className="flex-1 w-full resize-none bg-[var(--background)] font-mono text-xs leading-relaxed p-4 focus:outline-none text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]"
-            placeholder="Paste your HTML here, or upload a .html file above..."
-            spellCheck={false}
-          />
+
+          {/* Content */}
+          {view === "preview" ? (
+            <iframe
+              srcDoc={html}
+              className="flex-1 w-full border-none"
+              sandbox="allow-scripts allow-same-origin"
+              title={`Preview: ${page.title}`}
+            />
+          ) : (
+            <textarea
+              value={html}
+              onChange={(e) => handleChange(e.target.value)}
+              className="flex-1 w-full resize-none bg-[var(--background)] font-mono text-xs leading-relaxed p-4 focus:outline-none text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]"
+              placeholder="Paste your HTML here, or upload a .html file above..."
+              spellCheck={false}
+            />
+          )}
         </div>
 
         {/* Style panel */}
