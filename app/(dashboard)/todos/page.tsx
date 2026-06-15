@@ -2,7 +2,7 @@ import { CheckSquare } from "lucide-react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getTodos } from "@/lib/queries/todos";
-import { TodoList } from "@/components/todos/TodoList";
+import { TodoBoard } from "@/components/todos/TodoBoard";
 
 export const metadata = { title: "To Do's" };
 
@@ -23,7 +23,7 @@ export default async function TodosPage() {
           Track your personal tasks.
         </p>
       </div>
-      <TodoList initialTodos={todos} />
+      <TodoBoard initialTodos={todos} />
     </div>
   );
 }

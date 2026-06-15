@@ -11,6 +11,6 @@ export async function getTodos(): Promise<Tables<"todos">[]> {
     .from("todos")
     .select("*")
     .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
+    .order("position", { ascending: true });
   return data ?? [];
 }

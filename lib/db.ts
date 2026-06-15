@@ -384,6 +384,8 @@ export type Database = {
           user_id: string;
           title: string;
           completed: boolean;
+          due_date: string | null;
+          position: number;
           created_at: string;
         };
         Insert: {
@@ -391,6 +393,8 @@ export type Database = {
           user_id: string;
           title: string;
           completed?: boolean;
+          due_date?: string | null;
+          position?: number;
           created_at?: string;
         };
         Update: {
@@ -398,6 +402,8 @@ export type Database = {
           user_id?: string;
           title?: string;
           completed?: boolean;
+          due_date?: string | null;
+          position?: number;
           created_at?: string;
         };
         Relationships: [];
