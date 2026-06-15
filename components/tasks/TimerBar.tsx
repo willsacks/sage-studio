@@ -42,6 +42,7 @@ export function TimerBar({ activeEntry }: TimerBarProps) {
       : 0
   );
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const descDebounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
@@ -52,11 +53,14 @@ export function TimerBar({ activeEntry }: TimerBarProps) {
 
   async function handleStart() {
     setLoading(true);
+    setError(null);
     const result = await startTimer(description, category);
     if (result.entry) {
       setEntryId(result.entry.id);
       setElapsed(0);
       setIsRunning(true);
+    } else if (result.error) {
+      setError(result.error);
     }
     setLoading(false);
   }
@@ -137,6 +141,10 @@ export function TimerBar({ activeEntry }: TimerBarProps) {
           : <><Play size={13} fill="currentColor" /> Start</>
         }
       </button>
+
+      {error && (
+        <p className="w-full text-xs text-red-500">{error}</p>
+      )}
     </div>
   );
 }
