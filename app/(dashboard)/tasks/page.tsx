@@ -45,7 +45,7 @@ export default async function TasksPage() {
 
   // Fetch completed entries (last 30 days)
   const since = new Date();
-  since.setDate(since.getDate() - 30);
+  since.setDate(since.getDate() - 90);
 
   const { data: entriesRaw } = await supabase
     .from("time_entries")

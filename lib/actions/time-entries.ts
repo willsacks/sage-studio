@@ -117,7 +117,7 @@ export async function updateTimeEntry(
 
   const durationSeconds = Math.floor((stop.getTime() - start.getTime()) / 1000);
 
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("time_entries")
     .update({
       description: description.trim(),
@@ -128,9 +128,11 @@ export async function updateTimeEntry(
     })
     .eq("id", entryId)
     .eq("user_id", user.id)
-    .not("stopped_at", "is", null);
+    .select("id")
+    .single();
 
   if (error) return { error: error.message };
+  if (!updated) return { error: "Entry not found or could not be updated" };
   revalidatePath("/tasks");
   return { success: true };
 }
