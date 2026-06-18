@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Plus, Users, Calendar, ChevronRight, CheckCircle2 } from "lucide-react";
+import { useState, useTransition, useMemo } from "react";
+import { Plus, Users, Calendar, ChevronRight, ChevronDown, CheckCircle2 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { createContact, updateContact } from "@/lib/actions/pipeline";
 import { ContactDrawer } from "./ContactDrawer";
@@ -18,6 +18,7 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts,
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
   const [tags, setTags] = useState<Tag[]>(initialTags);
   const [activeContact, setActiveContact] = useState<Contact | null>(null);
+  const [collapsedStages, setCollapsedStages] = useState<Set<string>>(new Set());
   const [filterStageId, setFilterStageId] = useState<string | "all">("all");
   const [filterTagId, setFilterTagId] = useState<string | "all">("all");
   const [addingName, setAddingName] = useState("");
@@ -36,6 +37,30 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts,
       const posB = b.stage_id ? (stageMap[b.stage_id]?.position ?? Infinity) : Infinity;
       return posA - posB;
     });
+
+  const groups = useMemo(() => {
+    const buckets = new Map<string, Contact[]>();
+    for (const c of filteredContacts) {
+      const key = c.stage_id ?? "__no_stage__";
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key)!.push(c);
+    }
+    return [...buckets.entries()]
+      .map(([key, cts]) => ({
+        key,
+        stage: key !== "__no_stage__" ? (stageMap[key] ?? null) : null,
+        contacts: cts,
+      }))
+      .sort((a, b) => (a.stage?.position ?? Infinity) - (b.stage?.position ?? Infinity));
+  }, [filteredContacts, stageMap]);
+
+  function toggleStage(key: string) {
+    setCollapsedStages((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
 
   function handleAdd() {
     if (!addingName.trim()) return;
@@ -236,8 +261,8 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts,
         </div>
       )}
 
-      {/* Contact rows */}
-      <div className="space-y-1">
+      {/* Contact rows grouped by stage */}
+      <div>
         {filteredContacts.length === 0 && (
           <div className="text-center py-12 text-[var(--muted-foreground)] text-sm">
             {filterStageId === "all" && filterTagId === "all"
@@ -245,85 +270,124 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts,
               : "No contacts match the current filters."}
           </div>
         )}
-        {filteredContacts.map((contact) => {
-          const stage = contact.stage_id ? stageMap[contact.stage_id] : null;
-          const contactTags = contact.tag_ids.map((id) => tagMap[id]).filter(Boolean) as Tag[];
-          const isActive = activeContact?.id === contact.id;
-
+        {groups.map((group, i) => {
+          const isCollapsed = collapsedStages.has(group.key);
           return (
-            <div
-              key={contact.id}
-              onClick={() => setActiveContact(isActive ? null : contact)}
-              className={`group w-full flex items-center gap-4 px-4 py-3 rounded-xl text-left transition-all border cursor-pointer ${
-                isActive
-                  ? "bg-[var(--accent)] border-[var(--primary)]/30"
-                  : "bg-[var(--card)] border-[var(--border)] hover:border-[var(--primary)]/20 hover:bg-[var(--accent)]/50"
-              }`}
-            >
-              {/* Stage color bar */}
-              <div
-                className="w-1 h-10 rounded-full flex-shrink-0"
-                style={{ backgroundColor: stage?.color ?? "#E2E8F0" }}
-              />
-
-              {/* Name + tags + next action — single row on wide screens */}
-              <div className="flex-1 min-w-0 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                <span className="text-sm font-medium flex-none">{contact.name}</span>
-                {contactTags.map((tag) => (
-                  <span
-                    key={tag.id}
-                    className="text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-none"
-                    style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
-                  >
-                    {tag.name}
-                  </span>
-                ))}
-                {contact.next_action && (
-                  <span className="text-xs text-[var(--muted-foreground)] basis-full sm:basis-auto sm:flex-1 flex items-center gap-1 min-w-0">
-                    <span className="text-[var(--primary)] font-medium flex-shrink-0">→</span>
-                    <span className="truncate">{contact.next_action}</span>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleCompleteNextAction(contact); }}
-                      title="Mark done"
-                      className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-[var(--muted-foreground)] hover:text-[var(--primary)] p-0.5 rounded"
-                    >
-                      <CheckCircle2 size={13} />
-                    </button>
-                  </span>
-                )}
-              </div>
-
-              {/* Collaborators */}
-              {contact.collaborators && (
-                <div className="hidden sm:flex items-center gap-1 text-xs text-[var(--muted-foreground)] flex-shrink-0">
-                  <Users size={11} />
-                  <span className="max-w-32 truncate">{contact.collaborators}</span>
-                </div>
+            <div key={group.key}>
+              {/* Faint divider between stage groups */}
+              {i > 0 && (
+                <div className="my-4 border-t border-[var(--border)]/50" />
               )}
 
-              {/* Next session */}
-              {contact.next_session && (
-                <div className="hidden sm:flex items-center gap-1 text-xs text-[var(--muted-foreground)] flex-shrink-0">
-                  <Calendar size={11} />
-                  <span>{format(parseISO(contact.next_session), "MMM d")}</span>
-                </div>
-              )}
-
-              {/* Stage badge */}
-              {stage ? (
+              {/* Stage section header */}
+              <button
+                onClick={() => toggleStage(group.key)}
+                className="flex items-center gap-2 mb-2 px-1 py-0.5 w-full text-left group/hdr"
+              >
+                <ChevronDown
+                  size={13}
+                  className={`flex-shrink-0 text-[var(--muted-foreground)] transition-transform duration-150 ${isCollapsed ? "-rotate-90" : ""}`}
+                />
                 <span
-                  className="flex-shrink-0 text-xs px-2.5 py-1 rounded-full font-medium"
-                  style={{ backgroundColor: `${stage.color}20`, color: stage.color }}
+                  className="text-xs font-semibold tracking-wide"
+                  style={{ color: group.stage?.color ?? "var(--muted-foreground)" }}
                 >
-                  {stage.name}
+                  {group.stage?.name ?? "No stage"}
                 </span>
-              ) : (
-                <span className="flex-shrink-0 text-xs px-2.5 py-1 rounded-full font-medium bg-[var(--muted)] text-[var(--muted-foreground)]">
-                  No stage
+                <span className="text-xs text-[var(--muted-foreground)]">
+                  {group.contacts.length}
                 </span>
-              )}
+              </button>
 
-              <ChevronRight size={14} className={`flex-shrink-0 text-[var(--muted-foreground)] transition-transform ${isActive ? "rotate-90" : ""}`} />
+              {/* Contacts */}
+              {!isCollapsed && (
+                <div className="space-y-1">
+                  {group.contacts.map((contact) => {
+                    const stage = contact.stage_id ? stageMap[contact.stage_id] : null;
+                    const contactTags = contact.tag_ids.map((id) => tagMap[id]).filter(Boolean) as Tag[];
+                    const isActive = activeContact?.id === contact.id;
+
+                    return (
+                      <div
+                        key={contact.id}
+                        onClick={() => setActiveContact(isActive ? null : contact)}
+                        className={`group w-full flex items-center gap-4 px-4 py-3 rounded-xl text-left transition-all border cursor-pointer ${
+                          isActive
+                            ? "bg-[var(--accent)] border-[var(--primary)]/30"
+                            : "bg-[var(--card)] border-[var(--border)] hover:border-[var(--primary)]/20 hover:bg-[var(--accent)]/50"
+                        }`}
+                      >
+                        {/* Stage color bar */}
+                        <div
+                          className="w-1 h-10 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: stage?.color ?? "#E2E8F0" }}
+                        />
+
+                        {/* Name + tags + next action */}
+                        <div className="flex-1 min-w-0 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          <span className="text-sm font-medium flex-none">{contact.name}</span>
+                          {contactTags.map((tag) => (
+                            <span
+                              key={tag.id}
+                              className="text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-none"
+                              style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
+                            >
+                              {tag.name}
+                            </span>
+                          ))}
+                          {contact.next_action && (
+                            <span className="text-xs text-[var(--muted-foreground)] basis-full sm:basis-auto sm:flex-1 flex items-center gap-1 min-w-0">
+                              <span className="text-[var(--primary)] font-medium flex-shrink-0">→</span>
+                              <span className="truncate">{contact.next_action}</span>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleCompleteNextAction(contact); }}
+                                title="Mark done"
+                                className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-[var(--muted-foreground)] hover:text-[var(--primary)] p-0.5 rounded"
+                              >
+                                <CheckCircle2 size={13} />
+                              </button>
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Collaborators */}
+                        {contact.collaborators && (
+                          <div className="hidden sm:flex items-center gap-1 text-xs text-[var(--muted-foreground)] flex-shrink-0">
+                            <Users size={11} />
+                            <span className="max-w-32 truncate">{contact.collaborators}</span>
+                          </div>
+                        )}
+
+                        {/* Next session */}
+                        {contact.next_session && (
+                          <div className="hidden sm:flex items-center gap-1 text-xs text-[var(--muted-foreground)] flex-shrink-0">
+                            <Calendar size={11} />
+                            <span>{format(parseISO(contact.next_session), "MMM d")}</span>
+                          </div>
+                        )}
+
+                        {/* Stage badge — hidden when filtered to a single stage since it's obvious */}
+                        {filterStageId === "all" && (
+                          stage ? (
+                            <span
+                              className="flex-shrink-0 text-xs px-2.5 py-1 rounded-full font-medium"
+                              style={{ backgroundColor: `${stage.color}20`, color: stage.color }}
+                            >
+                              {stage.name}
+                            </span>
+                          ) : (
+                            <span className="flex-shrink-0 text-xs px-2.5 py-1 rounded-full font-medium bg-[var(--muted)] text-[var(--muted-foreground)]">
+                              No stage
+                            </span>
+                          )
+                        )}
+
+                        <ChevronRight size={14} className={`flex-shrink-0 text-[var(--muted-foreground)] transition-transform ${isActive ? "rotate-90" : ""}`} />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })}
