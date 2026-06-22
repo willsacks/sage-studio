@@ -2,11 +2,12 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Upload, Code2, Eye, ExternalLink, Wand2, Save, Loader2, Check, Globe, Settings } from "lucide-react";
+import { ArrowLeft, Upload, Code2, Eye, MousePointerClick, ExternalLink, Wand2, Save, Loader2, Check, Globe, Settings } from "lucide-react";
 import Link from "next/link";
 import { updateHtmlPage, applyCustomStyle } from "@/lib/actions/html-pages";
 import { togglePagePublished, saveSitePage } from "@/lib/actions/sites";
 import { extractStyleFromHtml } from "@/lib/utils/extract-html-style";
+import { HtmlVisualEditor } from "@/components/site/HtmlVisualEditor";
 import type { Tables } from "@/lib/db";
 import type { StyleTokens } from "@/lib/styles/types";
 import { THEMES_BY_KEY, DEFAULT_STYLE_KEY } from "@/lib/styles";
@@ -26,7 +27,7 @@ export function HtmlPageEditor({ page, siteId, siteSlug }: HtmlPageEditorProps) 
   const [isSaving, startSave] = useTransition();
   const [isPublishing, startPublish] = useTransition();
   const [saved, setSaved] = useState(false);
-  const [view, setView] = useState<"preview" | "html">("preview");
+  const [view, setView] = useState<"edit" | "preview" | "html">("edit");
   const [pageTitle, setPageTitle] = useState(page.title);
   const [pageSlug, setPageSlug] = useState(page.slug);
   const [isSavingSettings, startSaveSettings] = useTransition();
@@ -187,6 +188,16 @@ export function HtmlPageEditor({ page, siteId, siteSlug }: HtmlPageEditorProps) 
           <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--border)] bg-[var(--card)] flex-shrink-0">
             <div className="flex items-center gap-0.5 bg-[var(--muted)] rounded-lg p-0.5">
               <button
+                onClick={() => setView("edit")}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs transition-colors ${
+                  view === "edit"
+                    ? "bg-[var(--background)] text-[var(--foreground)] shadow-sm font-medium"
+                    : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                }`}
+              >
+                <MousePointerClick size={12} /> Edit
+              </button>
+              <button
                 onClick={() => setView("preview")}
                 className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs transition-colors ${
                   view === "preview"
@@ -208,7 +219,7 @@ export function HtmlPageEditor({ page, siteId, siteSlug }: HtmlPageEditorProps) 
               </button>
             </div>
 
-            {view === "html" && (
+            {view !== "preview" && (
               <label className="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-pointer transition-colors">
                 <Upload size={12} /> Upload .html file
                 <input
@@ -222,8 +233,16 @@ export function HtmlPageEditor({ page, siteId, siteSlug }: HtmlPageEditorProps) 
             )}
           </div>
 
+          {view === "edit" && (
+            <div className="px-4 py-1.5 text-[11px] text-[var(--muted-foreground)] bg-[var(--card)] border-b border-[var(--border)] flex-shrink-0">
+              Click any text to edit it in place. Hover a section to reveal its <span className="font-mono">⠿</span> handle, then drag to reorder.
+            </div>
+          )}
+
           {/* Content */}
-          {view === "preview" ? (
+          {view === "edit" ? (
+            <HtmlVisualEditor html={html} onChange={handleChange} />
+          ) : view === "preview" ? (
             <iframe
               srcDoc={html}
               className="flex-1 w-full border-none"
