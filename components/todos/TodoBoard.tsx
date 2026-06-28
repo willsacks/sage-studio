@@ -38,6 +38,14 @@ function buildSections(): Section[] {
   const today = startOfDay(new Date());
   const sections: Section[] = [];
 
+  sections.push({
+    key: "inbox",
+    label: "Inbox",
+    dateLabel: null,
+    dueDate: null,
+    match: (due) => due === null,
+  });
+
   for (let i = 0; i < 7; i++) {
     const d = addDays(today, i);
     const dStr = format(d, "yyyy-MM-dd");
@@ -65,7 +73,7 @@ function buildSections(): Section[] {
     label: "Backlog",
     dateLabel: null,
     dueDate: null,
-    match: (due) => due === null || due > nextWeekEnd,
+    match: (due) => due !== null && due > nextWeekEnd,
   });
 
   return sections;
@@ -83,6 +91,7 @@ function computePosition(items: Todo[], index: number): number {
 export function TodoBoard({ initialTodos }: { initialTodos: Todo[] }) {
   const [todos, setTodos] = useState(initialTodos);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [showCompleted, setShowCompleted] = useState(false);
   const [, startTransition] = useTransition();
   const sections = useMemo(buildSections, []);
 
@@ -98,13 +107,14 @@ export function TodoBoard({ initialTodos }: { initialTodos: Todo[] }) {
   const grouped = useMemo(() => {
     const map = new Map<string, Todo[]>();
     for (const s of sections) map.set(s.key, []);
-    for (const todo of todos) {
+    const visibleTodos = showCompleted ? todos : todos.filter((t) => !t.completed);
+    for (const todo of visibleTodos) {
       const section = sections.find((s) => s.match(todo.due_date)) ?? sections[sections.length - 1];
       map.get(section.key)!.push(todo);
     }
     for (const arr of map.values()) arr.sort((a, b) => a.position - b.position);
     return map;
-  }, [todos, sections]);
+  }, [todos, sections, showCompleted]);
 
   function handleDragStart(event: DragStartEvent) {
     setActiveId(event.active.id as string);
@@ -186,6 +196,18 @@ export function TodoBoard({ initialTodos }: { initialTodos: Todo[] }) {
 
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      <div className="flex justify-end mb-3">
+        <button
+          onClick={() => setShowCompleted((v) => !v)}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs border transition-colors ${
+            showCompleted
+              ? "border-[var(--primary)]/40 bg-[var(--primary)]/10 text-[var(--foreground)]"
+              : "border-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+          }`}
+        >
+          <Check size={12} /> Show completed
+        </button>
+      </div>
       <div className="space-y-4">
         {sections.map((section) => (
           <SectionColumn
