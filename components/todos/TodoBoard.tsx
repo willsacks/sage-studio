@@ -92,6 +92,7 @@ export function TodoBoard({ initialTodos }: { initialTodos: Todo[] }) {
   const [todos, setTodos] = useState(initialTodos);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
+  const [fadingIds, setFadingIds] = useState<Set<string>>(new Set());
   const [, startTransition] = useTransition();
   const sections = useMemo(buildSections, []);
 
@@ -107,14 +108,14 @@ export function TodoBoard({ initialTodos }: { initialTodos: Todo[] }) {
   const grouped = useMemo(() => {
     const map = new Map<string, Todo[]>();
     for (const s of sections) map.set(s.key, []);
-    const visibleTodos = showCompleted ? todos : todos.filter((t) => !t.completed);
+    const visibleTodos = showCompleted ? todos : todos.filter((t) => !t.completed || fadingIds.has(t.id));
     for (const todo of visibleTodos) {
       const section = sections.find((s) => s.match(todo.due_date)) ?? sections[sections.length - 1];
       map.get(section.key)!.push(todo);
     }
     for (const arr of map.values()) arr.sort((a, b) => a.position - b.position);
     return map;
-  }, [todos, sections, showCompleted]);
+  }, [todos, sections, showCompleted, fadingIds]);
 
   function handleDragStart(event: DragStartEvent) {
     setActiveId(event.active.id as string);
@@ -179,10 +180,21 @@ export function TodoBoard({ initialTodos }: { initialTodos: Todo[] }) {
   }
 
   function handleToggle(todo: Todo) {
-    setTodos((prev) => prev.map((t) => (t.id === todo.id ? { ...t, completed: !t.completed } : t)));
+    const completing = !todo.completed;
+    setTodos((prev) => prev.map((t) => (t.id === todo.id ? { ...t, completed: completing } : t)));
     startTransition(() => {
-      toggleTodo(todo.id, !todo.completed);
+      toggleTodo(todo.id, completing);
     });
+    if (completing && !showCompleted) {
+      setFadingIds((prev) => new Set(prev).add(todo.id));
+      setTimeout(() => {
+        setFadingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(todo.id);
+          return next;
+        });
+      }, 1000);
+    }
   }
 
   function handleDelete(id: string) {
@@ -225,6 +237,7 @@ export function TodoBoard({ initialTodos }: { initialTodos: Todo[] }) {
             onToggle={handleToggle}
             onDelete={handleDelete}
             onEditTitle={handleEditTitle}
+            fadingIds={fadingIds}
           />
         ))}
       </div>
@@ -247,6 +260,7 @@ function SectionColumn({
   onToggle,
   onDelete,
   onEditTitle,
+  fadingIds,
 }: {
   section: Section;
   items: Todo[];
@@ -254,6 +268,7 @@ function SectionColumn({
   onToggle: (todo: Todo) => void;
   onDelete: (id: string) => void;
   onEditTitle: (id: string, title: string) => void;
+  fadingIds: Set<string>;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: section.key });
   const [adding, setAdding] = useState(false);
@@ -296,7 +311,14 @@ function SectionColumn({
           ) : (
             <div className="divide-y divide-[var(--border)]">
               {items.map((todo) => (
-                <SortableTodoRow key={todo.id} todo={todo} onToggle={onToggle} onDelete={onDelete} onEditTitle={onEditTitle} />
+                <SortableTodoRow
+                  key={todo.id}
+                  todo={todo}
+                  onToggle={onToggle}
+                  onDelete={onDelete}
+                  onEditTitle={onEditTitle}
+                  isFading={fadingIds.has(todo.id)}
+                />
               ))}
             </div>
           )}
@@ -332,17 +354,30 @@ function SortableTodoRow({
   onToggle,
   onDelete,
   onEditTitle,
+  isFading,
 }: {
   todo: Todo;
   onToggle: (todo: Todo) => void;
   onDelete: (id: string) => void;
   onEditTitle: (id: string, title: string) => void;
+  isFading: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: todo.id });
+
+  const [fadeOut, setFadeOut] = useState(false);
+  useEffect(() => {
+    if (!isFading) {
+      setFadeOut(false);
+      return;
+    }
+    const t = setTimeout(() => setFadeOut(true), 300);
+    return () => clearTimeout(t);
+  }, [isFading]);
+
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
+    transition: fadeOut ? `${transition ?? ""}, opacity 700ms ease-out`.replace(/^,\s*/, "") : transition,
+    opacity: isDragging ? 0.4 : fadeOut ? 0 : 1,
   };
 
   const [isEditing, setIsEditing] = useState(false);
