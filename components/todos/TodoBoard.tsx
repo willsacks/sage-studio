@@ -193,7 +193,7 @@ export function TodoBoard({ initialTodos }: { initialTodos: Todo[] }) {
           next.delete(todo.id);
           return next;
         });
-      }, 1000);
+      }, 2200);
     }
   }
 
@@ -370,13 +370,26 @@ function SortableTodoRow({
       setFadeOut(false);
       return;
     }
-    const t = setTimeout(() => setFadeOut(true), 300);
-    return () => clearTimeout(t);
+    const fadeTimer = setTimeout(() => setFadeOut(true), 900);
+    return () => clearTimeout(fadeTimer);
   }, [isFading]);
 
+  const [justChecked, setJustChecked] = useState(false);
+  const wasCompleted = useRef(todo.completed);
+  useEffect(() => {
+    if (todo.completed && !wasCompleted.current) {
+      setJustChecked(true);
+      const t = setTimeout(() => setJustChecked(false), 450);
+      wasCompleted.current = todo.completed;
+      return () => clearTimeout(t);
+    }
+    wasCompleted.current = todo.completed;
+  }, [todo.completed]);
+
+  const dragTransform = CSS.Transform.toString(transform) ?? "";
   const style = {
-    transform: CSS.Transform.toString(transform),
-    transition: fadeOut ? `${transition ?? ""}, opacity 700ms ease-out`.replace(/^,\s*/, "") : transition,
+    transform: fadeOut ? `${dragTransform} translateX(8px)` : dragTransform,
+    transition: fadeOut ? [transition, "opacity 1300ms ease-in", "transform 1300ms ease-in"].filter(Boolean).join(", ") : transition,
     opacity: isDragging ? 0.4 : fadeOut ? 0 : 1,
   };
 
@@ -408,7 +421,7 @@ function SortableTodoRow({
           todo.completed
             ? "bg-[var(--primary)] border-[var(--primary)]"
             : "border-[var(--border)] hover:border-[var(--primary)]"
-        }`}
+        } ${justChecked ? "todo-check-pop" : ""}`}
       >
         {todo.completed && <Check size={10} className="text-[var(--primary-foreground)]" />}
       </button>
