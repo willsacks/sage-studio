@@ -331,8 +331,8 @@ function SectionColumn({
             ref={inputRef}
             autoFocus
             placeholder="Add a task..."
-            onBlur={() => {
-              if (!inputRef.current?.value.trim()) setAdding(false);
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setAdding(false);
             }}
             className="flex-1 px-2 py-1 text-sm rounded-md border border-[var(--border)] bg-[var(--background)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/30"
           />
