@@ -21,7 +21,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { createTodo, toggleTodo, deleteTodo, moveTodo } from "@/lib/actions/todos";
+import { createTodo, toggleTodo, deleteTodo, moveTodo, updateTodoTitle } from "@/lib/actions/todos";
 import type { Tables } from "@/lib/db";
 
 type Todo = Tables<"todos">;
@@ -192,6 +192,13 @@ export function TodoBoard({ initialTodos }: { initialTodos: Todo[] }) {
     });
   }
 
+  function handleEditTitle(id: string, title: string) {
+    setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, title } : t)));
+    startTransition(() => {
+      updateTodoTitle(id, title);
+    });
+  }
+
   const activeTodo = activeId ? todos.find((t) => t.id === activeId) ?? null : null;
 
   return (
@@ -217,6 +224,7 @@ export function TodoBoard({ initialTodos }: { initialTodos: Todo[] }) {
             onAdd={(title) => handleAdd(section, title)}
             onToggle={handleToggle}
             onDelete={handleDelete}
+            onEditTitle={handleEditTitle}
           />
         ))}
       </div>
@@ -238,12 +246,14 @@ function SectionColumn({
   onAdd,
   onToggle,
   onDelete,
+  onEditTitle,
 }: {
   section: Section;
   items: Todo[];
   onAdd: (title: string) => void;
   onToggle: (todo: Todo) => void;
   onDelete: (id: string) => void;
+  onEditTitle: (id: string, title: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: section.key });
   const [adding, setAdding] = useState(false);
@@ -286,7 +296,7 @@ function SectionColumn({
           ) : (
             <div className="divide-y divide-[var(--border)]">
               {items.map((todo) => (
-                <SortableTodoRow key={todo.id} todo={todo} onToggle={onToggle} onDelete={onDelete} />
+                <SortableTodoRow key={todo.id} todo={todo} onToggle={onToggle} onDelete={onDelete} onEditTitle={onEditTitle} />
               ))}
             </div>
           )}
@@ -321,10 +331,12 @@ function SortableTodoRow({
   todo,
   onToggle,
   onDelete,
+  onEditTitle,
 }: {
   todo: Todo;
   onToggle: (todo: Todo) => void;
   onDelete: (id: string) => void;
+  onEditTitle: (id: string, title: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: todo.id });
   const style = {
@@ -332,6 +344,19 @@ function SortableTodoRow({
     transition,
     opacity: isDragging ? 0.4 : 1,
   };
+
+  const [isEditing, setIsEditing] = useState(false);
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  function startEdit() {
+    setIsEditing(true);
+  }
+
+  function commitEdit() {
+    const value = editInputRef.current?.value.trim();
+    setIsEditing(false);
+    if (value && value !== todo.title) onEditTitle(todo.id, value);
+  }
 
   return (
     <div ref={setNodeRef} style={style} className="flex items-center gap-2 px-2 py-2 group">
@@ -352,9 +377,26 @@ function SortableTodoRow({
       >
         {todo.completed && <Check size={10} className="text-[var(--primary-foreground)]" />}
       </button>
-      <span className={`flex-1 text-sm ${todo.completed ? "line-through text-[var(--muted-foreground)]" : ""}`}>
-        {todo.title}
-      </span>
+      {isEditing ? (
+        <input
+          ref={editInputRef}
+          autoFocus
+          defaultValue={todo.title}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commitEdit();
+            if (e.key === "Escape") setIsEditing(false);
+          }}
+          onBlur={commitEdit}
+          className="flex-1 text-sm bg-transparent px-1 -mx-1 rounded focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/30"
+        />
+      ) : (
+        <span
+          onClick={startEdit}
+          className={`flex-1 text-sm cursor-text ${todo.completed ? "line-through text-[var(--muted-foreground)]" : ""}`}
+        >
+          {todo.title}
+        </span>
+      )}
       <button
         onClick={() => onDelete(todo.id)}
         className="opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] hover:text-red-500 transition-all flex-shrink-0"

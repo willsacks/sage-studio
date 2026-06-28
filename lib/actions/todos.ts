@@ -16,6 +16,12 @@ export async function createTodo(title: string, dueDate: string | null, position
   revalidatePath("/todos");
 }
 
+export async function updateTodoTitle(id: string, title: string) {
+  const { supabase, user } = await requireAuth();
+  await supabase.from("todos").update({ title }).eq("id", id).eq("user_id", user.id);
+  revalidatePath("/todos");
+}
+
 export async function toggleTodo(id: string, completed: boolean) {
   const { supabase, user } = await requireAuth();
   await supabase.from("todos").update({ completed }).eq("id", id).eq("user_id", user.id);
