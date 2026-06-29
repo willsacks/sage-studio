@@ -110,6 +110,5 @@ export async function acceptInvite(
     .eq("id", invite.site_id)
     .single();
 
-  revalidatePath("/my-site");
   return { siteId: invite.site_id, siteName: site?.name ?? "this site", role: invite.role as SiteRole };
 }
