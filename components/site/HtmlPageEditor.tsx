@@ -1,13 +1,13 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Upload, Code2, Eye, MousePointerClick, ExternalLink, Wand2, Save, Loader2, Check, Globe, Settings } from "lucide-react";
+import { ArrowLeft, Upload, Code2, Eye, MousePointerClick, ExternalLink, Wand2, Save, Loader2, Check, Globe, Settings, Link2, Unlink } from "lucide-react";
 import Link from "next/link";
 import { updateHtmlPage, applyCustomStyle } from "@/lib/actions/html-pages";
 import { togglePagePublished, saveSitePage } from "@/lib/actions/sites";
 import { extractStyleFromHtml } from "@/lib/utils/extract-html-style";
-import { HtmlVisualEditor } from "@/components/site/HtmlVisualEditor";
+import { HtmlVisualEditor, type HtmlVisualEditorHandle, type SelectionInfo } from "@/components/site/HtmlVisualEditor";
 import type { Tables } from "@/lib/db";
 import type { StyleTokens } from "@/lib/styles/types";
 import { THEMES_BY_KEY, DEFAULT_STYLE_KEY } from "@/lib/styles";
@@ -36,8 +36,25 @@ export function HtmlPageEditor({ page, siteId, siteSlug }: HtmlPageEditorProps) 
   const [isApplying, startApply] = useTransition();
   const [styleApplied, setStyleApplied] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const editorRef = useRef<HtmlVisualEditorHandle>(null);
+  const [selection, setSelection] = useState<SelectionInfo | null>(null);
+  const [linkUrl, setLinkUrl] = useState("");
 
   const isPublished = page.status === "published";
+
+  useEffect(() => {
+    setLinkUrl(selection?.href ?? "");
+  }, [selection]);
+
+  function handleApplyLink() {
+    if (!linkUrl.trim()) return;
+    editorRef.current?.applyLink(linkUrl.trim());
+  }
+
+  function handleRemoveLink() {
+    editorRef.current?.removeLink();
+    setLinkUrl("");
+  }
 
   function handleChange(value: string) {
     setHtml(value);
@@ -198,7 +215,7 @@ export function HtmlPageEditor({ page, siteId, siteSlug }: HtmlPageEditorProps) 
                 <MousePointerClick size={12} /> Edit
               </button>
               <button
-                onClick={() => setView("preview")}
+                onClick={() => { setView("preview"); setSelection(null); }}
                 className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs transition-colors ${
                   view === "preview"
                     ? "bg-[var(--background)] text-[var(--foreground)] shadow-sm font-medium"
@@ -208,7 +225,7 @@ export function HtmlPageEditor({ page, siteId, siteSlug }: HtmlPageEditorProps) 
                 <Eye size={12} /> Preview
               </button>
               <button
-                onClick={() => setView("html")}
+                onClick={() => { setView("html"); setSelection(null); }}
                 className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs transition-colors ${
                   view === "html"
                     ? "bg-[var(--background)] text-[var(--foreground)] shadow-sm font-medium"
@@ -235,13 +252,13 @@ export function HtmlPageEditor({ page, siteId, siteSlug }: HtmlPageEditorProps) 
 
           {view === "edit" && (
             <div className="px-4 py-1.5 text-[11px] text-[var(--muted-foreground)] bg-[var(--card)] border-b border-[var(--border)] flex-shrink-0">
-              Click any text to edit it in place. Hover a section to reveal its <span className="font-mono">⠿</span> handle, then drag to reorder.
+              Click any text to edit it in place, or select text to add a link in the sidebar. Hover a section to reveal its <span className="font-mono">⠿</span> handle, then drag to reorder.
             </div>
           )}
 
           {/* Content */}
           {view === "edit" ? (
-            <HtmlVisualEditor html={html} onChange={handleChange} />
+            <HtmlVisualEditor ref={editorRef} html={html} onChange={handleChange} onSelectionInfo={setSelection} />
           ) : view === "preview" ? (
             <iframe
               srcDoc={html}
@@ -311,6 +328,50 @@ export function HtmlPageEditor({ page, siteId, siteSlug }: HtmlPageEditorProps) 
               {settingsSaved ? "Saved" : "Save Settings"}
             </button>
           </div>
+
+          {view === "edit" && (
+            <div className="p-4 border-b border-[var(--border)] space-y-3">
+              <div className="flex items-center gap-1.5">
+                <Link2 size={12} className="text-[var(--muted-foreground)]" />
+                <p className="text-xs font-semibold text-[var(--foreground)]">Link</p>
+              </div>
+
+              {selection ? (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={linkUrl}
+                    onChange={(e) => setLinkUrl(e.target.value)}
+                    placeholder="https://example.com"
+                    className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/30"
+                    onKeyDown={(e) => { if (e.key === "Enter") handleApplyLink(); }}
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleApplyLink}
+                      disabled={!linkUrl.trim()}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] text-xs hover:opacity-90 transition-opacity disabled:opacity-40"
+                    >
+                      <Link2 size={12} /> {selection.href ? "Update" : "Add Link"}
+                    </button>
+                    {selection.href && (
+                      <button
+                        onClick={handleRemoveLink}
+                        title="Remove link"
+                        className="flex items-center justify-center w-8 h-8 rounded-lg border border-[var(--border)] text-[var(--muted-foreground)] hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                      >
+                        <Unlink size={12} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[11px] text-[var(--muted-foreground)] leading-snug">
+                  Select some text in the page to add a link.
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="p-4 border-b border-[var(--border)]">
             <p className="text-xs font-semibold text-[var(--foreground)] mb-1">Site Style</p>

@@ -1,10 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
+
+export interface SelectionInfo {
+  hasSelection: boolean;
+  href: string | null;
+}
+
+export interface HtmlVisualEditorHandle {
+  applyLink: (url: string) => void;
+  removeLink: () => void;
+}
 
 interface HtmlVisualEditorProps {
   html: string;
   onChange: (html: string) => void;
+  onSelectionInfo?: (info: SelectionInfo | null) => void;
 }
 
 const EDIT_STYLE_ID = "__sage_edit_styles__";
@@ -18,16 +29,31 @@ const DRAGGING_CLASS = "__sage_dragging__";
 const EDITABLE_SELECTOR =
   "h1,h2,h3,h4,h5,h6,p,span,a,li,td,th,button,figcaption,label,blockquote,strong,em,small,div";
 
+function closestElement(node: Node | null): HTMLElement | null {
+  while (node && node.nodeType !== Node.ELEMENT_NODE) node = node.parentNode;
+  return (node as HTMLElement | null) ?? null;
+}
+
+function normalizeUrl(url: string): string {
+  const trimmed = url.trim();
+  if (/^(https?:|mailto:|tel:|\/|#)/i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
 /**
  * Renders HTML inside a sandboxed iframe and makes it directly editable:
  * text leaves become contentEditable, and top-level <body> children get a
  * drag handle so the user can reorder sections. Edits are serialized back
  * to a plain HTML string (with all editing affordances stripped) via onChange.
+ * A link can be applied to the current text selection via the imperative
+ * handle (applyLink/removeLink), driven by a control outside the iframe.
  */
-export function HtmlVisualEditor({ html, onChange }: HtmlVisualEditorProps) {
+export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEditorProps>(
+  function HtmlVisualEditor({ html, onChange, onSelectionInfo }, ref) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const lastSyncedRef = useRef<string | null>(null);
   const dragSrcRef = useRef<HTMLElement | null>(null);
+  const lastRangeRef = useRef<Range | null>(null);
 
   const serialize = useCallback((): string | null => {
     const doc = iframeRef.current?.contentDocument;
@@ -50,6 +76,28 @@ export function HtmlVisualEditor({ html, onChange }: HtmlVisualEditorProps) {
     lastSyncedRef.current = next;
     onChange(next);
   }, [serialize, onChange]);
+
+  const reportSelection = useCallback((doc: Document) => {
+    if (!onSelectionInfo) return;
+    const sel = doc.getSelection();
+    if (!sel || sel.rangeCount === 0) {
+      onSelectionInfo(null);
+      return;
+    }
+    const range = sel.getRangeAt(0);
+    const el = closestElement(sel.anchorNode);
+    const editableEl = el?.closest('[contenteditable="true"]') ?? null;
+    if (!editableEl) {
+      onSelectionInfo(null);
+      return;
+    }
+    lastRangeRef.current = range.cloneRange();
+    const linkEl = el?.closest("a") ?? null;
+    onSelectionInfo({
+      hasSelection: !range.collapsed || !!linkEl,
+      href: linkEl?.getAttribute("href") ?? null,
+    });
+  }, [onSelectionInfo]);
 
   const setupEditing = useCallback(() => {
     const doc = iframeRef.current?.contentDocument;
@@ -149,7 +197,61 @@ export function HtmlVisualEditor({ html, onChange }: HtmlVisualEditorProps) {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(emitChange, 400);
     });
-  }, [emitChange]);
+
+    doc.addEventListener("selectionchange", () => reportSelection(doc));
+    doc.body.addEventListener("mouseup", () => reportSelection(doc));
+    doc.body.addEventListener("keyup", () => reportSelection(doc));
+  }, [emitChange, reportSelection]);
+
+  useImperativeHandle(ref, () => ({
+    applyLink(url: string) {
+      const doc = iframeRef.current?.contentDocument;
+      const win = iframeRef.current?.contentWindow;
+      if (!doc || !win) return;
+      const cleanUrl = normalizeUrl(url);
+
+      win.focus();
+      const sel = doc.getSelection();
+      const range = lastRangeRef.current;
+      if (sel && range) {
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+
+      const anchorEl = closestElement(sel?.anchorNode ?? null)?.closest("a") ?? null;
+      if (anchorEl && sel?.getRangeAt(0).collapsed) {
+        anchorEl.setAttribute("href", cleanUrl);
+      } else {
+        doc.execCommand("createLink", false, cleanUrl);
+      }
+      emitChange();
+      reportSelection(doc);
+    },
+    removeLink() {
+      const doc = iframeRef.current?.contentDocument;
+      const win = iframeRef.current?.contentWindow;
+      if (!doc || !win) return;
+
+      win.focus();
+      const sel = doc.getSelection();
+      const range = lastRangeRef.current;
+      if (sel && range) {
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+
+      const anchorEl = closestElement(sel?.anchorNode ?? null)?.closest("a") ?? null;
+      if (anchorEl) {
+        const parent = anchorEl.parentNode;
+        while (anchorEl.firstChild) parent?.insertBefore(anchorEl.firstChild, anchorEl);
+        parent?.removeChild(anchorEl);
+      } else {
+        doc.execCommand("unlink");
+      }
+      emitChange();
+      reportSelection(doc);
+    },
+  }), [emitChange, reportSelection]);
 
   useEffect(() => {
     const iframe = iframeRef.current;
@@ -172,4 +274,4 @@ export function HtmlVisualEditor({ html, onChange }: HtmlVisualEditorProps) {
       title="Edit page content"
     />
   );
-}
+});
