@@ -8,6 +8,7 @@ import type { PageData } from "@/lib/types/builder";
 import { buildStyleCssVars, buildGoogleFontsUrl, getFontsForTokens, resolveStyleTokens } from "@/lib/styles";
 import type { StyleTokens } from "@/lib/styles";
 import { ORNAMENTS_BY_KEY, DEFAULT_ORNAMENT_KEY, buildOrnamentCssVars } from "@/lib/ornaments";
+import { injectFormCaptureScript } from "@/lib/utils/form-capture-script";
 
 export async function generateMetadata({
   params,
@@ -69,7 +70,7 @@ export default async function PublicSitePageRoute({
     const htmlContent = (page as unknown as { html_content?: string | null }).html_content ?? "";
     return (
       <iframe
-        srcDoc={htmlContent}
+        srcDoc={injectFormCaptureScript(htmlContent, slug)}
         style={{ width: "100vw", height: "100vh", border: "none", display: "block" }}
         sandbox="allow-scripts allow-same-origin"
         title={page.title}

@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Upload, Code2, Eye, MousePointerClick, ExternalLink, Wand2, Save, Loader2, Check, Globe, Settings, Link2, Unlink } from "lucide-react";
+import { ArrowLeft, Upload, Code2, Eye, MousePointerClick, ExternalLink, Wand2, Save, Loader2, Check, Globe, Settings, Link2, Unlink, ClipboardList } from "lucide-react";
 import Link from "next/link";
 import { updateHtmlPage, applyCustomStyle } from "@/lib/actions/html-pages";
 import { togglePagePublished, saveSitePage } from "@/lib/actions/sites";
 import { extractStyleFromHtml } from "@/lib/utils/extract-html-style";
-import { HtmlVisualEditor, type HtmlVisualEditorHandle, type SelectionInfo } from "@/components/site/HtmlVisualEditor";
+import { HtmlVisualEditor, type HtmlVisualEditorHandle, type SelectionInfo, type FormInfo } from "@/components/site/HtmlVisualEditor";
+import { injectFormCaptureScript } from "@/lib/utils/form-capture-script";
 import type { Tables } from "@/lib/db";
 import type { StyleTokens } from "@/lib/styles/types";
 import { THEMES_BY_KEY, DEFAULT_STYLE_KEY } from "@/lib/styles";
@@ -39,6 +40,7 @@ export function HtmlPageEditor({ page, siteId, siteSlug }: HtmlPageEditorProps) 
   const editorRef = useRef<HtmlVisualEditorHandle>(null);
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
   const [linkUrl, setLinkUrl] = useState("");
+  const [forms, setForms] = useState<FormInfo[]>([]);
 
   const isPublished = page.status === "published";
 
@@ -54,6 +56,10 @@ export function HtmlPageEditor({ page, siteId, siteSlug }: HtmlPageEditorProps) 
   function handleRemoveLink() {
     editorRef.current?.removeLink();
     setLinkUrl("");
+  }
+
+  function handleToggleForm(formId: string, connected: boolean) {
+    editorRef.current?.toggleForm(formId, connected);
   }
 
   function handleChange(value: string) {
@@ -258,10 +264,10 @@ export function HtmlPageEditor({ page, siteId, siteSlug }: HtmlPageEditorProps) 
 
           {/* Content */}
           {view === "edit" ? (
-            <HtmlVisualEditor ref={editorRef} html={html} onChange={handleChange} onSelectionInfo={setSelection} />
+            <HtmlVisualEditor ref={editorRef} html={html} onChange={handleChange} onSelectionInfo={setSelection} onFormsDetected={setForms} />
           ) : view === "preview" ? (
             <iframe
-              srcDoc={html}
+              srcDoc={injectFormCaptureScript(html, siteSlug)}
               className="flex-1 w-full border-none"
               sandbox="allow-scripts allow-same-origin"
               title={`Preview: ${page.title}`}
@@ -370,6 +376,40 @@ export function HtmlPageEditor({ page, siteId, siteSlug }: HtmlPageEditorProps) 
                   Select some text in the page to add a link.
                 </p>
               )}
+            </div>
+          )}
+
+          {view === "edit" && forms.length > 0 && (
+            <div className="p-4 border-b border-[var(--border)] space-y-3">
+              <div className="flex items-center gap-1.5">
+                <ClipboardList size={12} className="text-[var(--muted-foreground)]" />
+                <p className="text-xs font-semibold text-[var(--foreground)]">Forms</p>
+              </div>
+              <p className="text-[11px] text-[var(--muted-foreground)] leading-snug">
+                Connect a form to see its submissions in Sage Studio. Forms left off keep working as imported.
+              </p>
+              <div className="space-y-1.5">
+                {forms.map((form) => (
+                  <button
+                    key={form.id}
+                    onClick={() => handleToggleForm(form.id, !form.connected)}
+                    className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border text-xs transition-colors ${
+                      form.connected
+                        ? "border-[var(--primary)]/40 bg-[var(--primary)]/10 text-[var(--foreground)]"
+                        : "border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--accent)]"
+                    }`}
+                  >
+                    <span className="truncate">{form.label}</span>
+                    <span className={`flex-shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                      form.connected
+                        ? "bg-[var(--primary)] text-[var(--primary-foreground)]"
+                        : "bg-[var(--muted)] text-[var(--muted-foreground)]"
+                    }`}>
+                      {form.connected ? "Connected" : "Off"}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 

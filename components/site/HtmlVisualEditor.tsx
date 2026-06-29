@@ -7,15 +7,23 @@ export interface SelectionInfo {
   href: string | null;
 }
 
+export interface FormInfo {
+  id: string;
+  label: string;
+  connected: boolean;
+}
+
 export interface HtmlVisualEditorHandle {
   applyLink: (url: string) => void;
   removeLink: () => void;
+  toggleForm: (formId: string, connected: boolean) => void;
 }
 
 interface HtmlVisualEditorProps {
   html: string;
   onChange: (html: string) => void;
   onSelectionInfo?: (info: SelectionInfo | null) => void;
+  onFormsDetected?: (forms: FormInfo[]) => void;
 }
 
 const EDIT_STYLE_ID = "__sage_edit_styles__";
@@ -24,6 +32,8 @@ const HANDLE_CLASS = "__sage_drag_handle__";
 const SECTION_ATTR = "data-sage-section";
 const DROP_INDICATOR_CLASS = "__sage_drop_indicator__";
 const DRAGGING_CLASS = "__sage_dragging__";
+const FORM_ID_ATTR = "data-sage-form-id";
+const FORM_CONNECTED_ATTR = "data-sage-form";
 
 // Leaf elements whose direct text content can be edited in place.
 const EDITABLE_SELECTOR =
@@ -49,7 +59,7 @@ function normalizeUrl(url: string): string {
  * handle (applyLink/removeLink), driven by a control outside the iframe.
  */
 export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEditorProps>(
-  function HtmlVisualEditor({ html, onChange, onSelectionInfo }, ref) {
+  function HtmlVisualEditor({ html, onChange, onSelectionInfo, onFormsDetected }, ref) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const lastSyncedRef = useRef<string | null>(null);
   const dragSrcRef = useRef<HTMLElement | null>(null);
@@ -67,6 +77,7 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
       el.removeAttribute(SECTION_ATTR);
       el.classList.remove(DRAGGING_CLASS);
     });
+    clone.querySelectorAll(`[${FORM_ID_ATTR}]`).forEach((el) => el.removeAttribute(FORM_ID_ATTR));
     return "<!DOCTYPE html>\n" + clone.outerHTML;
   }, []);
 
@@ -76,6 +87,25 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
     lastSyncedRef.current = next;
     onChange(next);
   }, [serialize, onChange]);
+
+  const scanForms = useCallback((doc: Document) => {
+    if (!onFormsDetected) return;
+    const formEls = Array.from(doc.body?.querySelectorAll("form") ?? []);
+    const forms: FormInfo[] = formEls.map((form, i) => {
+      if (!form.hasAttribute(FORM_ID_ATTR)) form.setAttribute(FORM_ID_ATTR, String(i));
+      const label =
+        form.querySelector("h1,h2,h3,legend")?.textContent?.trim() ||
+        form.getAttribute("name") ||
+        form.getAttribute("id") ||
+        `Form ${i + 1}`;
+      return {
+        id: form.getAttribute(FORM_ID_ATTR)!,
+        label,
+        connected: form.getAttribute(FORM_CONNECTED_ATTR) === "true",
+      };
+    });
+    onFormsDetected(forms);
+  }, [onFormsDetected]);
 
   const reportSelection = useCallback((doc: Document) => {
     if (!onSelectionInfo) return;
@@ -201,7 +231,9 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
     doc.addEventListener("selectionchange", () => reportSelection(doc));
     doc.body.addEventListener("mouseup", () => reportSelection(doc));
     doc.body.addEventListener("keyup", () => reportSelection(doc));
-  }, [emitChange, reportSelection]);
+
+    scanForms(doc);
+  }, [emitChange, reportSelection, scanForms]);
 
   useImperativeHandle(ref, () => ({
     applyLink(url: string) {
@@ -251,7 +283,20 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
       emitChange();
       reportSelection(doc);
     },
-  }), [emitChange, reportSelection]);
+    toggleForm(formId: string, connected: boolean) {
+      const doc = iframeRef.current?.contentDocument;
+      if (!doc) return;
+      const form = doc.querySelector(`[${FORM_ID_ATTR}="${formId}"]`);
+      if (!form) return;
+      if (connected) {
+        form.setAttribute(FORM_CONNECTED_ATTR, "true");
+      } else {
+        form.removeAttribute(FORM_CONNECTED_ATTR);
+      }
+      emitChange();
+      scanForms(doc);
+    },
+  }), [emitChange, reportSelection, scanForms]);
 
   useEffect(() => {
     const iframe = iframeRef.current;
