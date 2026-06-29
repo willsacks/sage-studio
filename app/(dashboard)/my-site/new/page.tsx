@@ -18,7 +18,7 @@ export default async function NewSitePage() {
         href="/my-site"
         className="inline-flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
       >
-        <ArrowLeft size={14} /> My Websites
+        <ArrowLeft size={14} /> Sites
       </Link>
       <div>
         <h1 className="text-2xl font-bold">Create New Website</h1>

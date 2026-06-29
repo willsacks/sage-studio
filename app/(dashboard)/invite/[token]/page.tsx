@@ -23,7 +23,7 @@ export default async function AcceptInvitePage({ params }: { params: Promise<{ t
             <AlertCircle size={28} className="text-red-500 mx-auto" />
             <p className="text-sm font-medium">{result.error}</p>
             <Link href="/my-site" className="inline-block text-sm font-medium text-[var(--primary)] hover:underline">
-              Go to My Websites
+              Go to Sites
             </Link>
           </>
         ) : (

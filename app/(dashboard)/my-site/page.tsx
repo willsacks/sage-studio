@@ -8,7 +8,7 @@ import { deletePersonalTemplate } from "@/lib/actions/offer-templates";
 import { Globe, Plus, Settings, ExternalLink, Palette, FileText, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 
-export const metadata: Metadata = { title: "My Websites" };
+export const metadata: Metadata = { title: "Sites" };
 
 export default async function MySitesPage() {
   const supabase = await createClient();
@@ -22,7 +22,7 @@ export default async function MySitesPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Globe size={24} /> My Websites
+            <Globe size={24} /> Sites
           </h1>
           <p className="text-[var(--muted-foreground)] mt-1">
             Create and manage your public-facing websites. Each site has its own URL and pages.

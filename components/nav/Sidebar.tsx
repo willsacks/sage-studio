@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Globe, Timer, CreditCard, Settings, Leaf, LogOut, ExternalLink, LayoutDashboard, GitBranch, CheckSquare, Gamepad2, BookOpen } from "lucide-react";
+import { Globe, Timer, CreditCard, Settings, Leaf, LogOut, LayoutDashboard, GitBranch, CheckSquare, Gamepad2, BookOpen } from "lucide-react";
 import { signOut } from "@/lib/actions/auth";
 
 interface SidebarProps {
@@ -12,7 +12,7 @@ interface SidebarProps {
 }
 
 const NAV = [
-  { href: "/my-site", label: "My Websites", icon: Globe },
+  { href: "/my-site", label: "Sites", icon: Globe },
   { href: "/todos", label: "To Do's", icon: CheckSquare },
   { href: "/tasks", label: "Time Tracker", icon: Timer },
   { href: "/pipeline", label: "Pipeline", icon: GitBranch },
@@ -82,18 +82,6 @@ export function Sidebar({ displayName, plan, isAdmin }: SidebarProps) {
           </>
         )}
 
-        {/* CC crosslink */}
-        <div className="pt-4">
-          <a
-            href="https://creatorscircle.art"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-[var(--muted-foreground)] hover:text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)] transition-colors"
-          >
-            <ExternalLink size={13} className="flex-shrink-0" />
-            Join Creator Circle
-          </a>
-        </div>
       </nav>
 
       {/* User footer */}
