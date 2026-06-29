@@ -41,22 +41,31 @@ CREATE INDEX IF NOT EXISTS idx_site_collaborators_user ON public.site_collaborat
 -- directly via the REST API, bypassing the app's permission checks entirely).
 ALTER TABLE public.site_collaborators ENABLE ROW LEVEL SECURITY;
 
+-- SECURITY DEFINER so the "is this user a manager of this site" check bypasses RLS
+-- internally instead of re-triggering the policy below on itself (infinite recursion).
+CREATE OR REPLACE FUNCTION public.is_site_manager(p_site_id uuid, p_user_id uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.site_collaborators
+    WHERE site_id = p_site_id AND user_id = p_user_id AND role = 'manager' AND status = 'accepted'
+  );
+$$;
+
 DROP POLICY IF EXISTS "Owners and managers manage collaborators" ON public.site_collaborators;
 CREATE POLICY "Owners and managers manage collaborators" ON public.site_collaborators
   FOR ALL
   USING (
     EXISTS (SELECT 1 FROM public.artist_sites s WHERE s.id = site_collaborators.site_id AND s.user_id = auth.uid())
-    OR EXISTS (
-      SELECT 1 FROM public.site_collaborators m
-      WHERE m.site_id = site_collaborators.site_id AND m.user_id = auth.uid() AND m.role = 'manager' AND m.status = 'accepted'
-    )
+    OR public.is_site_manager(site_collaborators.site_id, auth.uid())
   )
   WITH CHECK (
     EXISTS (SELECT 1 FROM public.artist_sites s WHERE s.id = site_collaborators.site_id AND s.user_id = auth.uid())
-    OR EXISTS (
-      SELECT 1 FROM public.site_collaborators m
-      WHERE m.site_id = site_collaborators.site_id AND m.user_id = auth.uid() AND m.role = 'manager' AND m.status = 'accepted'
-    )
+    OR public.is_site_manager(site_collaborators.site_id, auth.uid())
   );
 
 DROP POLICY IF EXISTS "Collaborators can view their own row" ON public.site_collaborators;
