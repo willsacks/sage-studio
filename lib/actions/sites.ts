@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { PageData, PageTheme } from "@/lib/types/builder";
 import type { Json } from "@/lib/db";
 import { addDomainToProject, removeDomainFromProject, getDomainStatus } from "@/lib/vercel-domains";
+import { requireSiteRole, requirePageRole } from "@/lib/access/site-access";
 
 async function requireAuth() {
   const supabase = await createClient();
@@ -66,40 +67,41 @@ export async function createSiteWithStyle(name: string, styleKey: string): Promi
 
 export async function setSiteStyle(siteId: string, styleKey: string) {
   const { supabase, user } = await requireAuth();
+  await requireSiteRole(supabase, siteId, user.id, "editor");
   await supabase
     .from("artist_sites")
     .update({ style_key: styleKey, updated_at: new Date().toISOString() })
-    .eq("id", siteId)
-    .eq("user_id", user.id);
+    .eq("id", siteId);
   revalidatePath(`/my-site/${siteId}/style`);
   return { success: true };
 }
 
 export async function setSiteOrnamentation(siteId: string, ornamentKey: string) {
   const { supabase, user } = await requireAuth();
+  await requireSiteRole(supabase, siteId, user.id, "editor");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (supabase as any)
     .from("artist_sites")
     .update({ ornamentation_key: ornamentKey, updated_at: new Date().toISOString() })
-    .eq("id", siteId)
-    .eq("user_id", user.id);
+    .eq("id", siteId);
   revalidatePath(`/my-site/${siteId}/style`);
   return { success: true };
 }
 
 export async function setSiteFontScale(siteId: string, fontScale: number) {
   const { supabase, user } = await requireAuth();
+  await requireSiteRole(supabase, siteId, user.id, "editor");
   await supabase
     .from("artist_sites")
     .update({ font_scale: fontScale, updated_at: new Date().toISOString() })
-    .eq("id", siteId)
-    .eq("user_id", user.id);
+    .eq("id", siteId);
   revalidatePath(`/my-site/${siteId}/style`);
   return { success: true };
 }
 
 export async function updateSite(siteId: string, formData: FormData) {
   const { supabase, user } = await requireAuth();
+  await requireSiteRole(supabase, siteId, user.id, "editor");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
@@ -113,8 +115,7 @@ export async function updateSite(siteId: string, formData: FormData) {
       footer_text: (formData.get("footer_text") as string)?.trim() || null,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", siteId)
-    .eq("user_id", user.id);
+    .eq("id", siteId);
 
   if (error) return { error: error.message };
   revalidatePath(`/my-site/${siteId}`);
@@ -123,33 +124,35 @@ export async function updateSite(siteId: string, formData: FormData) {
 
 export async function toggleSitePublished(siteId: string, isPublished: boolean) {
   const { supabase, user } = await requireAuth();
+  await requireSiteRole(supabase, siteId, user.id, "editor");
   await supabase
     .from("artist_sites")
     .update({ is_published: isPublished, updated_at: new Date().toISOString() })
-    .eq("id", siteId)
-    .eq("user_id", user.id);
+    .eq("id", siteId);
   revalidatePath(`/my-site/${siteId}`);
   return { success: true };
 }
 
 export async function setHomePage(siteId: string, pageId: string) {
   const { supabase, user } = await requireAuth();
+  await requireSiteRole(supabase, siteId, user.id, "editor");
   await supabase
     .from("artist_sites")
     .update({ home_page_id: pageId } as never)
-    .eq("id", siteId)
-    .eq("user_id", user.id);
+    .eq("id", siteId);
   revalidatePath(`/my-site/${siteId}`);
 }
 
 export async function deleteSite(siteId: string) {
   const { supabase, user } = await requireAuth();
-  await supabase.from("artist_sites").delete().eq("id", siteId).eq("user_id", user.id);
+  await requireSiteRole(supabase, siteId, user.id, "owner");
+  await supabase.from("artist_sites").delete().eq("id", siteId);
   revalidatePath("/my-site");
 }
 
 export async function createSitePage(siteId: string, formData: FormData) {
   const { supabase, user } = await requireAuth();
+  await requireSiteRole(supabase, siteId, user.id, "editor");
 
   const title = (formData.get("title") as string)?.trim() || "New Page";
   const page_type = (formData.get("page_type") as string) || "custom";
@@ -188,9 +191,12 @@ export async function addSitePage(
   theme?: PageTheme
 ): Promise<{ pageId?: string; error?: string }> {
   const { supabase, user } = await requireAuth();
+  await requireSiteRole(supabase, siteId, user.id, "editor");
 
+  // Plan limits are tied to the site owner's plan, not the acting collaborator's.
+  const { data: site } = await supabase.from("artist_sites").select("user_id").eq("id", siteId).single();
   const { data: profile } = await supabase
-    .from("profiles").select("tier_key, role").eq("id", user.id).single();
+    .from("profiles").select("tier_key, role").eq("id", site?.user_id ?? user.id).single();
   const { isProPlan, canAddPage } = await import("@/lib/plan-gates");
   const plan = isProPlan(profile?.tier_key ?? "", profile?.role) ? "pro" as const : "free" as const;
 
@@ -243,6 +249,7 @@ export async function saveSitePage(
   }
 ) {
   const { supabase, user } = await requireAuth();
+  await requirePageRole(supabase, pageId, user.id, "editor");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
@@ -260,8 +267,7 @@ export async function saveSitePage(
       ...(data.slug !== undefined ? { slug: data.slug } : {}),
       updated_at: new Date().toISOString(),
     })
-    .eq("id", pageId)
-    .eq("user_id", user.id);
+    .eq("id", pageId);
 
   if (error) return { error: error.message };
 
@@ -310,9 +316,19 @@ export async function saveSitePage(
 
 export async function setCustomDomain(siteId: string, domain: string) {
   const { supabase, user } = await requireAuth();
+  await requireSiteRole(supabase, siteId, user.id, "manager");
+
+  // Get current site to check for existing domain + resolve owner for plan gating
+  const { data: site } = await supabase
+    .from("artist_sites")
+    .select("user_id, custom_domain")
+    .eq("id", siteId)
+    .single();
+
+  if (!site) return { error: "Site not found" };
 
   const { data: profile } = await supabase
-    .from("profiles").select("tier_key, role").eq("id", user.id).single();
+    .from("profiles").select("tier_key, role").eq("id", site.user_id).single();
   const { isProPlan } = await import("@/lib/plan-gates");
   if (!isProPlan(profile?.tier_key ?? "", profile?.role)) {
     return { error: "Custom domains require a Pro plan. Upgrade to unlock." };
@@ -327,16 +343,6 @@ export async function setCustomDomain(siteId: string, domain: string) {
   if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(cleanDomain)) {
     return { error: "Invalid domain format (e.g. willsage.com)" };
   }
-
-  // Get current site to check for existing domain
-  const { data: site } = await supabase
-    .from("artist_sites")
-    .select("custom_domain")
-    .eq("id", siteId)
-    .eq("user_id", user.id)
-    .single();
-
-  if (!site) return { error: "Site not found" };
 
   // Remove old domain (bare + www) from Vercel if different
   if (site.custom_domain && site.custom_domain !== cleanDomain) {
@@ -360,8 +366,7 @@ export async function setCustomDomain(siteId: string, domain: string) {
       custom_domain_verified: false,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", siteId)
-    .eq("user_id", user.id);
+    .eq("id", siteId);
 
   revalidatePath(`/my-site/${siteId}/settings`);
 
@@ -373,12 +378,12 @@ export async function setCustomDomain(siteId: string, domain: string) {
 
 export async function removeCustomDomain(siteId: string) {
   const { supabase, user } = await requireAuth();
+  await requireSiteRole(supabase, siteId, user.id, "manager");
 
   const { data: site } = await supabase
     .from("artist_sites")
     .select("custom_domain")
     .eq("id", siteId)
-    .eq("user_id", user.id)
     .single();
 
   if (site?.custom_domain) {
@@ -391,8 +396,7 @@ export async function removeCustomDomain(siteId: string) {
   await supabase
     .from("artist_sites")
     .update({ custom_domain: null, custom_domain_verified: false, updated_at: new Date().toISOString() })
-    .eq("id", siteId)
-    .eq("user_id", user.id);
+    .eq("id", siteId);
 
   revalidatePath(`/my-site/${siteId}/settings`);
   return { success: true };
@@ -400,12 +404,12 @@ export async function removeCustomDomain(siteId: string) {
 
 export async function recheckDomainStatus(siteId: string) {
   const { supabase, user } = await requireAuth();
+  await requireSiteRole(supabase, siteId, user.id, "manager");
 
   const { data: site } = await supabase
     .from("artist_sites")
     .select("custom_domain")
     .eq("id", siteId)
-    .eq("user_id", user.id)
     .single();
 
   if (!site?.custom_domain) return { error: "No custom domain set" };
@@ -416,8 +420,7 @@ export async function recheckDomainStatus(siteId: string) {
     await supabase
       .from("artist_sites")
       .update({ custom_domain_verified: true, updated_at: new Date().toISOString() })
-      .eq("id", siteId)
-      .eq("user_id", user.id);
+      .eq("id", siteId);
   }
 
   revalidatePath(`/my-site/${siteId}/settings`);
@@ -426,11 +429,11 @@ export async function recheckDomainStatus(siteId: string) {
 
 export async function togglePagePublished(pageId: string, siteId: string, publish: boolean) {
   const { supabase, user } = await requireAuth();
+  await requirePageRole(supabase, pageId, user.id, "editor");
   await supabase
     .from("site_pages")
     .update({ status: publish ? "published" : "draft", updated_at: new Date().toISOString() })
-    .eq("id", pageId)
-    .eq("user_id", user.id);
+    .eq("id", pageId);
   revalidatePath(`/my-site/${siteId}`);
   return { success: true };
 }
@@ -441,18 +444,19 @@ export async function updatePageVisibility(
   patch: { show_in_nav?: boolean; hide_header?: boolean }
 ) {
   const { supabase, user } = await requireAuth();
+  await requirePageRole(supabase, pageId, user.id, "editor");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (supabase as any)
     .from("site_pages")
     .update({ ...patch, updated_at: new Date().toISOString() })
-    .eq("id", pageId)
-    .eq("user_id", user.id);
+    .eq("id", pageId);
   revalidatePath(`/my-site/${siteId}`);
   return { success: true };
 }
 
 export async function deleteSitePage(pageId: string, siteId: string) {
   const { supabase, user } = await requireAuth();
-  await supabase.from("site_pages").delete().eq("id", pageId).eq("user_id", user.id);
+  await requirePageRole(supabase, pageId, user.id, "editor");
+  await supabase.from("site_pages").delete().eq("id", pageId);
   revalidatePath(`/my-site/${siteId}`);
 }

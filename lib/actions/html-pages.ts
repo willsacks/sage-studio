@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { StyleTokens } from "@/lib/styles/types";
 import type { Json } from "@/lib/db";
+import { requireSiteRole, requirePageRole } from "@/lib/access/site-access";
 
 async function requireAuth() {
   const supabase = await createClient();
@@ -18,6 +19,7 @@ export async function createHtmlPage(
   htmlContent: string
 ): Promise<{ pageId?: string; error?: string }> {
   const { supabase, user } = await requireAuth();
+  await requireSiteRole(supabase, siteId, user.id, "editor");
 
   const baseSlug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   const slug = `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`;
@@ -54,12 +56,12 @@ export async function updateHtmlPage(
   htmlContent: string
 ): Promise<{ error?: string }> {
   const { supabase, user } = await requireAuth();
+  await requirePageRole(supabase, pageId, user.id, "editor");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
     .from("site_pages")
     .update({ html_content: htmlContent, updated_at: new Date().toISOString() })
-    .eq("id", pageId)
-    .eq("user_id", user.id);
+    .eq("id", pageId);
   if (error) return { error: error.message };
   return {};
 }
@@ -69,6 +71,7 @@ export async function applyCustomStyle(
   tokens: StyleTokens
 ): Promise<{ error?: string }> {
   const { supabase, user } = await requireAuth();
+  await requireSiteRole(supabase, siteId, user.id, "editor");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
     .from("artist_sites")
@@ -77,8 +80,7 @@ export async function applyCustomStyle(
       custom_style: tokens as unknown as Json,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", siteId)
-    .eq("user_id", user.id);
+    .eq("id", siteId);
   if (error) return { error: error.message };
   revalidatePath(`/my-site/${siteId}/style`);
   revalidatePath(`/my-site/${siteId}`);

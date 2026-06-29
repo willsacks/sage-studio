@@ -73,13 +73,20 @@ export default async function MySitesPage() {
                       )}
                       <h2 className="font-semibold text-[var(--foreground)] truncate">{site.name}</h2>
                     </div>
-                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${
-                      site.is_published
-                        ? "bg-green-100 text-green-700"
-                        : "bg-[var(--muted)] text-[var(--muted-foreground)]"
-                    }`}>
-                      {site.is_published ? "Live" : "Draft"}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {site.myRole && site.myRole !== "owner" && (
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] capitalize">
+                          Shared · {site.myRole}
+                        </span>
+                      )}
+                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                        site.is_published
+                          ? "bg-green-100 text-green-700"
+                          : "bg-[var(--muted)] text-[var(--muted-foreground)]"
+                      }`}>
+                        {site.is_published ? "Live" : "Draft"}
+                      </span>
+                    </div>
                   </div>
 
                   {/* URL */}
@@ -104,20 +111,24 @@ export default async function MySitesPage() {
                   >
                     Manage
                   </Link>
-                  <Link
-                    href={`/my-site/${site.id}/style`}
-                    className="flex items-center justify-center w-8 h-8 rounded-lg border border-[var(--border)] hover:bg-[var(--accent)] transition-colors"
-                    title="Design style"
-                  >
-                    <Palette size={13} />
-                  </Link>
-                  <Link
-                    href={`/my-site/${site.id}/settings`}
-                    className="flex items-center justify-center w-8 h-8 rounded-lg border border-[var(--border)] hover:bg-[var(--accent)] transition-colors"
-                    title="Settings"
-                  >
-                    <Settings size={13} />
-                  </Link>
+                  {site.myRole !== "viewer" && (
+                    <Link
+                      href={`/my-site/${site.id}/style`}
+                      className="flex items-center justify-center w-8 h-8 rounded-lg border border-[var(--border)] hover:bg-[var(--accent)] transition-colors"
+                      title="Design style"
+                    >
+                      <Palette size={13} />
+                    </Link>
+                  )}
+                  {(site.myRole === "owner" || site.myRole === "manager") && (
+                    <Link
+                      href={`/my-site/${site.id}/settings`}
+                      className="flex items-center justify-center w-8 h-8 rounded-lg border border-[var(--border)] hover:bg-[var(--accent)] transition-colors"
+                      title="Settings"
+                    >
+                      <Settings size={13} />
+                    </Link>
+                  )}
                   {site.is_published && (
                     <Link
                       href={`/sites/${site.slug}`}

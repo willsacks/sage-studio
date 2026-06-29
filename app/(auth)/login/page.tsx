@@ -11,6 +11,12 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  function buildCallbackUrl() {
+    const next = new URLSearchParams(window.location.search).get("next");
+    const url = `${window.location.origin}/api/auth/callback`;
+    return next ? `${url}?next=${encodeURIComponent(next)}` : url;
+  }
+
   async function handleMagicLink(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -19,7 +25,7 @@ export default function LoginPage() {
     const { error: err } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/api/auth/callback`,
+        emailRedirectTo: buildCallbackUrl(),
       },
     });
     setLoading(false);
@@ -37,7 +43,7 @@ export default function LoginPage() {
     const { error: err } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/api/auth/callback`,
+        redirectTo: buildCallbackUrl(),
       },
     });
     if (err) {

@@ -378,6 +378,45 @@ export type Database = {
         };
         Relationships: [];
       };
+      site_collaborators: {
+        Row: {
+          id: string;
+          site_id: string;
+          email: string;
+          user_id: string | null;
+          role: "viewer" | "editor" | "manager";
+          invite_token: string;
+          status: "pending" | "accepted";
+          invited_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          site_id: string;
+          email: string;
+          user_id?: string | null;
+          role: "viewer" | "editor" | "manager";
+          invite_token?: string;
+          status?: "pending" | "accepted";
+          invited_by: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          site_id?: string;
+          email?: string;
+          user_id?: string | null;
+          role?: "viewer" | "editor" | "manager";
+          invite_token?: string;
+          status?: "pending" | "accepted";
+          invited_by?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       todos: {
         Row: {
           id: string;

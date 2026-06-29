@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getSiteById, getSitePageById, getPagesForSite } from "@/lib/queries/sites";
 import { SitePageBuilder } from "@/components/site/SitePageBuilder";
 import { HtmlPageEditor } from "@/components/site/HtmlPageEditor";
+import { ReadOnlyPageView } from "@/components/site/ReadOnlyPageView";
+import { getSiteRole, hasAtLeast } from "@/lib/access/site-access";
 
 export default async function SitePageEditPage({
   params,
@@ -29,8 +31,14 @@ export default async function SitePageEditPage({
     getPagesForSite(siteId),
   ]);
 
-  if (!site || site.user_id !== user.id) notFound();
-  if (!page || page.user_id !== user.id) notFound();
+  if (!site) notFound();
+  if (!page) notFound();
+  const role = await getSiteRole(supabase, siteId, user.id);
+  if (!role) notFound();
+
+  if (!hasAtLeast(role, "editor")) {
+    return <ReadOnlyPageView page={page} site={site} />;
+  }
 
   if (page.page_type === "html") {
     return <HtmlPageEditor page={page as Parameters<typeof HtmlPageEditor>[0]["page"]} siteId={siteId} siteSlug={site.slug} />;

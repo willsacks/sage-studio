@@ -4,10 +4,13 @@ import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getSiteById } from "@/lib/queries/sites";
+import { getCollaboratorsForSite } from "@/lib/queries/site-collaborators";
 import { SiteSettingsForm } from "@/components/site/SiteSettingsForm";
 import { CustomDomainForm } from "@/components/site/CustomDomainForm";
 import { DeleteSiteButton } from "@/components/site/DeleteSiteButton";
+import { CollaboratorsPanel } from "@/components/site/CollaboratorsPanel";
 import { isProPlan } from "@/lib/plan-gates";
+import { getSiteRole, hasAtLeast } from "@/lib/access/site-access";
 
 export const metadata: Metadata = { title: "Site Settings" };
 
@@ -18,10 +21,13 @@ export default async function SiteSettingsPage({ params }: { params: Promise<{ s
   if (!user) redirect("/login");
 
   const site = await getSiteById(siteId);
-  if (!site || site.user_id !== user.id) notFound();
+  if (!site) notFound();
+  const role = await getSiteRole(supabase, siteId, user.id);
+  if (!hasAtLeast(role, "manager")) notFound();
 
-  const { data: profile } = await supabase.from("profiles").select("tier_key, role").eq("id", user.id).single();
+  const { data: profile } = await supabase.from("profiles").select("tier_key, role").eq("id", site.user_id).single();
   const isPro = isProPlan(profile?.tier_key ?? "", profile?.role);
+  const collaborators = await getCollaboratorsForSite(siteId);
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -63,13 +69,19 @@ export default async function SiteSettingsPage({ params }: { params: Promise<{ s
         )}
       </div>
 
-      <div className="border-t border-[var(--border)] pt-6 flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium">Delete this site</p>
-          <p className="text-xs text-[var(--muted-foreground)]">Permanently removes the site and all its pages.</p>
-        </div>
-        <DeleteSiteButton siteId={siteId} siteName={site.name} />
+      <div className="border-t border-[var(--border)] pt-6">
+        <CollaboratorsPanel siteId={siteId} collaborators={collaborators} />
       </div>
+
+      {role === "owner" && (
+        <div className="border-t border-[var(--border)] pt-6 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">Delete this site</p>
+            <p className="text-xs text-[var(--muted-foreground)]">Permanently removes the site and all its pages.</p>
+          </div>
+          <DeleteSiteButton siteId={siteId} siteName={site.name} />
+        </div>
+      )}
     </div>
   );
 }

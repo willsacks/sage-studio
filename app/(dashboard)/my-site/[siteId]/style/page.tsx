@@ -8,6 +8,7 @@ import { SiteStyleEditor } from "@/components/site/SiteStyleEditor";
 import { OrnamentSelector } from "@/components/site/OrnamentSelector";
 import { DEFAULT_STYLE_KEY } from "@/lib/styles";
 import { DEFAULT_ORNAMENT_KEY } from "@/lib/ornaments";
+import { getSiteRole, hasAtLeast } from "@/lib/access/site-access";
 
 export const metadata: Metadata = { title: "Site Style" };
 
@@ -18,7 +19,9 @@ export default async function SiteStylePage({ params }: { params: Promise<{ site
   if (!user) redirect("/login");
 
   const site = await getSiteById(siteId);
-  if (!site || site.user_id !== user.id) notFound();
+  if (!site) notFound();
+  const role = await getSiteRole(supabase, siteId, user.id);
+  if (!hasAtLeast(role, "editor")) notFound();
 
   const currentStyleKey = site.style_key ?? DEFAULT_STYLE_KEY;
   const currentFontScale = site.font_scale ?? 1;
