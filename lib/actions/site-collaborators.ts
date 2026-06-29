@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { requireSiteRole, type SiteRole } from "@/lib/access/site-access";
 import type { SiteCollaborator } from "@/lib/queries/site-collaborators";
 
@@ -81,9 +81,14 @@ export async function removeCollaborator(collaboratorId: string) {
 export async function acceptInvite(
   token: string
 ): Promise<{ siteId: string; siteName: string; role: SiteRole } | { error: string }> {
-  const { supabase, user } = await requireAuth();
+  // requireAuth() confirms there's a real logged-in session; the actual lookup below
+  // uses the service-role client because a brand-new invitee won't yet match any
+  // RLS policy on site_collaborators (they're not the owner or an existing
+  // collaborator) — the invite_token itself is what authorizes this one operation.
+  const { user } = await requireAuth();
+  const admin = createAdminClient();
 
-  const { data: invite } = await supabase
+  const { data: invite } = await admin
     .from("site_collaborators")
     .select("id, site_id, role, status, user_id")
     .eq("invite_token", token)
@@ -94,12 +99,12 @@ export async function acceptInvite(
     return { error: "This invite has already been claimed by another account." };
   }
 
-  await supabase
+  await admin
     .from("site_collaborators")
     .update({ user_id: user.id, status: "accepted", updated_at: new Date().toISOString() })
     .eq("id", invite.id);
 
-  const { data: site } = await supabase
+  const { data: site } = await admin
     .from("artist_sites")
     .select("name")
     .eq("id", invite.site_id)

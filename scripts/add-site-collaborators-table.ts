@@ -35,6 +35,34 @@ CREATE TABLE IF NOT EXISTS public.site_collaborators (
 
 CREATE INDEX IF NOT EXISTS idx_site_collaborators_site ON public.site_collaborators(site_id);
 CREATE INDEX IF NOT EXISTS idx_site_collaborators_user ON public.site_collaborators(user_id);
+
+-- RLS: this table grants access, so it's locked down even though artist_sites/site_pages
+-- aren't (the anon key is public; without this, anyone could grant themselves access
+-- directly via the REST API, bypassing the app's permission checks entirely).
+ALTER TABLE public.site_collaborators ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Owners and managers manage collaborators" ON public.site_collaborators;
+CREATE POLICY "Owners and managers manage collaborators" ON public.site_collaborators
+  FOR ALL
+  USING (
+    EXISTS (SELECT 1 FROM public.artist_sites s WHERE s.id = site_collaborators.site_id AND s.user_id = auth.uid())
+    OR EXISTS (
+      SELECT 1 FROM public.site_collaborators m
+      WHERE m.site_id = site_collaborators.site_id AND m.user_id = auth.uid() AND m.role = 'manager' AND m.status = 'accepted'
+    )
+  )
+  WITH CHECK (
+    EXISTS (SELECT 1 FROM public.artist_sites s WHERE s.id = site_collaborators.site_id AND s.user_id = auth.uid())
+    OR EXISTS (
+      SELECT 1 FROM public.site_collaborators m
+      WHERE m.site_id = site_collaborators.site_id AND m.user_id = auth.uid() AND m.role = 'manager' AND m.status = 'accepted'
+    )
+  );
+
+DROP POLICY IF EXISTS "Collaborators can view their own row" ON public.site_collaborators;
+CREATE POLICY "Collaborators can view their own row" ON public.site_collaborators
+  FOR SELECT
+  USING (user_id = auth.uid());
 `.trim();
 
 async function main() {
