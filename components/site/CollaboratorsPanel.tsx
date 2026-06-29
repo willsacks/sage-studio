@@ -163,7 +163,7 @@ export function CollaboratorsPanel({
           </div>
         )}
         <p className="text-xs text-[var(--muted-foreground)]">
-          There&apos;s no email sent automatically — copy the link above and send it to them yourself.
+          We won&apos;t send anything automatically — just copy the link above and share it with them however you&apos;d like (email, text, etc).
         </p>
       </div>
     </div>
