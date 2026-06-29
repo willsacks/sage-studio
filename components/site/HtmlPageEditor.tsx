@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Upload, Code2, Eye, MousePointerClick, ExternalLink, Wand2, Save, Loader2, Check, Globe, Settings, Link2, Unlink, ClipboardList } from "lucide-react";
+import { ArrowLeft, Upload, Code2, Eye, MousePointerClick, ExternalLink, Wand2, Save, Loader2, Check, Globe, Settings, Link2, Unlink, ClipboardList, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { updateHtmlPage, applyCustomStyle } from "@/lib/actions/html-pages";
 import { togglePagePublished, saveSitePage } from "@/lib/actions/sites";
@@ -28,6 +28,7 @@ export function HtmlPageEditor({ page, siteId, siteSlug }: HtmlPageEditorProps) 
   const [isSaving, startSave] = useTransition();
   const [isPublishing, startPublish] = useTransition();
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [view, setView] = useState<"edit" | "preview" | "html">("edit");
   const [pageTitle, setPageTitle] = useState(page.title);
   const [pageSlug, setPageSlug] = useState(page.slug);
@@ -106,11 +107,20 @@ export function HtmlPageEditor({ page, siteId, siteSlug }: HtmlPageEditorProps) 
   }
 
   function handleSave() {
+    setSaveError(null);
     startSave(async () => {
-      await updateHtmlPage(page.id, html);
-      setIsDirty(false);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      try {
+        const result = await updateHtmlPage(page.id, html);
+        if (result.error) {
+          setSaveError(result.error);
+          return;
+        }
+        setIsDirty(false);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+      } catch {
+        setSaveError("Save failed — this page may be too large. Contact support if this keeps happening.");
+      }
     });
   }
 
@@ -202,6 +212,12 @@ export function HtmlPageEditor({ page, siteId, siteSlug }: HtmlPageEditorProps) 
           </button>
         </div>
       </div>
+
+      {saveError && (
+        <div className="flex items-center gap-1.5 px-4 py-2 text-xs text-red-600 bg-red-500/10 border-b border-red-500/30 flex-shrink-0">
+          <AlertCircle size={13} className="flex-shrink-0" /> {saveError}
+        </div>
+      )}
 
       {/* Main layout */}
       <div className="flex flex-1 min-h-0">

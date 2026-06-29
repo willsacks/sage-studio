@@ -28,12 +28,16 @@ export function SiteSettingsForm({ siteId, site }: { siteId: string; site: Artis
     formData.set("favicon_url", faviconUrl ?? "");
 
     startTransition(async () => {
-      const result = await updateSite(siteId, formData);
-      if (result?.error) {
-        setError(result.error);
-      } else {
-        setSaved(true);
-        router.refresh();
+      try {
+        const result = await updateSite(siteId, formData);
+        if (result?.error) {
+          setError(result.error);
+        } else {
+          setSaved(true);
+          router.refresh();
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Save failed. Please try again.");
       }
     });
   }

@@ -70,11 +70,30 @@ export function buildFormCaptureScript(siteSlug: string): string {
           })
         }).then(function(res) {
           if (!res.ok) throw new Error('failed');
+
           var thanks = document.createElement('div');
           thanks.textContent = 'Thanks! Your message has been sent.';
-          thanks.style.cssText = 'padding:1rem;font-family:system-ui,sans-serif;font-size:0.95rem;color:#16a34a;';
-          form.style.display = 'none';
-          form.parentNode.insertBefore(thanks, form.nextSibling);
+          thanks.style.cssText = 'padding:1.5rem 0;font-family:system-ui,sans-serif;font-size:1rem;color:#16a34a;text-align:center;opacity:0;transition:opacity 0.3s ease;';
+          form.style.transition = 'opacity 0.3s ease';
+          form.style.opacity = '0';
+
+          setTimeout(function() {
+            form.style.display = 'none';
+            form.insertAdjacentElement('afterend', thanks);
+            requestAnimationFrame(function() { thanks.style.opacity = '1'; });
+          }, 300);
+
+          setTimeout(function() {
+            thanks.style.opacity = '0';
+            setTimeout(function() {
+              thanks.remove();
+              form.reset();
+              if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = originalText; }
+              form.style.display = '';
+              form.style.opacity = '0';
+              requestAnimationFrame(function() { form.style.opacity = '1'; });
+            }, 300);
+          }, 4000);
         }).catch(function() {
           if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = originalText; }
           var err = document.createElement('div');
