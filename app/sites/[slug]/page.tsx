@@ -23,12 +23,11 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const siteUrl = site.custom_domain && site.custom_domain_verified
     ? `https://${site.custom_domain}`
     : `https://sagestudio.org/sites/${slug}`;
+  const faviconUrl = (site as { favicon_url?: string | null }).favicon_url;
   return {
     title,
     description,
-    icons: (site as { favicon_url?: string | null }).favicon_url
-      ? { icon: (site as { favicon_url?: string | null }).favicon_url! }
-      : undefined,
+    ...(faviconUrl ? { icons: { icon: faviconUrl } } : {}),
     openGraph: {
       title: ogTitle,
       description: ogDescription,
