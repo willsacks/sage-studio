@@ -31,6 +31,7 @@ export type Database = {
           site_style_key: string | null;
           site_style_pending: string | null;
           profile_links: Json;
+          ai_assistant_enabled: boolean;
           created_at: string;
         };
         Insert: {
@@ -51,6 +52,7 @@ export type Database = {
           site_style_key?: string | null;
           site_style_pending?: string | null;
           profile_links?: Json;
+          ai_assistant_enabled?: boolean;
           created_at?: string;
         };
         Update: {
@@ -71,6 +73,7 @@ export type Database = {
           site_style_key?: string | null;
           site_style_pending?: string | null;
           profile_links?: Json;
+          ai_assistant_enabled?: boolean;
           created_at?: string;
         };
         Relationships: [];

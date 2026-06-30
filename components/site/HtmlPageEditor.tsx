@@ -2,13 +2,14 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Upload, Code2, Eye, MousePointerClick, ExternalLink, Wand2, Save, Loader2, Check, Globe, Settings, Link2, Unlink, ClipboardList, AlertCircle } from "lucide-react";
+import { ArrowLeft, Upload, Code2, Eye, MousePointerClick, ExternalLink, Wand2, Save, Loader2, Check, Globe, Settings, Link2, Unlink, ClipboardList, AlertCircle, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { updateHtmlPage, applyCustomStyle } from "@/lib/actions/html-pages";
 import { togglePagePublished, saveSitePage } from "@/lib/actions/sites";
 import { extractStyleFromHtml } from "@/lib/utils/extract-html-style";
 import { HtmlVisualEditor, type HtmlVisualEditorHandle, type SelectionInfo, type FormInfo } from "@/components/site/HtmlVisualEditor";
 import { injectFormCaptureScript } from "@/lib/utils/form-capture-script";
+import { AiChatPanel } from "@/components/site/AiChatPanel";
 import type { Tables } from "@/lib/db";
 import type { StyleTokens } from "@/lib/styles/types";
 import { THEMES_BY_KEY, DEFAULT_STYLE_KEY } from "@/lib/styles";
@@ -19,9 +20,10 @@ interface HtmlPageEditorProps {
   page: Page;
   siteId: string;
   siteSlug: string;
+  aiEnabled?: boolean;
 }
 
-export function HtmlPageEditor({ page, siteId, siteSlug }: HtmlPageEditorProps) {
+export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: HtmlPageEditorProps) {
   const router = useRouter();
   const [html, setHtml] = useState(page.html_content ?? "");
   const [isDirty, setIsDirty] = useState(false);
@@ -42,6 +44,7 @@ export function HtmlPageEditor({ page, siteId, siteSlug }: HtmlPageEditorProps) 
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
   const [linkUrl, setLinkUrl] = useState("");
   const [forms, setForms] = useState<FormInfo[]>([]);
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
 
   const isPublished = page.status === "published";
 
@@ -172,6 +175,18 @@ export function HtmlPageEditor({ page, siteId, siteSlug }: HtmlPageEditorProps) 
 
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setAiPanelOpen((o) => !o)}
+            title="AI Assistant"
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border transition-colors ${
+              aiPanelOpen
+                ? "border-[var(--primary)]/50 bg-[var(--primary)]/10 text-[var(--primary)]"
+                : "border-[var(--border)] hover:bg-[var(--accent)] text-[var(--muted-foreground)]"
+            }`}
+          >
+            <Sparkles size={13} /> AI
+          </button>
+
+          <button
             onClick={handlePreview}
             title="Open in new tab"
             className="flex items-center gap-1.5 px-2 py-1.5 text-xs rounded-lg border border-[var(--border)] hover:bg-[var(--accent)] transition-colors"
@@ -221,6 +236,20 @@ export function HtmlPageEditor({ page, siteId, siteSlug }: HtmlPageEditorProps) 
 
       {/* Main layout */}
       <div className="flex flex-1 min-h-0">
+        {/* AI Panel */}
+        {aiPanelOpen && (
+          <div className="w-80 flex-shrink-0 border-r border-[var(--border)] flex flex-col overflow-hidden">
+            <AiChatPanel
+              editorType="html"
+              aiEnabled={aiEnabled}
+              pageId={page.id}
+              pageTitle={pageTitle}
+              html={html}
+              onHtmlUpdate={handleChange}
+            />
+          </div>
+        )}
+
         {/* Editor / Preview */}
         <div className="flex-1 flex flex-col min-w-0">
           {/* Toggle bar */}

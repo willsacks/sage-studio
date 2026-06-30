@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Save, Eye, Globe, Bookmark, Layers, Loader2, Check, AlertCircle, Monitor, Tablet, Smartphone, ArrowLeft } from "lucide-react";
+import { Save, Eye, Globe, Bookmark, Layers, Loader2, Check, AlertCircle, Monitor, Tablet, Smartphone, ArrowLeft, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useBuilderStore, type SitePageRef } from "@/lib/store/builder";
 import { saveOfferPage, publishOfferPage } from "@/lib/actions/offer-pages";
@@ -15,11 +15,13 @@ import { TemplateSelector } from "./TemplateSelector";
 import { PublishSettingsModal } from "./PublishSettingsModal";
 import { SaveAsTemplateModal } from "./SaveAsTemplateModal";
 import { cn } from "@/lib/utils/cn";
+import { AiChatPanel } from "@/components/site/AiChatPanel";
 
 interface BuilderProps {
   page: OfferPage;
   artistUsername: string | null;
   isAdmin: boolean;
+  aiEnabled?: boolean;
   templates: {
     platform: OfferTemplate[];
     personal: OfferTemplate[];
@@ -45,11 +47,12 @@ const VIEWPORT_BUTTONS: { id: Viewport; icon: typeof Monitor; label: string }[] 
   { id: "mobile", icon: Smartphone, label: "Mobile" },
 ];
 
-export function Builder({ page, artistUsername, isAdmin, templates, saveAction, publishAction, saveSettingsAction, siteContext, siteStyleVars, ornamentStyleVars, previewUrlOverride, backUrl }: BuilderProps) {
-  const { reset, blocks, theme, isDirty, markSaved, selectedBlockId, setSiteContext } = useBuilderStore();
+export function Builder({ page, artistUsername, isAdmin, aiEnabled = false, templates, saveAction, publishAction, saveSettingsAction, siteContext, siteStyleVars, ornamentStyleVars, previewUrlOverride, backUrl }: BuilderProps) {
+  const { reset, blocks, theme, isDirty, markSaved, selectedBlockId, setSiteContext, setBlocks } = useBuilderStore();
 
   const [modal, setModal] = useState<Modal>(null);
   const [viewport, setViewport] = useState<Viewport>("desktop");
+  const [leftTab, setLeftTab] = useState<"blocks" | "ai">("blocks");
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle");
   const [title, setTitle] = useState(page.title);
@@ -168,6 +171,21 @@ export function Builder({ page, artistUsername, isAdmin, templates, saveAction, 
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
+          {/* AI Assistant toggle */}
+          {aiEnabled && (
+            <button
+              onClick={() => setLeftTab((t) => t === "ai" ? "blocks" : "ai")}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded text-xs transition-colors",
+                leftTab === "ai"
+                  ? "bg-[var(--primary)]/15 text-[var(--primary)]"
+                  : "text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)]"
+              )}
+            >
+              <Sparkles size={14} /> AI
+            </button>
+          )}
+
           {/* Change Template */}
           <button
             onClick={() => setModal("template")}
@@ -242,7 +260,20 @@ export function Builder({ page, artistUsername, isAdmin, templates, saveAction, 
 
       {/* Main layout */}
       <div className="flex flex-1 overflow-hidden">
-        <BlockLibrary selectedBlockId={selectedBlockId} />
+        {aiEnabled && leftTab === "ai" ? (
+          <div className="w-72 flex-shrink-0 border-r border-[var(--border)] flex flex-col overflow-hidden">
+            <AiChatPanel
+              editorType="block"
+              aiEnabled={aiEnabled}
+              pageId={page.id}
+              pageTitle={page.title}
+              blocks={blocks}
+              onBlocksUpdate={setBlocks}
+            />
+          </div>
+        ) : (
+          <BlockLibrary selectedBlockId={selectedBlockId} />
+        )}
         <main className="flex-1 overflow-hidden" data-builder-canvas>
           {(siteStyleVars || ornamentStyleVars) && (
             <style>{`[data-builder-canvas] { ${siteStyleVars ?? ""} ${ornamentStyleVars ?? ""} }`}</style>

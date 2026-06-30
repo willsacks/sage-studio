@@ -15,10 +15,11 @@ interface SitePageBuilderProps {
   allPages: SitePage[];
   username: string | null;
   isAdmin: boolean;
+  aiEnabled?: boolean;
   templates: { platform: OfferTemplate[]; personal: OfferTemplate[]; promoted: OfferTemplate[] };
 }
 
-export function SitePageBuilder({ page, site, allPages, username, isAdmin, templates }: SitePageBuilderProps) {
+export function SitePageBuilder({ page, site, allPages, username, isAdmin, aiEnabled = false, templates }: SitePageBuilderProps) {
   const asOfferPage = {
     ...page,
     owner_id: page.user_id,
@@ -65,6 +66,7 @@ export function SitePageBuilder({ page, site, allPages, username, isAdmin, templ
       page={asOfferPage}
       artistUsername={username}
       isAdmin={isAdmin}
+      aiEnabled={aiEnabled}
       templates={templates}
       saveAction={handleSave}
       publishAction={handlePublish}

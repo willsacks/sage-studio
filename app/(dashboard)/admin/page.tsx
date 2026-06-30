@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getStripe } from "@/lib/stripe";
-import { LayoutDashboard, UserPlus, Globe, Zap, MessageSquare } from "lucide-react";
+import { LayoutDashboard, UserPlus, Globe, Zap, MessageSquare, BrainCircuit } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { AiAccessTable, type UserRow } from "@/components/admin/AiAccessTable";
 
 export const metadata: Metadata = { title: "Admin — Sage Studio" };
 
@@ -188,6 +189,24 @@ function FeedEvent({ event }: { event: ActivityEvent }) {
   );
 }
 
+// ─── AI access list ──────────────────────────────────────────────────────────
+
+async function getAiAccessUsers(): Promise<UserRow[]> {
+  const admin = createAdminClient();
+  const [{ data: profiles }, { data: authUsers }] = await Promise.all([
+    admin.from("profiles").select("id, display_name, tier_key, ai_assistant_enabled").order("created_at", { ascending: false }),
+    admin.auth.admin.listUsers({ perPage: 1000 }),
+  ]);
+  const emailMap = new Map((authUsers?.users ?? []).map((u) => [u.id, u.email ?? ""]));
+  return (profiles ?? []).map((p) => ({
+    id: p.id,
+    display_name: p.display_name,
+    email: emailMap.get(p.id) ?? "",
+    tier_key: p.tier_key ?? "free",
+    ai_assistant_enabled: p.ai_assistant_enabled ?? false,
+  }));
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default async function AdminPage() {
@@ -203,7 +222,7 @@ export default async function AdminPage() {
 
   if (profile?.role !== "admin") redirect("/my-site");
 
-  const [m, feed] = await Promise.all([getMetrics(), getActivityFeed()]);
+  const [m, feed, aiUsers] = await Promise.all([getMetrics(), getActivityFeed(), getAiAccessUsers()]);
 
   return (
     <div className="space-y-8">
@@ -252,6 +271,18 @@ export default async function AdminPage() {
           />
           <StatCard label="Drafts" value={String(m.totalSites - m.publishedSites)} sub="Unpublished" />
         </div>
+      </section>
+
+      {/* AI Access */}
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-[var(--muted-foreground)] uppercase tracking-wide">AI Assistant Access</h2>
+          <BrainCircuit size={14} className="text-[var(--muted-foreground)]" />
+        </div>
+        <p className="text-xs text-[var(--muted-foreground)]">
+          Enable the AI page-editing assistant for specific accounts. Off by default. Click a row to toggle.
+        </p>
+        <AiAccessTable users={aiUsers} />
       </section>
 
       {/* Activity feed */}
