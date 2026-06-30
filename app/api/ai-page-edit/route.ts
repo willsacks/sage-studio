@@ -1,3 +1,23 @@
+/**
+ * Streaming multi-turn tool-calling agent loop for the AI page editor (both the
+ * block builder and the HTML editor share this one route, switched by editorType).
+ *
+ * Each request holds the page state (blocks array or HTML string) in memory only —
+ * nothing is persisted here. Tool calls mutate that in-memory working copy as the
+ * model makes them; the response is a newline-delimited JSON stream the client
+ * applies live: {type:"text"} for chat copy, {type:"tool_call"} for the activity
+ * indicator, {type:"state_update"} after every tool call so edits appear in real
+ * time, {type:"final_state"} once the loop ends, {type:"done"|"error"} to close out.
+ *
+ * Saving to the database still goes through the normal Save button — AI edits
+ * flow into the same onChange/setBlocks path as manual edits, so nothing here
+ * auto-publishes anything.
+ *
+ * Gated by profiles.ai_assistant_enabled (off by default, toggled per-user from
+ * /admin — see components/admin/AiAccessTable.tsx) rather than a Pro-plan check,
+ * so it can be rolled out to specific accounts first. Requires ANTHROPIC_API_KEY
+ * to be set — as of this writing it is NOT yet in .env.local or Vercel env.
+ */
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
