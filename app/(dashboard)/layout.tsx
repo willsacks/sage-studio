@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Sidebar } from "@/components/nav/Sidebar";
+import { PageContainer } from "@/components/nav/PageContainer";
 import { isProPlan } from "@/lib/plan-gates";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -23,9 +24,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <div className="flex min-h-screen">
       <Sidebar displayName={profile?.display_name ?? null} plan={plan} isAdmin={isAdmin} />
       <main className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-6 py-8">
-          {children}
-        </div>
+        <PageContainer>{children}</PageContainer>
       </main>
     </div>
   );

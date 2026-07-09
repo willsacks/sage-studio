@@ -32,7 +32,7 @@ export function KnowledgeView({ sections: initialSections, entries: initialEntri
   }
 
   return (
-    <div className="-mx-6 -my-8 flex h-screen overflow-hidden border-t border-[var(--border)]">
+    <div className="flex h-full overflow-hidden border-t border-[var(--border)]">
       <KnowledgeSidebar
         sections={sections}
         entries={entries}
