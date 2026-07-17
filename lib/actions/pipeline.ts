@@ -171,12 +171,12 @@ export async function reorderStages(orderedIds: string[]) {
 
 // ── Contacts ──────────────────────────────────────────────────────────────────
 
-export async function createContact(name: string, stageId: string | null) {
+export async function createContact(name: string, stageId: string | null, nextAction?: string | null) {
   const { supabase, user } = await requireAuth();
 
   const { data, error } = await supabase
     .from("pipeline_contacts")
-    .insert({ user_id: user.id, name: name.trim(), stage_id: stageId })
+    .insert({ user_id: user.id, name: name.trim(), stage_id: stageId, next_action: nextAction || null })
     .select("id")
     .single();
 
@@ -194,6 +194,8 @@ export async function updateContact(
     collaborators?: string;
     next_session?: string | null;
     next_action?: string | null;
+    email?: string | null;
+    phone?: string | null;
   }
 ) {
   const { supabase, user } = await requireAuth();
@@ -205,6 +207,8 @@ export async function updateContact(
   if (fields.collaborators !== undefined) update.collaborators = fields.collaborators;
   if ("next_session" in fields) update.next_session = fields.next_session;
   if ("next_action" in fields) update.next_action = fields.next_action;
+  if ("email" in fields) update.email = fields.email;
+  if ("phone" in fields) update.phone = fields.phone;
 
   const { error } = await supabase
     .from("pipeline_contacts")

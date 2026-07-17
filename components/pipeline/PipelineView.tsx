@@ -125,17 +125,27 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts,
   function handleAdd() {
     if (!addingName.trim() || !addingTarget) return;
     const stageId = addingTarget === "__global__" ? (stages[0]?.id ?? null) : addingTarget;
+
+    // Shortcut: "Jim Jones -> Call him Tuesday" splits into name + next action.
+    const raw = addingName.trim();
+    const arrowIndex = raw.indexOf("->");
+    const name = arrowIndex === -1 ? raw : raw.slice(0, arrowIndex).trim();
+    const nextAction = arrowIndex === -1 ? null : raw.slice(arrowIndex + 2).trim() || null;
+    if (!name) return;
+
     startTransition(async () => {
-      const res = await createContact(addingName.trim(), stageId);
+      const res = await createContact(name, stageId, nextAction);
       if (res.contactId) {
         const newContact: Contact = {
           id: res.contactId,
-          name: addingName.trim(),
+          name,
           stage_id: stageId,
           notes: null,
           collaborators: null,
           next_session: null,
-          next_action: null,
+          next_action: nextAction,
+          email: null,
+          phone: null,
           tag_ids: [],
           created_at: new Date().toISOString(),
         };

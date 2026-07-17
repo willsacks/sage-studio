@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Trash2, Plus, Check, GripVertical, CheckCircle2 } from "lucide-react";
+import { X, Trash2, Plus, Check, GripVertical, CheckCircle2, Mail, Phone } from "lucide-react";
 import { format } from "date-fns";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import type { DragEndEvent } from "@dnd-kit/core";
@@ -323,6 +323,8 @@ export function ContactDrawer({
   const [notes, setNotes] = useState(contact?.notes ?? "");
   const [collaborators, setCollaborators] = useState(contact?.collaborators ?? "");
   const [nextSession, setNextSession] = useState(contact?.next_session ?? "");
+  const [email, setEmail] = useState(contact?.email ?? "");
+  const [phone, setPhone] = useState(contact?.phone ?? "");
   const [pending, startTransition] = useTransition();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -335,6 +337,8 @@ export function ContactDrawer({
     setNotes(contact?.notes ?? "");
     setCollaborators(contact?.collaborators ?? "");
     setNextSession(contact?.next_session ?? "");
+    setEmail(contact?.email ?? "");
+    setPhone(contact?.phone ?? "");
     setConfirmDelete(false);
     setTab("contact");
   }, [contact?.id]);
@@ -345,8 +349,13 @@ export function ContactDrawer({
       await updateContact(contact.id, {
         name, stage_id: stageId, next_action: nextAction || null,
         notes, collaborators, next_session: nextSession || null,
+        email: email || null, phone: phone || null,
       });
-      onContactUpdated({ ...contact, name, stage_id: stageId, next_action: nextAction || null, notes, collaborators, next_session: nextSession || null });
+      onContactUpdated({
+        ...contact, name, stage_id: stageId, next_action: nextAction || null,
+        notes, collaborators, next_session: nextSession || null,
+        email: email || null, phone: phone || null,
+      });
     });
   }
 
@@ -405,6 +414,22 @@ export function ContactDrawer({
                     <input ref={nameRef} value={name} onChange={(e) => setName(e.target.value)} onBlur={save}
                       className="w-full text-xl font-semibold bg-transparent border-b-2 border-transparent focus:border-[var(--primary)] focus:outline-none transition-colors py-1"
                       placeholder="Contact name" />
+                  </div>
+
+                  {/* Email / phone — kept quiet, no labels or borders */}
+                  <div className="flex items-center gap-4 -mt-2">
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                      <Mail size={12} className="flex-shrink-0 text-[var(--muted-foreground)]/60" />
+                      <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} onBlur={save}
+                        placeholder="Email"
+                        className="w-full min-w-0 text-xs bg-transparent focus:outline-none placeholder:text-[var(--muted-foreground)]/50 text-[var(--muted-foreground)]" />
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                      <Phone size={12} className="flex-shrink-0 text-[var(--muted-foreground)]/60" />
+                      <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} onBlur={save}
+                        placeholder="Phone"
+                        className="w-full min-w-0 text-xs bg-transparent focus:outline-none placeholder:text-[var(--muted-foreground)]/50 text-[var(--muted-foreground)]" />
+                    </div>
                   </div>
 
                   {/* Next Action */}

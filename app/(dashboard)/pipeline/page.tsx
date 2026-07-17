@@ -27,6 +27,8 @@ export type Contact = {
   collaborators: string | null;
   next_session: string | null;
   next_action: string | null;
+  email: string | null;
+  phone: string | null;
   tag_ids: string[];
   created_at: string;
 };
@@ -44,7 +46,7 @@ export default async function PipelinePage() {
   const [{ data: stagesRaw }, { data: contactsRaw }, { data: tagsRaw }, { data: contactTagsRaw }] =
     await Promise.all([
       db.from("pipeline_stages").select("id, name, color, position").eq("user_id", user.id).order("position", { ascending: true }),
-      db.from("pipeline_contacts").select("id, name, stage_id, notes, collaborators, next_session, next_action, created_at").eq("user_id", user.id).order("created_at", { ascending: false }),
+      db.from("pipeline_contacts").select("id, name, stage_id, notes, collaborators, next_session, next_action, email, phone, created_at").eq("user_id", user.id).order("created_at", { ascending: false }),
       db.from("pipeline_tags").select("id, name, color").eq("user_id", user.id).order("created_at", { ascending: true }),
       db.from("pipeline_contact_tags").select("contact_id, tag_id"),
     ]);
