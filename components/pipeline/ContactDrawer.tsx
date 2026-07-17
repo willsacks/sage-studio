@@ -328,6 +328,10 @@ export function ContactDrawer({
   const [pending, startTransition] = useTransition();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
+  // Chain each save onto the previous one so concurrent blurs (e.g. tabbing
+  // from Email to Phone) can never resolve out of order and have an earlier,
+  // stale snapshot silently overwrite a later field's value.
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     setName(contact?.name ?? "");
@@ -343,20 +347,26 @@ export function ContactDrawer({
     setTab("contact");
   }, [contact?.id]);
 
+  // Every write to this contact — full-object saves and one-off partial
+  // updates alike — goes through this queue so an earlier request can never
+  // resolve after a later one and clobber it with a stale snapshot.
+  function queueUpdate(contactId: string, fields: Parameters<typeof updateContact>[1], optimistic: Contact) {
+    startTransition(async () => {
+      saveQueueRef.current = saveQueueRef.current
+        .then(() => updateContact(contactId, fields))
+        .then(() => { onContactUpdated(optimistic); });
+      await saveQueueRef.current;
+    });
+  }
+
   function save() {
     if (!contact) return;
-    startTransition(async () => {
-      await updateContact(contact.id, {
-        name, stage_id: stageId, next_action: nextAction || null,
-        notes, collaborators, next_session: nextSession || null,
-        email: email || null, phone: phone || null,
-      });
-      onContactUpdated({
-        ...contact, name, stage_id: stageId, next_action: nextAction || null,
-        notes, collaborators, next_session: nextSession || null,
-        email: email || null, phone: phone || null,
-      });
-    });
+    const fields = {
+      name, stage_id: stageId, next_action: nextAction || null,
+      notes, collaborators, next_session: nextSession || null,
+      email: email || null, phone: phone || null,
+    };
+    queueUpdate(contact.id, fields, { ...contact, ...fields });
   }
 
   function toggleTag(tagId: string) {
@@ -450,10 +460,8 @@ export function ContactDrawer({
                             const newNotes = notes ? `${notes}\n${entry}` : entry;
                             setNotes(newNotes);
                             setNextAction("");
-                            startTransition(async () => {
-                              await updateContact(contact.id, { next_action: null, notes: newNotes });
-                              onContactUpdated({ ...contact, name, stage_id: stageId, next_action: null, notes: newNotes, collaborators, next_session: nextSession || null });
-                            });
+                            queueUpdate(contact.id, { next_action: null, notes: newNotes },
+                              { ...contact, name, stage_id: stageId, next_action: null, notes: newNotes, collaborators, next_session: nextSession || null });
                           }}
                           className="flex-shrink-0 p-1 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--primary)] hover:bg-[var(--primary)]/10 transition-colors"
                         >
@@ -472,10 +480,8 @@ export function ContactDrawer({
                           onClick={() => {
                             setStageId(stage.id);
                             if (!contact) return;
-                            startTransition(async () => {
-                              await updateContact(contact.id, { stage_id: stage.id });
-                              onContactUpdated({ ...contact, name, stage_id: stage.id, next_action: nextAction || null, notes, collaborators, next_session: nextSession || null });
-                            });
+                            queueUpdate(contact.id, { stage_id: stage.id },
+                              { ...contact, name, stage_id: stage.id, next_action: nextAction || null, notes, collaborators, next_session: nextSession || null });
                           }}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border"
                           style={stageId === stage.id
@@ -489,10 +495,8 @@ export function ContactDrawer({
                         onClick={() => {
                           setStageId(null);
                           if (!contact) return;
-                          startTransition(async () => {
-                            await updateContact(contact.id, { stage_id: null });
-                            onContactUpdated({ ...contact, name, stage_id: null, next_action: nextAction || null, notes, collaborators, next_session: nextSession || null });
-                          });
+                          queueUpdate(contact.id, { stage_id: null },
+                            { ...contact, name, stage_id: null, next_action: nextAction || null, notes, collaborators, next_session: nextSession || null });
                         }}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border border-[var(--border)] ${stageId === null ? "bg-[var(--muted)] font-semibold" : "text-[var(--muted-foreground)] hover:bg-[var(--accent)]"}`}>
                         None
