@@ -89,7 +89,11 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts,
 
   function handleContactUpdated(updated: Contact) {
     setContacts((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
-    if (activeContact?.id === updated.id) setActiveContact(updated);
+    // Functional form, not `if (activeContact?.id === updated.id) setActiveContact(updated)` —
+    // this callback can resolve after the drawer was already closed (e.g. user
+    // blurs a field and immediately clicks away), and closing over the stale
+    // `activeContact` from call time would reopen it with the save result.
+    setActiveContact((prev) => (prev?.id === updated.id ? updated : prev));
   }
 
   function handleContactDeleted(id: string) {
@@ -142,7 +146,7 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts,
 
   function handleContactTagsChanged(contactId: string, tagIds: string[]) {
     setContacts((prev) => prev.map((c) => c.id === contactId ? { ...c, tag_ids: tagIds } : c));
-    if (activeContact?.id === contactId) setActiveContact((prev) => prev ? { ...prev, tag_ids: tagIds } : prev);
+    setActiveContact((prev) => (prev?.id === contactId ? { ...prev, tag_ids: tagIds } : prev));
   }
 
   return (
