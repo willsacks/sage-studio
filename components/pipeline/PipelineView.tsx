@@ -13,6 +13,44 @@ interface Props {
   tags: Tag[];
 }
 
+// ── Inline "add contact" row, reused both at the top of the page and inline
+// under a specific stage header ──────────────────────────────────────────────
+
+function AddContactRow({
+  value, onChange, onSubmit, onCancel, pending,
+}: {
+  value: string; onChange: (v: string) => void; onSubmit: () => void; onCancel: () => void; pending: boolean;
+}) {
+  return (
+    <div className="flex gap-2 items-center p-3 bg-[var(--card)] border border-[var(--border)] rounded-xl">
+      <input
+        autoFocus
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") onSubmit();
+          if (e.key === "Escape") onCancel();
+        }}
+        placeholder="Artist or project name"
+        className="flex-1 text-sm bg-transparent focus:outline-none placeholder:text-[var(--muted-foreground)]"
+      />
+      <button
+        onClick={onSubmit}
+        disabled={pending || !value.trim()}
+        className="text-xs px-3 py-1.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 transition-opacity disabled:opacity-50"
+      >
+        Add
+      </button>
+      <button
+        onClick={onCancel}
+        className="text-xs px-3 py-1.5 rounded-lg border border-[var(--border)] hover:bg-[var(--accent)] transition-colors"
+      >
+        Cancel
+      </button>
+    </div>
+  );
+}
+
 export function PipelineView({ stages: initialStages, contacts: initialContacts, tags: initialTags }: Props) {
   const [stages, setStages] = useState<Stage[]>(initialStages);
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
@@ -22,7 +60,9 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts,
   const [filterStageId, setFilterStageId] = useState<string | "all">("all");
   const [filterTagId, setFilterTagId] = useState<string | "all">("all");
   const [addingName, setAddingName] = useState("");
-  const [showAdd, setShowAdd] = useState(false);
+  // null = no add form open; "__global__" = the top-of-page button; otherwise
+  // a stage id, for the inline "+" beside that stage's header.
+  const [addingTarget, setAddingTarget] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const stageMap = Object.fromEntries(stages.map((s) => [s.id, s]));
@@ -45,14 +85,18 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts,
       if (!buckets.has(key)) buckets.set(key, []);
       buckets.get(key)!.push(c);
     }
-    return [...buckets.entries()]
-      .map(([key, cts]) => ({
-        key,
-        stage: key !== "__no_stage__" ? (stageMap[key] ?? null) : null,
-        contacts: cts,
-      }))
+    // Show every stage (so the per-stage "+" is reachable even when a stage
+    // has no contacts yet), plus a "No stage" bucket only when it's non-empty.
+    const stageGroups = stages
+      .filter((s) => filterStageId === "all" || filterStageId === s.id)
+      .map((s) => ({ key: s.id, stage: s as Stage | null, contacts: buckets.get(s.id) ?? [] }));
+    const noStageContacts = buckets.get("__no_stage__") ?? [];
+    const noStageGroup = noStageContacts.length > 0
+      ? [{ key: "__no_stage__", stage: null as Stage | null, contacts: noStageContacts }]
+      : [];
+    return [...stageGroups, ...noStageGroup]
       .sort((a, b) => (a.stage?.position ?? Infinity) - (b.stage?.position ?? Infinity));
-  }, [filteredContacts, stageMap]);
+  }, [filteredContacts, stages, filterStageId]);
 
   function toggleStage(key: string) {
     setCollapsedStages((prev) => {
@@ -62,16 +106,32 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts,
     });
   }
 
+  function openAdd(target: string) {
+    setAddingTarget(target);
+    setAddingName("");
+    setCollapsedStages((prev) => {
+      if (!prev.has(target)) return prev;
+      const next = new Set(prev);
+      next.delete(target);
+      return next;
+    });
+  }
+
+  function closeAdd() {
+    setAddingTarget(null);
+    setAddingName("");
+  }
+
   function handleAdd() {
-    if (!addingName.trim()) return;
-    const defaultStageId = stages[0]?.id ?? null;
+    if (!addingName.trim() || !addingTarget) return;
+    const stageId = addingTarget === "__global__" ? (stages[0]?.id ?? null) : addingTarget;
     startTransition(async () => {
-      const res = await createContact(addingName.trim(), defaultStageId);
+      const res = await createContact(addingName.trim(), stageId);
       if (res.contactId) {
         const newContact: Contact = {
           id: res.contactId,
           name: addingName.trim(),
-          stage_id: defaultStageId,
+          stage_id: stageId,
           notes: null,
           collaborators: null,
           next_session: null,
@@ -80,8 +140,7 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts,
           created_at: new Date().toISOString(),
         };
         setContacts((prev) => [newContact, ...prev]);
-        setAddingName("");
-        setShowAdd(false);
+        closeAdd();
         setActiveContact(newContact);
       }
     });
@@ -160,7 +219,7 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts,
           </p>
         </div>
         <button
-          onClick={() => setShowAdd(true)}
+          onClick={() => openAdd("__global__")}
           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--primary)] text-[var(--primary-foreground)] text-sm font-medium hover:opacity-90 transition-opacity flex-shrink-0"
         >
           <Plus size={15} />
@@ -236,38 +295,13 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts,
       </div>
 
       {/* Add contact inline form */}
-      {showAdd && (
-        <div className="flex gap-2 items-center p-3 bg-[var(--card)] border border-[var(--border)] rounded-xl">
-          <input
-            autoFocus
-            value={addingName}
-            onChange={(e) => setAddingName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleAdd();
-              if (e.key === "Escape") { setShowAdd(false); setAddingName(""); }
-            }}
-            placeholder="Artist or project name"
-            className="flex-1 text-sm bg-transparent focus:outline-none placeholder:text-[var(--muted-foreground)]"
-          />
-          <button
-            onClick={handleAdd}
-            disabled={pending || !addingName.trim()}
-            className="text-xs px-3 py-1.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 transition-opacity disabled:opacity-50"
-          >
-            Add
-          </button>
-          <button
-            onClick={() => { setShowAdd(false); setAddingName(""); }}
-            className="text-xs px-3 py-1.5 rounded-lg border border-[var(--border)] hover:bg-[var(--accent)] transition-colors"
-          >
-            Cancel
-          </button>
-        </div>
+      {addingTarget === "__global__" && (
+        <AddContactRow value={addingName} onChange={setAddingName} onSubmit={handleAdd} onCancel={closeAdd} pending={pending} />
       )}
 
       {/* Contact rows grouped by stage */}
       <div>
-        {filteredContacts.length === 0 && (
+        {groups.length === 0 && (
           <div className="text-center py-12 text-[var(--muted-foreground)] text-sm">
             {filterStageId === "all" && filterTagId === "all"
               ? "No contacts yet — add your first one above."
@@ -276,6 +310,7 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts,
         )}
         {groups.map((group, i) => {
           const isCollapsed = collapsedStages.has(group.key);
+          const isAddingHere = addingTarget === group.key;
           return (
             <div key={group.key}>
               {/* Faint divider between stage groups */}
@@ -284,28 +319,47 @@ export function PipelineView({ stages: initialStages, contacts: initialContacts,
               )}
 
               {/* Stage section header */}
-              <button
-                onClick={() => toggleStage(group.key)}
-                className="flex items-center gap-2 mb-2 px-1 py-0.5 w-full text-left group/hdr"
-              >
-                <ChevronDown
-                  size={13}
-                  className={`flex-shrink-0 text-[var(--muted-foreground)] transition-transform duration-150 ${isCollapsed ? "-rotate-90" : ""}`}
-                />
-                <span
-                  className="text-xs font-semibold tracking-wide"
-                  style={{ color: group.stage?.color ?? "var(--muted-foreground)" }}
+              <div className="flex items-center gap-1 mb-2 group/hdr">
+                <button
+                  onClick={() => toggleStage(group.key)}
+                  className="flex items-center gap-2 flex-1 min-w-0 px-1 py-0.5 text-left"
                 >
-                  {group.stage?.name ?? "No stage"}
-                </span>
-                <span className="text-xs text-[var(--muted-foreground)]">
-                  {group.contacts.length}
-                </span>
-              </button>
+                  <ChevronDown
+                    size={13}
+                    className={`flex-shrink-0 text-[var(--muted-foreground)] transition-transform duration-150 ${isCollapsed ? "-rotate-90" : ""}`}
+                  />
+                  <span
+                    className="text-xs font-semibold tracking-wide"
+                    style={{ color: group.stage?.color ?? "var(--muted-foreground)" }}
+                  >
+                    {group.stage?.name ?? "No stage"}
+                  </span>
+                  <span className="text-xs text-[var(--muted-foreground)]">
+                    {group.contacts.length}
+                  </span>
+                </button>
+                {group.stage && (
+                  <button
+                    onClick={() => openAdd(group.key)}
+                    title={`Add to ${group.stage.name}`}
+                    className="flex-shrink-0 p-1 rounded-md text-[var(--muted-foreground)] opacity-0 group-hover/hdr:opacity-100 hover:text-[var(--primary)] hover:bg-[var(--accent)] transition-opacity"
+                  >
+                    <Plus size={13} />
+                  </button>
+                )}
+              </div>
 
               {/* Contacts */}
               {!isCollapsed && (
                 <div className="space-y-1">
+                  {isAddingHere && (
+                    <AddContactRow value={addingName} onChange={setAddingName} onSubmit={handleAdd} onCancel={closeAdd} pending={pending} />
+                  )}
+                  {group.contacts.length === 0 && !isAddingHere && (
+                    <p className="px-3 py-1.5 text-xs text-[var(--muted-foreground)]/60 italic">
+                      No contacts in this stage yet
+                    </p>
+                  )}
                   {group.contacts.map((contact) => {
                     const stage = contact.stage_id ? stageMap[contact.stage_id] : null;
                     const contactTags = contact.tag_ids.map((id) => tagMap[id]).filter(Boolean) as Tag[];
