@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { addDays, format, startOfDay } from "date-fns";
-import { Plus, Trash2, Check, GripVertical, X } from "lucide-react";
+import { Plus, Trash2, Check, GripVertical, X, Play, CheckCircle2 } from "lucide-react";
 import {
   DndContext,
   DragOverlay,
@@ -22,6 +22,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { createTodo, toggleTodo, deleteTodo, moveTodo, updateTodoTitle } from "@/lib/actions/todos";
+import { startTodoTimer, finishTodoTimer } from "@/lib/actions/time-entries";
 import type { Tables } from "@/lib/db";
 
 type Todo = Tables<"todos">;
@@ -88,17 +89,53 @@ function computePosition(items: Todo[], index: number): number {
   return (prev.position + next.position) / 2;
 }
 
-export function TodoBoard({ initialTodos }: { initialTodos: Todo[] }) {
+type ActiveTimer = { todoId: string; entryId: string | null };
+
+export function TodoBoard({
+  initialTodos,
+  initialActiveTimer = null,
+}: {
+  initialTodos: Todo[];
+  initialActiveTimer?: { id: string; todoId: string } | null;
+}) {
   const [todos, setTodos] = useState(initialTodos);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [fadingIds, setFadingIds] = useState<Set<string>>(new Set());
+  const [activeTimer, setActiveTimer] = useState<ActiveTimer | null>(
+    initialActiveTimer ? { todoId: initialActiveTimer.todoId, entryId: initialActiveTimer.id } : null
+  );
   const [, startTransition] = useTransition();
   const sections = useMemo(buildSections, []);
 
   useEffect(() => {
     setTodos(initialTodos);
   }, [initialTodos]);
+
+  useEffect(() => {
+    setActiveTimer(initialActiveTimer ? { todoId: initialActiveTimer.todoId, entryId: initialActiveTimer.id } : null);
+  }, [initialActiveTimer]);
+
+  function handleStartTimer(todo: Todo) {
+    setActiveTimer({ todoId: todo.id, entryId: null });
+    startTransition(async () => {
+      const res = await startTodoTimer(todo.id, todo.title);
+      setActiveTimer((prev) =>
+        prev?.todoId === todo.id ? { todoId: todo.id, entryId: res.entry?.id ?? null } : prev
+      );
+    });
+  }
+
+  function handleFinishTimer(todo: Todo) {
+    if (!activeTimer?.entryId || activeTimer.todoId !== todo.id) return;
+    const entryId = activeTimer.entryId;
+    setActiveTimer(null);
+    setTodos((prev) => prev.map((t) => (t.id === todo.id ? { ...t, completed: true } : t)));
+    startTransition(() => {
+      finishTodoTimer(todo.id, entryId);
+    });
+    triggerCompletionFade(todo.id);
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -179,22 +216,25 @@ export function TodoBoard({ initialTodos }: { initialTodos: Todo[] }) {
     });
   }
 
+  function triggerCompletionFade(id: string) {
+    if (showCompleted) return;
+    setFadingIds((prev) => new Set(prev).add(id));
+    setTimeout(() => {
+      setFadingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }, 2200);
+  }
+
   function handleToggle(todo: Todo) {
     const completing = !todo.completed;
     setTodos((prev) => prev.map((t) => (t.id === todo.id ? { ...t, completed: completing } : t)));
     startTransition(() => {
       toggleTodo(todo.id, completing);
     });
-    if (completing && !showCompleted) {
-      setFadingIds((prev) => new Set(prev).add(todo.id));
-      setTimeout(() => {
-        setFadingIds((prev) => {
-          const next = new Set(prev);
-          next.delete(todo.id);
-          return next;
-        });
-      }, 2200);
-    }
+    if (completing) triggerCompletionFade(todo.id);
   }
 
   function handleDelete(id: string) {
@@ -238,6 +278,9 @@ export function TodoBoard({ initialTodos }: { initialTodos: Todo[] }) {
             onDelete={handleDelete}
             onEditTitle={handleEditTitle}
             fadingIds={fadingIds}
+            activeTimer={activeTimer}
+            onStartTimer={handleStartTimer}
+            onFinishTimer={handleFinishTimer}
           />
         ))}
       </div>
@@ -261,6 +304,9 @@ function SectionColumn({
   onDelete,
   onEditTitle,
   fadingIds,
+  activeTimer,
+  onStartTimer,
+  onFinishTimer,
 }: {
   section: Section;
   items: Todo[];
@@ -269,6 +315,9 @@ function SectionColumn({
   onDelete: (id: string) => void;
   onEditTitle: (id: string, title: string) => void;
   fadingIds: Set<string>;
+  activeTimer: ActiveTimer | null;
+  onStartTimer: (todo: Todo) => void;
+  onFinishTimer: (todo: Todo) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: section.key });
   const [adding, setAdding] = useState(false);
@@ -318,6 +367,10 @@ function SectionColumn({
                   onDelete={onDelete}
                   onEditTitle={onEditTitle}
                   isFading={fadingIds.has(todo.id)}
+                  isActiveTimer={activeTimer?.todoId === todo.id}
+                  isTimerStarting={activeTimer?.todoId === todo.id && activeTimer.entryId === null}
+                  onStartTimer={onStartTimer}
+                  onFinishTimer={onFinishTimer}
                 />
               ))}
             </div>
@@ -355,12 +408,20 @@ function SortableTodoRow({
   onDelete,
   onEditTitle,
   isFading,
+  isActiveTimer,
+  isTimerStarting,
+  onStartTimer,
+  onFinishTimer,
 }: {
   todo: Todo;
   onToggle: (todo: Todo) => void;
   onDelete: (id: string) => void;
   onEditTitle: (id: string, title: string) => void;
   isFading: boolean;
+  isActiveTimer: boolean;
+  isTimerStarting: boolean;
+  onStartTimer: (todo: Todo) => void;
+  onFinishTimer: (todo: Todo) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: todo.id });
 
@@ -407,7 +468,11 @@ function SortableTodoRow({
   }
 
   return (
-    <div ref={setNodeRef} style={style} className="flex items-center gap-2 px-2 py-2 group">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center gap-2 px-2 py-2 group ${isActiveTimer ? "bg-[var(--primary)]/5" : ""}`}
+    >
       <button
         {...attributes}
         {...listeners}
@@ -425,6 +490,26 @@ function SortableTodoRow({
       >
         {todo.completed && <Check size={10} className="text-[var(--primary-foreground)]" />}
       </button>
+      {!todo.completed && (
+        isActiveTimer ? (
+          <button
+            onClick={() => onFinishTimer(todo)}
+            disabled={isTimerStarting}
+            title="Finish — stops the timer and completes this task"
+            className={`flex-shrink-0 flex items-center justify-center w-5 h-5 text-[var(--primary)] transition-opacity ${isTimerStarting ? "opacity-40" : "hover:opacity-70"}`}
+          >
+            <CheckCircle2 size={15} />
+          </button>
+        ) : (
+          <button
+            onClick={() => onStartTimer(todo)}
+            title="Start — track time on this task"
+            className="flex-shrink-0 flex items-center justify-center w-5 h-5 text-[var(--muted-foreground)] opacity-0 group-hover:opacity-100 hover:text-[var(--primary)] transition-opacity"
+          >
+            <Play size={13} />
+          </button>
+        )
+      )}
       {isEditing ? (
         <input
           ref={editInputRef}

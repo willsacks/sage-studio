@@ -198,6 +198,7 @@ export type Database = {
           stopped_at: string | null;
           duration_seconds: number | null;
           category: string | null;
+          todo_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -208,6 +209,7 @@ export type Database = {
           stopped_at?: string | null;
           duration_seconds?: number | null;
           category?: string | null;
+          todo_id?: string | null;
           created_at?: string;
         };
         Update: {
@@ -218,6 +220,7 @@ export type Database = {
           stopped_at?: string | null;
           duration_seconds?: number | null;
           category?: string | null;
+          todo_id?: string | null;
           created_at?: string;
         };
         Relationships: [];

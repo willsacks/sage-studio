@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { toggleTodo } from "./todos";
 
 async function requireAuth() {
   const supabase = await createClient();
@@ -15,7 +16,7 @@ export interface CategorySelection {
   category: string | null;
 }
 
-export async function startTimer(description: string, sel?: CategorySelection) {
+export async function startTimer(description: string, sel?: CategorySelection, todoId?: string | null) {
   const { supabase, user } = await requireAuth();
   const now = new Date().toISOString();
 
@@ -44,6 +45,7 @@ export async function startTimer(description: string, sel?: CategorySelection) {
       description: description.trim(),
       started_at: now,
       category: sel?.category ?? null,
+      todo_id: todoId ?? null,
     })
     .select("id, started_at, description, category")
     .single();
@@ -51,6 +53,20 @@ export async function startTimer(description: string, sel?: CategorySelection) {
   if (error) return { error: error.message };
   revalidatePath("/tasks");
   return { entry: data };
+}
+
+// ── Todo <-> timer bridge ────────────────────────────────────────────────────
+
+export async function startTodoTimer(todoId: string, title: string) {
+  const result = await startTimer(title, undefined, todoId);
+  revalidatePath("/todos");
+  return result;
+}
+
+export async function finishTodoTimer(todoId: string, entryId: string) {
+  await stopTimer(entryId);
+  await toggleTodo(todoId, true);
+  return { success: true };
 }
 
 export async function stopTimer(entryId: string) {

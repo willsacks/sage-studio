@@ -13,6 +13,17 @@ export default async function TodosPage() {
 
   const todos = await getTodos();
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = supabase as any;
+  const { data: activeRaw } = await db
+    .from("time_entries")
+    .select("id, todo_id")
+    .eq("user_id", user.id)
+    .is("stopped_at", null)
+    .maybeSingle();
+
+  const activeTimer = activeRaw?.todo_id ? { id: activeRaw.id as string, todoId: activeRaw.todo_id as string } : null;
+
   return (
     <div className="space-y-6">
       <div>
@@ -23,7 +34,7 @@ export default async function TodosPage() {
           Track your personal tasks.
         </p>
       </div>
-      <TodoBoard initialTodos={todos} />
+      <TodoBoard initialTodos={todos} initialActiveTimer={activeTimer} />
     </div>
   );
 }
