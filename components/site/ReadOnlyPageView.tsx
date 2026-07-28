@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, Eye } from "lucide-react";
+import { injectAnchorScrollFix } from "@/lib/utils/anchor-scroll-fix-script";
 import type { ArtistSite, SitePage } from "@/lib/queries/sites";
 import { OfferPageBlocks } from "@/components/offer-builder/OfferPageBlocks";
 import type { PageData } from "@/lib/types/builder";
@@ -25,7 +26,7 @@ export function ReadOnlyPageView({ page, site }: { page: SitePage; site: ArtistS
       <div className="flex-1 overflow-auto">
         {page.page_type === "html" ? (
           <iframe
-            srcDoc={page.html_content ?? ""}
+            srcDoc={injectAnchorScrollFix(page.html_content ?? "")}
             className="w-full h-full border-none"
             sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
             title={page.title}
