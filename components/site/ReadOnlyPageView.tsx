@@ -27,7 +27,7 @@ export function ReadOnlyPageView({ page, site }: { page: SitePage; site: ArtistS
           <iframe
             srcDoc={page.html_content ?? ""}
             className="w-full h-full border-none"
-            sandbox="allow-scripts allow-same-origin"
+            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
             title={page.title}
           />
         ) : (
