@@ -481,3 +481,24 @@ export async function reorderSitePages(
   revalidatePath(`/my-site/${siteId}`);
   return { success: true };
 }
+
+export async function setNotificationEmail(siteId: string, email: string) {
+  const { supabase, user } = await requireAuth();
+  await requireSiteRole(supabase, siteId, user.id, "manager");
+
+  const trimmed = email.trim();
+  if (trimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    return { error: "Enter a valid email address" };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
+    .from("artist_sites")
+    .update({ notification_email: trimmed || null })
+    .eq("id", siteId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/my-site/${siteId}`);
+  return { success: true };
+}

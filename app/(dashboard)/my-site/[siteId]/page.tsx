@@ -6,6 +6,7 @@ import { getSiteById, getPagesForSite } from "@/lib/queries/sites";
 import { getFormSubmissionsForSite } from "@/lib/queries/form-submissions";
 import { toggleSitePublished } from "@/lib/actions/sites";
 import { MarkSubmissionsReadOnMount } from "@/components/site/MarkSubmissionsReadOnMount";
+import { NotificationEmailForm } from "@/components/site/NotificationEmailForm";
 import { ArrowLeft, Globe, ExternalLink, Settings, Eye, EyeOff, Palette } from "lucide-react";
 import { format } from "date-fns";
 import { PageTypePicker } from "@/components/site/PageTypePicker";
@@ -183,6 +184,13 @@ export default async function SitePageManagerPage({ params }: { params: Promise<
             </span>
           )}
         </div>
+
+        {canManage && (
+          <NotificationEmailForm
+            siteId={siteId}
+            currentEmail={(site as { notification_email?: string | null }).notification_email ?? null}
+          />
+        )}
 
         {submissions.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-10 border border-dashed border-[var(--border)] rounded-xl text-center">
