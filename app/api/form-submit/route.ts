@@ -1,6 +1,19 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 
+// This is fetched from artist sites' own custom domains (e.g. lesliemurphy.com),
+// which are cross-origin from this app's domain — allow any origin since the
+// route accepts no credentials and only writes a form submission.
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+}
+
 export async function POST(request: Request) {
   const body = await request.json() as {
     formTitle?: string;
@@ -13,7 +26,7 @@ export async function POST(request: Request) {
   const { formTitle, siteSlug, answers = {}, questions = [] } = body;
 
   if (Object.keys(answers).length === 0) {
-    return NextResponse.json({ error: "No answers provided" }, { status: 400 });
+    return NextResponse.json({ error: "No answers provided" }, { status: 400, headers: CORS_HEADERS });
   }
 
   try {
@@ -27,9 +40,9 @@ export async function POST(request: Request) {
     });
 
     if (error) throw error;
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true }, { headers: CORS_HEADERS });
   } catch (err) {
     console.error("form-submit error:", err);
-    return NextResponse.json({ error: "Failed to save submission" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to save submission" }, { status: 500, headers: CORS_HEADERS });
   }
 }

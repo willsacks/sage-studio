@@ -9,7 +9,7 @@
  * absolute URL rather than relying on the iframe's ambiguous base URL.
  */
 export function buildFormCaptureScript(siteSlug: string): string {
-  const endpoint = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://sagestudio.org"}/api/form-submit`;
+  const endpoint = `${process.env.NEXT_PUBLIC_APP_URL || "https://sagestudio.org"}/api/form-submit`;
 
   return `<script>(function(){
     var ENDPOINT = ${JSON.stringify(endpoint)};
