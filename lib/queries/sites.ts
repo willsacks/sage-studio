@@ -17,6 +17,7 @@ export type SitePage = Tables<"site_pages"> & {
   og_image?: string | null;
   og_title?: string | null;
   og_description?: string | null;
+  parent_page_id?: string | null;
 };
 
 export async function getMySites(): Promise<ArtistSite[]> {

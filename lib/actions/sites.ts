@@ -460,3 +460,24 @@ export async function deleteSitePage(pageId: string, siteId: string) {
   await supabase.from("site_pages").delete().eq("id", pageId);
   revalidatePath(`/my-site/${siteId}`);
 }
+
+export async function reorderSitePages(
+  siteId: string,
+  updates: { id: string; sort_order: number; parent_page_id: string | null }[]
+) {
+  const { supabase, user } = await requireAuth();
+  await requireSiteRole(supabase, siteId, user.id, "editor");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = supabase as any;
+  await Promise.all(
+    updates.map((u) =>
+      db
+        .from("site_pages")
+        .update({ sort_order: u.sort_order, parent_page_id: u.parent_page_id, updated_at: new Date().toISOString() })
+        .eq("id", u.id)
+        .eq("site_id", siteId)
+    )
+  );
+  revalidatePath(`/my-site/${siteId}`);
+  return { success: true };
+}

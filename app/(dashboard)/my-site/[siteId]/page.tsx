@@ -4,14 +4,13 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getSiteById, getPagesForSite } from "@/lib/queries/sites";
 import { getFormSubmissionsForSite } from "@/lib/queries/form-submissions";
-import { toggleSitePublished, togglePagePublished, updatePageVisibility } from "@/lib/actions/sites";
+import { toggleSitePublished } from "@/lib/actions/sites";
 import { MarkSubmissionsReadOnMount } from "@/components/site/MarkSubmissionsReadOnMount";
-import { ArrowLeft, Globe, Pencil, ExternalLink, Settings, Eye, EyeOff, Palette, Home, Navigation, PanelTop } from "lucide-react";
+import { ArrowLeft, Globe, ExternalLink, Settings, Eye, EyeOff, Palette } from "lucide-react";
 import { format } from "date-fns";
 import { PageTypePicker } from "@/components/site/PageTypePicker";
 import { ImportHtmlButton } from "@/components/site/ImportHtmlButton";
-import { SetHomePageButton } from "@/components/site/SetHomePageButton";
-import { DeletePageDialog } from "@/components/site/DeletePageDialog";
+import { PagesManager } from "@/components/site/PagesManager";
 import { getSiteRole, hasAtLeast } from "@/lib/access/site-access";
 
 export async function generateMetadata({ params }: { params: Promise<{ siteId: string }> }): Promise<Metadata> {
@@ -162,102 +161,13 @@ export default async function SitePageManagerPage({ params }: { params: Promise<
             )}
           </div>
         ) : (
-          <div className="space-y-2">
-            {pages.map((page) => (
-              <div
-                key={page.id}
-                className="flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:border-[var(--primary)]/30 transition-colors"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs text-[var(--muted-foreground)] border border-[var(--border)] px-1.5 py-0.5 rounded font-mono">
-                      /{page.slug}
-                    </span>
-                    <p className="font-medium text-[var(--foreground)] truncate">{page.title}</p>
-                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
-                      page.status === "published"
-                        ? "bg-green-100 text-green-700"
-                        : "bg-[var(--muted)] text-[var(--muted-foreground)]"
-                    }`}>
-                      {page.status}
-                    </span>
-                    {page.id === homePageId && (
-                      <span className="flex items-center gap-1 text-[10px] text-[var(--primary)] border border-[var(--primary)]/40 px-1.5 py-0.5 rounded-full">
-                        <Home size={9} /> Home
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
-                    Updated {format(new Date(page.updated_at), "MMM d")}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  {page.status === "published" && (
-                    <Link
-                      href={`${siteUrl}/${page.slug}`}
-                      target="_blank"
-                      className="flex items-center justify-center w-8 h-8 rounded hover:bg-[var(--accent)] text-[var(--muted-foreground)] transition-colors"
-                    >
-                      <ExternalLink size={13} />
-                    </Link>
-                  )}
-                  {canEdit && (page.status === "published" ? (
-                    <form action={async () => { "use server"; await togglePagePublished(page.id, siteId, false); }}>
-                      <button type="submit" className="flex items-center gap-1 px-2 py-1 rounded text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)] transition-colors">
-                        <EyeOff size={12} /> Unpublish
-                      </button>
-                    </form>
-                  ) : (
-                    <form action={async () => { "use server"; await togglePagePublished(page.id, siteId, true); }}>
-                      <button type="submit" className="flex items-center gap-1 px-2 py-1 rounded border border-[var(--border)] text-xs hover:bg-[var(--accent)] transition-colors">
-                        <Eye size={12} /> Publish
-                      </button>
-                    </form>
-                  ))}
-                  {canEdit && page.id !== homePageId && (
-                    <SetHomePageButton siteId={siteId} pageId={page.id} />
-                  )}
-                  {/* Nav visibility toggle */}
-                  {canEdit && (
-                    <form action={async () => {
-                      "use server";
-                      await updatePageVisibility(page.id, siteId, { show_in_nav: page.show_in_nav === false });
-                    }}>
-                      <button
-                        type="submit"
-                        title={page.show_in_nav === false ? "Hidden from nav — click to show" : "Shown in nav — click to hide"}
-                        className={`flex items-center justify-center w-8 h-8 rounded hover:bg-[var(--accent)] transition-colors ${page.show_in_nav === false ? "text-[var(--muted-foreground)] opacity-40" : "text-[var(--foreground)]"}`}
-                      >
-                        <Navigation size={13} />
-                      </button>
-                    </form>
-                  )}
-                  {/* Header visibility toggle */}
-                  {canEdit && (
-                    <form action={async () => {
-                      "use server";
-                      await updatePageVisibility(page.id, siteId, { hide_header: !page.hide_header });
-                    }}>
-                      <button
-                        type="submit"
-                        title={page.hide_header ? "Header hidden — click to show" : "Header visible — click to hide"}
-                        className={`flex items-center justify-center w-8 h-8 rounded hover:bg-[var(--accent)] transition-colors ${page.hide_header ? "text-[var(--muted-foreground)] opacity-40" : "text-[var(--foreground)]"}`}
-                      >
-                        <PanelTop size={13} />
-                      </button>
-                    </form>
-                  )}
-                  <Link
-                    href={`/my-site/${siteId}/pages/${page.id}/edit`}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded border border-[var(--border)] text-xs hover:bg-[var(--accent)] transition-colors"
-                  >
-                    {canEdit ? <><Pencil size={13} /> Edit</> : "View"}
-                  </Link>
-                  {canEdit && <DeletePageDialog pageId={page.id} siteId={siteId} pageTitle={page.title} />}
-                </div>
-              </div>
-            ))}
-          </div>
+          <PagesManager
+            siteId={siteId}
+            siteUrl={siteUrl}
+            pages={pages}
+            homePageId={homePageId}
+            canEdit={canEdit}
+          />
         )}
       </div>
 
