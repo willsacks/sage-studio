@@ -80,7 +80,7 @@ export default async function SiteRootPage({ params }: { params: Promise<{ slug:
       <iframe
         srcDoc={injectAnchorScrollFix(injectFormCaptureScript(htmlContent, slug))}
         style={{ width: "100vw", height: "100vh", border: "none", display: "block" }}
-        sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+        sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms"
         title={homePage.title}
       />
     );

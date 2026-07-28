@@ -28,7 +28,7 @@ export function ReadOnlyPageView({ page, site }: { page: SitePage; site: ArtistS
           <iframe
             srcDoc={injectAnchorScrollFix(page.html_content ?? "")}
             className="w-full h-full border-none"
-            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms"
             title={page.title}
           />
         ) : (

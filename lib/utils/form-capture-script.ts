@@ -82,18 +82,6 @@ export function buildFormCaptureScript(siteSlug: string): string {
             form.insertAdjacentElement('afterend', thanks);
             requestAnimationFrame(function() { thanks.style.opacity = '1'; });
           }, 300);
-
-          setTimeout(function() {
-            thanks.style.opacity = '0';
-            setTimeout(function() {
-              thanks.remove();
-              form.reset();
-              if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = originalText; }
-              form.style.display = '';
-              form.style.opacity = '0';
-              requestAnimationFrame(function() { form.style.opacity = '1'; });
-            }, 300);
-          }, 4000);
         }).catch(function() {
           if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = originalText; }
           var err = document.createElement('div');
