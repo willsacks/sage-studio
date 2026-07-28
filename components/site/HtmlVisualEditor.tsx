@@ -251,7 +251,7 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
       }
 
       const anchorEl = closestElement(sel?.anchorNode ?? null)?.closest("a") ?? null;
-      if (anchorEl && sel?.getRangeAt(0).collapsed) {
+      if (anchorEl) {
         anchorEl.setAttribute("href", cleanUrl);
       } else {
         doc.execCommand("createLink", false, cleanUrl);
