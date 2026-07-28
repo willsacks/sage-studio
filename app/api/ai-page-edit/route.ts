@@ -29,7 +29,16 @@ import {
   setTextContent, setAttribute, setInlineStyle, insertHtml,
   replaceElement, removeElement, addLink, getElementHtml, buildPageSummary,
 } from "@/lib/utils/html-mutations";
+import { BLOCK_FIELD_KEYS } from "@/lib/types/builder";
 import type { Block, BlockType, BlockData } from "@/lib/types/builder";
+
+/** Keys in `data` that don't exist on this block type's data shape — passing one
+ * of these silently does nothing (the real field keeps its default), so callers
+ * must strip them and tell the model what the real field names are. */
+function unknownBlockFields(type: BlockType, data: Record<string, unknown>): string[] {
+  const validKeys = new Set(BLOCK_FIELD_KEYS[type] ?? []);
+  return Object.keys(data).filter((k) => !validKeys.has(k));
+}
 
 const MODEL = "claude-sonnet-4-6";
 const MAX_TURNS = 20;
@@ -37,8 +46,54 @@ const MAX_TURNS = 20;
 const SYSTEM_BLOCK = `You are an AI design assistant built into Sage Studio, a website builder for independent artists.
 Help artists create and improve their pages using the available tools. Be decisive — make changes directly without asking for confirmation on small, clear requests.
 Describe what you're doing as you work ("Adding a hero section now...", "Updating the headline...").
-Block types available: hero, text, image, feature_grid, testimonial, pricing_card, image_text, guarantee, cta_banner, video_embed, spacer, divider, application_form, simple_form, music_embed, album_showcase, discography.
-Key block fields — hero: {headline, subheadline, height:"sm"|"md"|"lg"|"full", textAlign:"left"|"center"|"right", backgroundType:"image"|"video", overlay:boolean, ctaText, ctaLink}. text: {html:string}. cta_banner: {headline, ctaText, ctaLink}.`;
+
+RULES
+- Field names below are exact and case-sensitive. A field name that isn't listed for that block type is silently ignored — the real field keeps its default placeholder text and your content never appears on the page. If a tool result tells you a field was ignored, immediately call update_block_data with the corrected field name — don't leave it wrong.
+- Fully populate every block's data_overrides in the same add_block call that creates it. Don't add a block with defaults now and fill it in with a separate call later — and never leave placeholder content ("Feature One", "Describe the benefit of this feature...", "Your Compelling Headline Here") in the final result.
+- If the page already has blocks when you start, edit and reuse them with update_block_data instead of adding duplicates — e.g. if there's already a hero block, update it rather than adding a second one.
+- You have no way to source, generate, or upload real images. Never set backgroundType or an image field to "image" without also being given a real image URL by the user — leave backgroundType unset (a solid color background) and mention in your reply that they can drop in an image afterward.
+- Vary section types for visual rhythm — don't stack multiple feature_grid blocks back to back. Write specific copy pulled from what the user actually told you, not generic filler ("Everything You Get", "Ready to Begin?") unless their own words suggest that tone.
+
+BLOCK SCHEMA — exact data fields per block type ("?" = optional; everything else is expected)
+
+hero: { headline, subheadline?, paragraph?, ctaText?, ctaLink?, overlay?:bool, height?:"sm"|"md"|"lg"|"full", textAlign?:"left"|"center"|"right", backgroundType?:"image"|"video", backgroundImage?, backgroundVideo? }
+
+text: { content (an HTML string), alignment?:"left"|"center"|"right", size?:"sm"|"base"|"lg"|"xl", maxWidth?:bool }
+  — the field is "content", not "html".
+
+image: { image? (url), width:"full"|"wide"|"medium"|"small", alignment:"left"|"center"|"right", padding:"none"|"sm"|"md"|"lg", caption? }
+
+feature_grid: { columns:2|3|4, heading?, subheading?, features:[{id, icon?, title, description}] }
+  — the title fields are "heading"/"subheading", not "headline"/"subheadline". Always write real entries into "features" — never leave the default Feature One/Two/Three placeholders.
+
+testimonial: { heading?, testimonials:[{id, quote, name, title?, avatar?}] }
+
+pricing_card: { sectionHeading?, sectionSubheading?, footerText?, layout?:"center"|"left", tiers:[{id, heading?, badge?, price, originalPrice?, period?, description?, features:string[], ctaText, ctaLink?, highlight?:bool}] }
+  — use "tiers" (an array), not top-level price/features fields — those are a legacy single-tier fallback the renderer no longer prefers.
+
+image_text: { imagePosition:"left"|"right"|"centered", image?, heading?, subheading?, body, ctaText?, ctaLink? }
+  — the fields are "heading"/"body", not "headline"/"text".
+
+guarantee: { heading, body, icon? }
+  — the fields are "heading"/"body", not "headline"/"text".
+
+cta_banner: { heading, subheading?, ctaText, ctaLink?, background?:"gold"|"dark"|"brand" }
+
+video_embed: { url, caption? }
+
+spacer: { height:"sm"|"md"|"lg"|"xl" }
+
+divider: { style:"line"|"dotted"|"gradient"|"ornament", width?:"full"|"centered" }
+
+music_embed: { url, caption?, size?:"compact"|"full" }
+
+album_showcase: { albumArt?, albumTitle, artistName?, releaseYear?, releaseType?:"album"|"ep"|"single"|"mixtape", description?, tracklist?:[{id, title, duration?}], streamingLinks?:[{id, platform, url}], layout?:"left"|"center" }
+
+discography: { heading?, subheading?, columns?:2|3|4, releases:[{id, title, year?, type?:"album"|"ep"|"single"|"mixtape", url?, artwork?}] }
+
+simple_form: { heading?, subheading?, fields?:[{id, type:"text"|"email"|"phone"|"textarea", label, placeholder?, required?:bool, halfWidth?:bool}], submitText?, successMessage?, notificationEmail? }
+
+application_form: { welcomeTitle?, welcomeSubtitle?, welcomeButtonText?, questions?:[{id, type:"short_text"|"long_text"|"multiple_choice"|"select_multiple"|"email"|"phone"|"rating", label, description?, placeholder?, required?:bool, choices?:string[]}], thankYouTitle?, thankYouMessage?, submitButtonText? }`;
 
 const SYSTEM_HTML = `You are an AI design assistant built into Sage Studio, a website builder for independent artists.
 Help artists edit their imported HTML pages using the available tools. Make targeted, precise edits — preserve existing styles and class names unless asked to change them.
@@ -54,19 +109,39 @@ async function executeBlockTool(
   blocks: Block[],
   name: string,
   input: Record<string, unknown>,
-): Promise<{ blocks: Block[]; result: string }> {
+): Promise<{ blocks: Block[]; result: string; isError?: boolean }> {
   switch (name) {
     case "add_block": {
-      const newBlocks = addBlock(
-        blocks,
-        input.type as BlockType,
-        input.after_block_id as string | undefined,
-        input.data_overrides as Partial<BlockData> | undefined,
-      );
-      return { blocks: newBlocks, result: `Added ${String(input.type)} block.` };
+      const type = input.type as BlockType;
+      const overrides = (input.data_overrides as Record<string, unknown>) ?? {};
+      const badKeys = unknownBlockFields(type, overrides);
+      const cleanOverrides = Object.fromEntries(Object.entries(overrides).filter(([k]) => !badKeys.includes(k)));
+      const newBlocks = addBlock(blocks, type, input.after_block_id as string | undefined, cleanOverrides as Partial<BlockData>);
+      const added = newBlocks.find((b) => !blocks.some((ob) => ob.id === b.id));
+      if (badKeys.length > 0) {
+        return {
+          blocks: newBlocks,
+          result: `Added ${type} block (id: ${added?.id}), but these fields don't exist on a "${type}" block and were ignored: ${badKeys.join(", ")}. Valid fields for "${type}" are: ${BLOCK_FIELD_KEYS[type].join(", ")}. Call update_block_data on block ${added?.id} with the correct field names to actually set that content.`,
+          isError: true,
+        };
+      }
+      return { blocks: newBlocks, result: `Added ${type} block.` };
     }
     case "update_block_data": {
-      const newBlocks = updateBlockData(blocks, input.block_id as string, input.data as Partial<BlockData>);
+      const blockId = input.block_id as string;
+      const target = blocks.find((b) => b.id === blockId);
+      if (!target) return { blocks, result: `No block found with id ${blockId}.`, isError: true };
+      const data = (input.data as Record<string, unknown>) ?? {};
+      const badKeys = unknownBlockFields(target.type, data);
+      const cleanData = Object.fromEntries(Object.entries(data).filter(([k]) => !badKeys.includes(k)));
+      const newBlocks = updateBlockData(blocks, blockId, cleanData as Partial<BlockData>);
+      if (badKeys.length > 0) {
+        return {
+          blocks: newBlocks,
+          result: `Updated block, but these fields don't exist on a "${target.type}" block and were ignored: ${badKeys.join(", ")}. Valid fields for "${target.type}" are: ${BLOCK_FIELD_KEYS[target.type].join(", ")}.`,
+          isError: true,
+        };
+      }
       return { blocks: newBlocks, result: "Updated block data." };
     }
     case "move_block": {
@@ -82,7 +157,7 @@ async function executeBlockTool(
       return { blocks: newBlocks, result: "Duplicated block." };
     }
     default:
-      return { blocks, result: `Unknown tool: ${name}` };
+      return { blocks, result: `Unknown tool: ${name}`, isError: true };
   }
 }
 
@@ -192,10 +267,12 @@ export async function POST(request: NextRequest) {
             emit(controller, { type: "tool_call", name: block.name, label: toolCallLabel(block.name, input) });
 
             let resultText: string;
+            let isError = false;
             if (editorType === "block") {
-              const { blocks: next, result } = await executeBlockTool(workingBlocks, block.name, input);
+              const { blocks: next, result, isError: err } = await executeBlockTool(workingBlocks, block.name, input);
               workingBlocks = next;
               resultText = result;
+              isError = err ?? false;
               emit(controller, { type: "state_update", blocks: workingBlocks });
             } else {
               const { html: next, result } = await executeHtmlTool(workingHtml, block.name, input);
@@ -206,7 +283,7 @@ export async function POST(request: NextRequest) {
                 emit(controller, { type: "state_update", html: workingHtml });
               }
             }
-            toolResults.push({ type: "tool_result", tool_use_id: block.id, content: resultText });
+            toolResults.push({ type: "tool_result", tool_use_id: block.id, content: resultText, is_error: isError });
           }
 
           conversationMessages.push({ role: "user", content: toolResults });

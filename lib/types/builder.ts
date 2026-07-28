@@ -328,6 +328,33 @@ export const DEFAULT_THEME: PageTheme = {
   fontPairing: "editorial",
 };
 
+/** Every valid top-level key per block type's data shape — used to catch the AI
+ * assistant writing to a field name that doesn't exist for a given block type
+ * (e.g. "headline" on a feature_grid, which actually uses "heading"). Without
+ * this check, a wrong key silently merges into the block's data object and
+ * does nothing — the real field keeps its default text and the content the
+ * AI wrote is invisible on the rendered page. See app/api/ai-page-edit/route.ts. */
+export const BLOCK_FIELD_KEYS: Record<BlockType, string[]> = {
+  hero: ["headline", "subheadline", "paragraph", "backgroundType", "backgroundImage", "backgroundFocusX", "backgroundFocusY", "backgroundVideo", "ctaText", "ctaLink", "overlay", "height", "textAlign"],
+  text: ["content", "alignment", "size", "maxWidth"],
+  image: ["image", "imageFocusX", "imageFocusY", "width", "alignment", "padding", "caption"],
+  feature_grid: ["columns", "heading", "subheading", "features"],
+  testimonial: ["heading", "testimonials"],
+  pricing_card: ["sectionHeading", "sectionSubheading", "footerText", "layout", "cardWidth", "hidePerTierCta", "globalCtaText", "globalCtaLink", "tiers", "heading", "badge", "imageUrl", "imageFocusX", "imageFocusY", "price", "originalPrice", "period", "description", "features", "featureIcon", "ctaText", "ctaLink", "secondaryCtaText", "secondaryCtaLink", "guarantee", "stripePriceId", "stripeMode", "highlight", "buttonStyle"],
+  image_text: ["imagePosition", "image", "imageFocusX", "imageFocusY", "heading", "subheading", "body", "ctaText", "ctaLink"],
+  guarantee: ["heading", "body", "icon"],
+  cta_banner: ["heading", "subheading", "ctaText", "ctaLink", "background"],
+  video_embed: ["url", "caption"],
+  spacer: ["height"],
+  divider: ["style", "width"],
+  corner_nav: ["artistName", "backgroundType", "backgroundImage", "backgroundFocusX", "backgroundFocusY", "backgroundVideo", "backgroundColor", "overlayOpacity", "topLeftLabel", "topLeftUrl", "topRightLabel", "topRightUrl", "bottomLeftLabel", "bottomLeftUrl", "bottomRightLabel", "bottomRightUrl", "socialLinks", "linkColor", "linkSize", "socialIconColor", "socialIconSize"],
+  application_form: ["welcomeTitle", "welcomeSubtitle", "welcomeButtonText", "questions", "thankYouTitle", "thankYouMessage", "submitButtonText", "notificationEmail"],
+  music_embed: ["url", "caption", "size"],
+  album_showcase: ["albumArt", "albumArtFocusX", "albumArtFocusY", "albumTitle", "artistName", "releaseYear", "releaseType", "description", "tracklist", "streamingLinks", "layout"],
+  discography: ["heading", "subheading", "columns", "releases"],
+  simple_form: ["heading", "subheading", "fields", "submitText", "successMessage", "notificationEmail"],
+};
+
 export const BLOCK_LABELS: Record<BlockType, string> = {
   hero: "Hero",
   text: "Text Block",
