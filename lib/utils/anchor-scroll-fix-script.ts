@@ -22,7 +22,11 @@ function buildAnchorScrollFixScript(): string {
       var target = document.getElementById(id);
       if (!target) return;
       target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      history.replaceState(null, '', '#' + id);
+      // Best-effort only — a srcdoc iframe's document URL is 'about:srcdoc',
+      // so replaceState's same-origin check on the resolved '#id' URL always
+      // throws here. It's harmless either way: this never affects the real
+      // top-level address bar from inside the iframe.
+      try { history.replaceState(null, '', '#' + id); } catch (err) {}
     });
   })();</script>`;
 }
