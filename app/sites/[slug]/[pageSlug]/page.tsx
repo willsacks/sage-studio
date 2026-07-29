@@ -11,6 +11,7 @@ import type { StyleTokens } from "@/lib/styles";
 import { ORNAMENTS_BY_KEY, DEFAULT_ORNAMENT_KEY, buildOrnamentCssVars } from "@/lib/ornaments";
 import { injectFormCaptureScript } from "@/lib/utils/form-capture-script";
 import { injectAnchorScrollFix } from "@/lib/utils/anchor-scroll-fix-script";
+import { injectTopNavigationFix } from "@/lib/utils/top-navigation-fix-script";
 
 export async function generateMetadata({
   params,
@@ -76,9 +77,9 @@ export default async function PublicSitePageRoute({
     const htmlContent = (page as unknown as { html_content?: string | null }).html_content ?? "";
     return (
       <iframe
-        srcDoc={injectAnchorScrollFix(injectFormCaptureScript(htmlContent, slug))}
+        srcDoc={injectTopNavigationFix(injectAnchorScrollFix(injectFormCaptureScript(htmlContent, slug)))}
         style={{ width: "100vw", height: "100vh", border: "none", display: "block" }}
-        sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms"
+        sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms allow-top-navigation-by-user-activation"
         title={page.title}
       />
     );

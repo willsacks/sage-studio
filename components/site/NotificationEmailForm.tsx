@@ -19,6 +19,9 @@ export function NotificationEmailForm({ siteId, currentEmail }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
+  const isDirty = email.trim() !== (currentEmail ?? "").trim();
+  const isUnchangedSavedValue = !!currentEmail?.trim() && !isDirty;
+
   function handleSave() {
     setError(null);
     setSaved(false);
@@ -44,12 +47,18 @@ export function NotificationEmailForm({ siteId, currentEmail }: Props) {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
+            onKeyDown={(e) => { if (e.key === "Enter" && !isUnchangedSavedValue) handleSave(); }}
             placeholder="you@example.com"
             className="h-8 text-sm"
           />
-          <Button size="sm" onClick={handleSave} disabled={isPending} className="h-8 flex-shrink-0">
-            {isPending ? <Loader2 size={13} className="animate-spin" /> : saved ? <CheckCircle2 size={13} /> : "Save"}
+          <Button
+            size="sm"
+            variant={isUnchangedSavedValue ? "outline" : "default"}
+            onClick={handleSave}
+            disabled={isPending || isUnchangedSavedValue}
+            className="h-8 flex-shrink-0"
+          >
+            {isPending ? <Loader2 size={13} className="animate-spin" /> : saved ? <CheckCircle2 size={13} /> : isUnchangedSavedValue ? "Edit" : "Save"}
           </Button>
         </div>
         {error && <p className="text-xs text-red-500 mt-1.5">{error}</p>}
