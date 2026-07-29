@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Upload, Code2, Eye, MousePointerClick, ExternalLink, Wand2, Save, Loader2, Check, Globe, Settings, Link2, Unlink, ClipboardList, AlertCircle, Sparkles } from "lucide-react";
+import { ArrowLeft, Upload, Code2, Eye, MousePointerClick, ExternalLink, Wand2, Save, Loader2, Check, Globe, Settings, Link2, Unlink, ClipboardList, AlertCircle, Sparkles, Palette, X } from "lucide-react";
 import Link from "next/link";
 import { updateHtmlPage, applyCustomStyle } from "@/lib/actions/html-pages";
 import { togglePagePublished, saveSitePage } from "@/lib/actions/sites";
@@ -43,6 +43,7 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
   const editorRef = useRef<HtmlVisualEditorHandle>(null);
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
   const [linkUrl, setLinkUrl] = useState("");
+  const [textColor, setTextColor] = useState("#000000");
   const [forms, setForms] = useState<FormInfo[]>([]);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
 
@@ -60,6 +61,15 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
   function handleRemoveLink() {
     editorRef.current?.removeLink();
     setLinkUrl("");
+  }
+
+  function handleApplyColor(color: string) {
+    setTextColor(color);
+    editorRef.current?.applyColor(color);
+  }
+
+  function handleClearColor() {
+    editorRef.current?.clearColor();
   }
 
   function handleToggleForm(formId: string, connected: boolean) {
@@ -419,6 +429,38 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
               ) : (
                 <p className="text-[11px] text-[var(--muted-foreground)] leading-snug">
                   Select some text in the page to add a link.
+                </p>
+              )}
+            </div>
+          )}
+
+          {view === "edit" && (
+            <div className="p-4 border-b border-[var(--border)] space-y-3">
+              <div className="flex items-center gap-1.5">
+                <Palette size={12} className="text-[var(--muted-foreground)]" />
+                <p className="text-xs font-semibold text-[var(--foreground)]">Text Color</p>
+              </div>
+
+              {selection ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={textColor}
+                    onChange={(e) => handleApplyColor(e.target.value)}
+                    title="Pick a color"
+                    className="w-8 h-8 rounded-lg border border-[var(--border)] p-0.5 cursor-pointer bg-transparent"
+                  />
+                  <button
+                    onClick={handleClearColor}
+                    title="Clear color (reset to default)"
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
+                  >
+                    <X size={12} /> Clear
+                  </button>
+                </div>
+              ) : (
+                <p className="text-[11px] text-[var(--muted-foreground)] leading-snug">
+                  Select some text, then pick a color to apply it.
                 </p>
               )}
             </div>

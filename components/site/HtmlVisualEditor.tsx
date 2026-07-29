@@ -16,6 +16,8 @@ export interface FormInfo {
 export interface HtmlVisualEditorHandle {
   applyLink: (url: string) => void;
   removeLink: () => void;
+  applyColor: (color: string) => void;
+  clearColor: () => void;
   toggleForm: (formId: string, connected: boolean) => void;
 }
 
@@ -279,6 +281,57 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
         parent?.removeChild(anchorEl);
       } else {
         doc.execCommand("unlink");
+      }
+      emitChange();
+      reportSelection(doc);
+    },
+    applyColor(color: string) {
+      const doc = iframeRef.current?.contentDocument;
+      const win = iframeRef.current?.contentWindow;
+      if (!doc || !win) return;
+
+      win.focus();
+      const sel = doc.getSelection();
+      const range = lastRangeRef.current;
+      if (sel && range) {
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+
+      // A collapsed selection (cursor just placed in a link, nothing dragged
+      // over) has no text for execCommand to wrap — style the enclosing link
+      // directly instead, same special-case applyLink already makes.
+      const linkEl = range?.collapsed ? closestElement(sel?.anchorNode ?? null)?.closest("a") ?? null : null;
+      if (linkEl) {
+        linkEl.style.color = color;
+      } else {
+        // styleWithCSS makes execCommand write `<span style="color:...">`
+        // instead of the legacy `<font color="...">` tag.
+        doc.execCommand("styleWithCSS", false, "true");
+        doc.execCommand("foreColor", false, color);
+      }
+      emitChange();
+      reportSelection(doc);
+    },
+    clearColor() {
+      const doc = iframeRef.current?.contentDocument;
+      const win = iframeRef.current?.contentWindow;
+      if (!doc || !win) return;
+
+      win.focus();
+      const sel = doc.getSelection();
+      const range = lastRangeRef.current;
+      if (sel && range) {
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+
+      const linkEl = range?.collapsed ? closestElement(sel?.anchorNode ?? null)?.closest("a") ?? null : null;
+      if (linkEl) {
+        linkEl.style.removeProperty("color");
+      } else {
+        doc.execCommand("styleWithCSS", false, "true");
+        doc.execCommand("foreColor", false, "inherit");
       }
       emitChange();
       reportSelection(doc);
