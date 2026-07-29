@@ -21,15 +21,20 @@ export async function generateMetadata({
     getPublishedPageBySlug(slug, pageSlug),
     getSiteBySlug(slug),
   ]);
-  if (!page) return { title: "Not Found" };
-  const ogTitle = page.og_title ?? page.meta_title ?? page.title;
+  if (!page) return { title: { absolute: "Not Found" } };
+  const pageTitle = page.meta_title ?? page.title;
+  const siteName = site?.site_title ?? site?.name;
+  const title = siteName ? `${pageTitle} | ${siteName}` : pageTitle;
+  const ogTitle = page.og_title ?? pageTitle;
   const ogDescription = page.og_description ?? page.meta_description ?? undefined;
   const siteUrl = site?.custom_domain && site.custom_domain_verified
     ? `https://${site.custom_domain}`
     : `https://sagestudio.org/sites/${slug}`;
   const faviconUrl = (site as { favicon_url?: string | null } | null)?.favicon_url;
   return {
-    title: page.meta_title ?? page.title,
+    // `absolute` bypasses the root layout's "%s | Sage Studio" title template —
+    // artist sites shouldn't carry Sage Studio's own branding in the browser tab.
+    title: { absolute: title },
     description: page.meta_description ?? undefined,
     ...(faviconUrl ? { icons: { icon: faviconUrl } } : {}),
     openGraph: {

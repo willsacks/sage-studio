@@ -17,7 +17,11 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   if (!site) return {};
   const homePage = (site.home_page_id ? pages.find((p) => p.id === site.home_page_id) : null)
     ?? pages.find((p) => p.page_type === "home") ?? pages[0];
-  const title = homePage?.meta_title ?? homePage?.title ?? site.site_title ?? site.name;
+  const siteName = site.site_title ?? site.name;
+  // Site-level title wins over the page's own internal label ("Home") here — the
+  // Site Title field is documented as "shown in the browser tab", so it should be
+  // what the tab actually shows, not the raw admin-facing page title.
+  const title = homePage?.meta_title ?? siteName;
   const description = homePage?.meta_description ?? undefined;
   const ogTitle = homePage?.og_title ?? title;
   const ogDescription = homePage?.og_description ?? description;
@@ -26,7 +30,10 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     : `https://sagestudio.org/sites/${slug}`;
   const faviconUrl = (site as { favicon_url?: string | null }).favicon_url;
   return {
-    title,
+    // `absolute` bypasses the root layout's "%s | Sage Studio" title template —
+    // artist sites (especially on their own custom domains) shouldn't carry
+    // Sage Studio's own branding in the browser tab.
+    title: { absolute: title },
     description,
     ...(faviconUrl ? { icons: { icon: faviconUrl } } : {}),
     openGraph: {

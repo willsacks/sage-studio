@@ -6,7 +6,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { ImageUploader } from "@/components/ui/image-uploader";
 import { updateSite } from "@/lib/actions/sites";
 import type { ArtistSite } from "@/lib/queries/sites";
@@ -16,6 +16,7 @@ export function SiteSettingsForm({ siteId, site }: { siteId: string; site: Artis
   const [isPending, startTransition] = useTransition();
   const [logoUrl, setLogoUrl] = useState<string | null>(site.logo_url);
   const [faviconUrl, setFaviconUrl] = useState<string | null>(site.favicon_url ?? null);
+  const [footerText, setFooterText] = useState(site.footer_text ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -26,6 +27,7 @@ export function SiteSettingsForm({ siteId, site }: { siteId: string; site: Artis
     const formData = new FormData(e.currentTarget);
     formData.set("logo_url", logoUrl ?? "");
     formData.set("favicon_url", faviconUrl ?? "");
+    formData.set("footer_text", footerText);
 
     startTransition(async () => {
       try {
@@ -75,7 +77,11 @@ export function SiteSettingsForm({ siteId, site }: { siteId: string; site: Artis
 
       <div className="space-y-2">
         <Label htmlFor="footer_text">Footer Text</Label>
-        <Textarea id="footer_text" name="footer_text" defaultValue={site.footer_text ?? ""} placeholder={`© ${new Date().getFullYear()} ${site.name}`} rows={2} />
+        <RichTextEditor
+          content={footerText}
+          onChange={setFooterText}
+          placeholder={`© ${new Date().getFullYear()} ${site.name}`}
+        />
       </div>
 
       {error && <p className="text-sm text-red-500">{error}</p>}
