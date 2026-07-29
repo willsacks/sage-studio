@@ -5,6 +5,9 @@ import { getStripe } from "@/lib/stripe";
 import { LayoutDashboard, UserPlus, Globe, Zap, MessageSquare, BrainCircuit } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { AiAccessTable, type UserRow } from "@/components/admin/AiAccessTable";
+import { AiPromptEditor } from "@/components/admin/AiPromptEditor";
+import { getAiPrompts } from "@/lib/actions/admin";
+import { DEFAULT_SYSTEM_BLOCK, DEFAULT_SYSTEM_HTML } from "@/lib/ai/prompts";
 
 export const metadata: Metadata = { title: "Admin — Sage Studio" };
 
@@ -222,7 +225,7 @@ export default async function AdminPage() {
 
   if (profile?.role !== "admin") redirect("/my-site");
 
-  const [m, feed, aiUsers] = await Promise.all([getMetrics(), getActivityFeed(), getAiAccessUsers()]);
+  const [m, feed, aiUsers, aiPrompts] = await Promise.all([getMetrics(), getActivityFeed(), getAiAccessUsers(), getAiPrompts()]);
 
   return (
     <div className="space-y-8">
@@ -283,6 +286,20 @@ export default async function AdminPage() {
           Enable the AI page-editing assistant for specific accounts. Off by default. Click a row to toggle.
         </p>
         <AiAccessTable users={aiUsers} />
+      </section>
+
+      {/* AI Prompt */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-[var(--muted-foreground)] uppercase tracking-wide">AI Assistant Prompt</h2>
+        <p className="text-xs text-[var(--muted-foreground)]">
+          The system prompt the AI assistant uses when editing pages — one for the block editor, one for the HTML editor. Edits take effect on the next AI request, no deploy needed.
+        </p>
+        <AiPromptEditor
+          initialBlockPrompt={aiPrompts.blockPrompt}
+          initialHtmlPrompt={aiPrompts.htmlPrompt}
+          defaultBlockPrompt={DEFAULT_SYSTEM_BLOCK}
+          defaultHtmlPrompt={DEFAULT_SYSTEM_HTML}
+        />
       </section>
 
       {/* Activity feed */}
