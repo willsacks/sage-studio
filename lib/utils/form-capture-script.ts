@@ -73,7 +73,10 @@ export function buildFormCaptureScript(siteSlug: string): string {
 
           var thanks = document.createElement('div');
           thanks.textContent = 'Thanks! Your message has been sent.';
-          thanks.style.cssText = 'padding:1.5rem 0;font-family:system-ui,sans-serif;font-size:1rem;color:#16a34a;text-align:center;opacity:0;transition:opacity 0.3s ease;';
+          // Prefer whatever accent variable this page's own design already defines
+          // (imported pages commonly name it --gold, --accent, or --primary),
+          // falling back to a plain green for pages that define none of these.
+          thanks.style.cssText = 'padding:1.5rem 0;font-family:system-ui,sans-serif;font-size:1rem;color:var(--gold,var(--accent,var(--primary,#16a34a)));text-align:center;opacity:0;transition:opacity 0.3s ease;';
           form.style.transition = 'opacity 0.3s ease';
           form.style.opacity = '0';
 
