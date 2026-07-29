@@ -77,6 +77,9 @@ export function SiteSettingsForm({ siteId, site }: { siteId: string; site: Artis
 
       <div className="space-y-2">
         <Label htmlFor="footer_text">Footer Text</Label>
+        <p className="text-xs text-[var(--muted-foreground)]">
+          Shown centered at the bottom of every page on your site — a good spot for a copyright line or a link. Leave blank to hide the footer entirely. Doesn&apos;t apply to pages you&apos;ve imported as raw HTML, since those already have their own footer built in.
+        </p>
         <RichTextEditor
           content={footerText}
           onChange={setFooterText}

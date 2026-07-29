@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getSiteBySlug, getPublishedPagesForSite } from "@/lib/queries/sites";
 import { OfferPageBlocks } from "@/components/offer-builder/OfferPageBlocks";
 import { SiteNav } from "@/components/site/SiteNav";
+import { SiteFooter } from "@/components/site/SiteFooter";
 import { SiteUnpublishedMessage } from "@/components/site/SiteUnpublishedMessage";
 import type { PageData } from "@/lib/types/builder";
 import { buildStyleCssVars, buildGoogleFontsUrl, getFontsForTokens, resolveStyleTokens } from "@/lib/styles";
@@ -130,6 +131,8 @@ export default async function SiteRootPage({ params }: { params: Promise<{ slug:
       <main>
         <OfferPageBlocks blocks={blocks} basePath={basePath} siteSlug={slug} />
       </main>
+
+      <SiteFooter footerText={site.footer_text} tokens={tokens as StyleTokens} />
     </div>
   );
 }
