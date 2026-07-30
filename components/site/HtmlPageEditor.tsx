@@ -324,7 +324,12 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
             <iframe
               srcDoc={injectFormCaptureScript(html, siteSlug)}
               className="flex-1 w-full border-none"
-              sandbox="allow-scripts allow-same-origin"
+              // No allow-same-origin: this preview renders arbitrary saved HTML
+              // (editor-role collaborators can write it) inside the authenticated
+              // dashboard. allow-scripts + allow-same-origin together would let
+              // injected script reach window.parent as same-origin and hijack the
+              // viewing user's session — keeping the origin opaque prevents that.
+              sandbox="allow-scripts"
               title={`Preview: ${page.title}`}
             />
           ) : (

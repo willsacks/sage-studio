@@ -28,7 +28,11 @@ export function ReadOnlyPageView({ page, site }: { page: SitePage; site: ArtistS
           <iframe
             srcDoc={injectAnchorScrollFix(page.html_content ?? "")}
             className="w-full h-full border-none"
-            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms"
+            // No allow-same-origin — this renders saved page HTML inside the
+            // authenticated dashboard; combining it with allow-scripts would let
+            // injected script reach window.parent as same-origin and hijack the
+            // viewing user's session.
+            sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms"
             title={page.title}
           />
         ) : (

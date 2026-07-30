@@ -8,6 +8,26 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "4mb",
     },
   },
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          // Blocks clickjacking (embedding the dashboard/login/artist sites in a
+          // third-party iframe). Unrelated to this app embedding artist HTML in
+          // its own iframes elsewhere — that's this app framing content, not
+          // being framed.
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          // No "preload" directive — that requires a separate, hard-to-reverse
+          // submission to browsers' HSTS preload list, which is a call for the
+          // site owner to make deliberately, not something to opt into here.
+          { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

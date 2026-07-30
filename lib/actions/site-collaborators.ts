@@ -90,13 +90,19 @@ export async function acceptInvite(
 
   const { data: invite } = await admin
     .from("site_collaborators")
-    .select("id, site_id, role, status, user_id")
+    .select("id, site_id, role, status, user_id, email")
     .eq("invite_token", token)
     .single();
 
   if (!invite) return { error: "This invite link is invalid." };
   if (invite.status === "accepted" && invite.user_id && invite.user_id !== user.id) {
     return { error: "This invite has already been claimed by another account." };
+  }
+  // The token itself is the bearer credential for this lookup (see comment above),
+  // so anyone who obtains the link could otherwise claim someone else's invite —
+  // require the accepting account's email to match who it was actually sent to.
+  if (invite.email && user.email?.toLowerCase() !== invite.email.toLowerCase()) {
+    return { error: "This invite was sent to a different email address. Please log in with that email to accept it." };
   }
 
   await admin

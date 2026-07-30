@@ -5,7 +5,11 @@ import type { Database } from "@/lib/db";
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/my-site";
+  const rawNext = searchParams.get("next") ?? "/my-site";
+  // Only allow a same-app relative path — reject anything that could redirect
+  // off-origin (protocol-relative "//host", an absolute URL, or a backslash
+  // variant browsers also treat as a scheme separator).
+  const next = /^\/(?!\/|\\)/.test(rawNext) ? rawNext : "/my-site";
 
   if (!code) {
     return NextResponse.redirect(`${origin}/login?error=auth_failed`);

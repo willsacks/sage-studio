@@ -89,7 +89,11 @@ export default async function SiteRootPage({ params }: { params: Promise<{ slug:
       <iframe
         srcDoc={injectTopNavigationFix(injectAnchorScrollFix(injectFormCaptureScript(htmlContent, slug)))}
         style={{ width: "100vw", height: "100vh", border: "none", display: "block" }}
-        sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms allow-top-navigation-by-user-activation"
+        // No allow-same-origin — a visitor may be logged into Sage Studio in the
+        // same browser (e.g. the artist previewing their own site); allow-scripts
+        // + allow-same-origin together would let injected page HTML reach that
+        // session via window.top as same-origin.
+        sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-top-navigation-by-user-activation"
         title={homePage.title}
       />
     );

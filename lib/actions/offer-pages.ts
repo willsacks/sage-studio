@@ -57,7 +57,7 @@ export async function publishOfferPage(pageId: string, publish: boolean) {
 }
 
 export async function verifyCustomDomain(pageId: string, domain: string) {
-  const { supabase } = await requireAuth();
+  const { supabase, user } = await requireAuth();
   try {
     const res = await fetch(`https://dns.google/resolve?name=${domain}&type=A`);
     const json = await res.json() as { Answer?: Array<{ data: string }> };
@@ -66,7 +66,8 @@ export async function verifyCustomDomain(pageId: string, domain: string) {
     await supabase
       .from("offer_pages")
       .update({ custom_domain_verified: verified, custom_domain: domain })
-      .eq("id", pageId);
+      .eq("id", pageId)
+      .eq("owner_id", user.id);
     return { verified, resolved };
   } catch {
     return { verified: false, error: "DNS lookup failed" };
