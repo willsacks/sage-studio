@@ -1,9 +1,9 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { ImagePlus, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { uploadImage } from "@/lib/utils/upload-image";
 
 interface ImageUploaderProps {
   value: string | null;
@@ -12,45 +12,6 @@ interface ImageUploaderProps {
   folder?: string;
   aspectRatio?: "video" | "wide" | "square";
   className?: string;
-}
-
-const MAX_DIMENSION = 2000;
-const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20MB input limit
-
-async function downscaleImage(file: File): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      let { width, height } = img;
-
-      if (width <= MAX_DIMENSION && height <= MAX_DIMENSION) {
-        resolve(file);
-        return;
-      }
-
-      const scale = Math.min(MAX_DIMENSION / width, MAX_DIMENSION / height);
-      width = Math.round(width * scale);
-      height = Math.round(height * scale);
-
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d")!;
-      ctx.drawImage(img, 0, 0, width, height);
-      canvas.toBlob(
-        (blob) => {
-          if (blob) resolve(blob);
-          else reject(new Error("Canvas toBlob failed"));
-        },
-        "image/jpeg",
-        0.88
-      );
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Failed to load image")); };
-    img.src = url;
-  });
 }
 
 export function ImageUploader({
@@ -73,43 +34,16 @@ export function ImageUploader({
   }[aspectRatio];
 
   async function upload(file: File) {
-    if (!file.type.startsWith("image/")) {
-      setError("Please select an image file.");
-      return;
-    }
-    if (file.size > MAX_FILE_BYTES) {
-      setError("Image must be under 20MB.");
-      return;
-    }
     setError(null);
     setUploading(true);
-
-    let blob: Blob;
     try {
-      blob = await downscaleImage(file);
-    } catch {
-      setError("Could not process image. Please try another file.");
+      const url = await uploadImage(file, bucket, folder);
+      onChange(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
       setUploading(false);
-      return;
     }
-
-    const supabase = createClient();
-    const ext = blob.type === "image/jpeg" ? "jpg" : file.name.split(".").pop() ?? "jpg";
-    const path = `${folder ? folder + "/" : ""}${crypto.randomUUID()}.${ext}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from(bucket)
-      .upload(path, blob, { upsert: false, contentType: blob.type });
-
-    if (uploadError) {
-      setError(uploadError.message);
-      setUploading(false);
-      return;
-    }
-
-    const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-    onChange(data.publicUrl);
-    setUploading(false);
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {

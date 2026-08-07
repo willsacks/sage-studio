@@ -2,13 +2,14 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Upload, Code2, Eye, MousePointerClick, ExternalLink, Wand2, Save, Loader2, Check, Globe, Settings, Link2, Unlink, ClipboardList, AlertCircle, Sparkles, Palette, X, Crosshair } from "lucide-react";
+import { ArrowLeft, Upload, Code2, Eye, MousePointerClick, ExternalLink, Wand2, Save, Loader2, Check, Globe, Settings, Link2, Unlink, ClipboardList, AlertCircle, Sparkles, Palette, X, Crosshair, Image as ImageIcon } from "lucide-react";
 import Link from "next/link";
 import { applyCustomStyle } from "@/lib/actions/html-pages";
 import { togglePagePublished, saveSitePage } from "@/lib/actions/sites";
 import { extractStyleFromHtml } from "@/lib/utils/extract-html-style";
-import { HtmlVisualEditor, type HtmlVisualEditorHandle, type SelectionInfo, type FormInfo } from "@/components/site/HtmlVisualEditor";
+import { HtmlVisualEditor, type HtmlVisualEditorHandle, type SelectionInfo, type FormInfo, type ImageSelectionInfo } from "@/components/site/HtmlVisualEditor";
 import { injectFormCaptureScript } from "@/lib/utils/form-capture-script";
+import { uploadImage } from "@/lib/utils/upload-image";
 import { AiChatPanel } from "@/components/site/AiChatPanel";
 import type { Tables } from "@/lib/db";
 import type { StyleTokens } from "@/lib/styles/types";
@@ -48,12 +49,26 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [pickerMode, setPickerMode] = useState(false);
   const [selectedElement, setSelectedElement] = useState<{ selector: string; label: string } | null>(null);
+  const [selectedImage, setSelectedImage] = useState<ImageSelectionInfo | null>(null);
+  const [imageWidthInput, setImageWidthInput] = useState("");
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState<string | null>(null);
+  const imageFileRef = useRef<HTMLInputElement>(null);
 
   const isPublished = page.status === "published";
 
   useEffect(() => {
     setLinkUrl(selection?.href ?? "");
   }, [selection]);
+
+  // Resizing (drag, a preset button, or this very field) only ever commits
+  // on blur/Enter, never per-keystroke, so there's no live typing state this
+  // could clobber — safe to resync on every width change, which is what
+  // keeps the field showing the real current width after a canvas drag
+  // instead of a stale pre-drag number.
+  useEffect(() => {
+    setImageWidthInput(selectedImage ? String(selectedImage.widthPx) : "");
+  }, [selectedImage?.selector, selectedImage?.widthPx]);
 
   function handleApplyLink() {
     if (!linkUrl.trim()) return;
@@ -92,6 +107,28 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
       }
       return next;
     });
+  }
+
+  function handleApplyImageWidth() {
+    const px = parseInt(imageWidthInput, 10);
+    if (!Number.isFinite(px) || px <= 0) return;
+    editorRef.current?.resizeSelectedImage(px);
+  }
+
+  async function handleReplaceImageFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setImageUploadError(null);
+    setIsUploadingImage(true);
+    try {
+      const url = await uploadImage(file, "offering-media", "html-editor");
+      editorRef.current?.replaceSelectedImageSrc(url);
+    } catch (err) {
+      setImageUploadError(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
+      setIsUploadingImage(false);
+    }
   }
 
   function handleChange(value: string) {
@@ -313,7 +350,7 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
                 <MousePointerClick size={12} /> Edit
               </button>
               <button
-                onClick={() => { setView("preview"); setSelection(null); }}
+                onClick={() => { setView("preview"); setSelection(null); setSelectedImage(null); }}
                 className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs transition-colors ${
                   view === "preview"
                     ? "bg-[var(--background)] text-[var(--foreground)] shadow-sm font-medium"
@@ -323,7 +360,7 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
                 <Eye size={12} /> Preview
               </button>
               <button
-                onClick={() => { setView("html"); setSelection(null); }}
+                onClick={() => { setView("html"); setSelection(null); setSelectedImage(null); }}
                 className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs transition-colors ${
                   view === "html"
                     ? "bg-[var(--background)] text-[var(--foreground)] shadow-sm font-medium"
@@ -350,7 +387,7 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
 
           {view === "edit" && (
             <div className="px-4 py-1.5 text-[11px] text-[var(--muted-foreground)] bg-[var(--card)] border-b border-[var(--border)] flex-shrink-0">
-              Click any text to edit it in place, or select text to add a link in the sidebar. Hover a section to reveal its <span className="font-mono">⠿</span> handle, then drag to reorder.
+              Click any text to edit it in place, or select text to add a link in the sidebar. Click an image to resize (drag its corners) or replace it. Hover a section to reveal its <span className="font-mono">⠿</span> handle, then drag to reorder.
             </div>
           )}
 
@@ -365,6 +402,8 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
               pickerMode={pickerMode}
               selectedSelector={selectedElement?.selector ?? null}
               onElementPicked={handleElementPicked}
+              selectedImageSelector={selectedImage?.selector ?? null}
+              onImageSelected={setSelectedImage}
             />
           ) : view === "preview" ? (
             <iframe
@@ -512,6 +551,77 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
               ) : (
                 <p className="text-[11px] text-[var(--muted-foreground)] leading-snug">
                   Select some text, then pick a color to apply it.
+                </p>
+              )}
+            </div>
+          )}
+
+          {view === "edit" && (
+            <div className="p-4 border-b border-[var(--border)] space-y-3">
+              <div className="flex items-center gap-1.5">
+                <ImageIcon size={12} className="text-[var(--muted-foreground)]" />
+                <p className="text-xs font-semibold text-[var(--foreground)]">Image</p>
+              </div>
+
+              {selectedImage ? (
+                <div className="space-y-3">
+                  <div className="rounded-lg border border-[var(--border)] overflow-hidden bg-[var(--muted)]/30 aspect-video flex items-center justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={selectedImage.src} alt="" className="max-w-full max-h-full object-contain" />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-medium text-[var(--muted-foreground)] uppercase tracking-wider">
+                      Width (px)
+                    </label>
+                    <input
+                      type="number"
+                      min={40}
+                      value={imageWidthInput}
+                      onChange={(e) => setImageWidthInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleApplyImageWidth(); }}
+                      onBlur={handleApplyImageWidth}
+                      className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/30"
+                    />
+                  </div>
+
+                  <div className="flex rounded-lg border border-[var(--border)] overflow-hidden text-[11px] font-medium">
+                    {([["Small", 200], ["Medium", 400], ["Large", 800]] as const).map(([label, px]) => (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => editorRef.current?.resizeSelectedImage(px)}
+                        className="flex-1 py-1.5 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors border-r border-[var(--border)]"
+                      >
+                        {label}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => editorRef.current?.resizeSelectedImage("full")}
+                      className="flex-1 py-1.5 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
+                    >
+                      Full
+                    </button>
+                  </div>
+
+                  <label className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs hover:bg-[var(--accent)] transition-colors cursor-pointer">
+                    {isUploadingImage ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                    {isUploadingImage ? "Uploading…" : "Replace Image"}
+                    <input
+                      ref={imageFileRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="sr-only"
+                      onChange={handleReplaceImageFile}
+                      disabled={isUploadingImage}
+                    />
+                  </label>
+                  {imageUploadError && <p className="text-[11px] text-red-500">{imageUploadError}</p>}
+                </div>
+              ) : (
+                <p className="text-[11px] text-[var(--muted-foreground)] leading-snug">
+                  Click an image in the page to resize or replace it.
                 </p>
               )}
             </div>

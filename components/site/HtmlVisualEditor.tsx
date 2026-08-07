@@ -14,12 +14,20 @@ export interface FormInfo {
   connected: boolean;
 }
 
+export interface ImageSelectionInfo {
+  selector: string;
+  src: string;
+  widthPx: number;
+}
+
 export interface HtmlVisualEditorHandle {
   applyLink: (url: string) => void;
   removeLink: () => void;
   applyColor: (color: string) => void;
   clearColor: () => void;
   toggleForm: (formId: string, connected: boolean) => void;
+  resizeSelectedImage: (width: number | "full") => void;
+  replaceSelectedImageSrc: (url: string) => void;
 }
 
 interface HtmlVisualEditorProps {
@@ -31,6 +39,9 @@ interface HtmlVisualEditorProps {
   pickerMode?: boolean;
   selectedSelector?: string | null;
   onElementPicked?: (info: { selector: string; label: string } | null) => void;
+  // Image selection/resize/replace — see the "Image editing" section below.
+  selectedImageSelector?: string | null;
+  onImageSelected?: (info: ImageSelectionInfo | null) => void;
 }
 
 const EDIT_STYLE_ID = "__sage_edit_styles__";
@@ -42,6 +53,10 @@ const DRAGGING_CLASS = "__sage_dragging__";
 const FORM_ID_ATTR = "data-sage-form-id";
 const FORM_CONNECTED_ATTR = "data-sage-form";
 const PICKED_CLASS = "__sage_ai_picked__";
+const IMG_SELECTED_CLASS = "__sage_img_selected__";
+const IMG_HANDLE_CLASS = "__sage_img_handle__";
+const IMG_HANDLE_SIZE = 10;
+type ImageCorner = "tl" | "tr" | "bl" | "br";
 
 // Candidate elements whose text content can be edited in place. Whichever of
 // these is the outermost "text-like" wrapper (see isTextLikeElement) becomes
@@ -76,6 +91,98 @@ function normalizeUrl(url: string): string {
   return `https://${trimmed}`;
 }
 
+// Image selection handles — positioned as document-flow-relative (not
+// viewport-fixed) absolute elements so they scroll naturally with the page
+// content without needing a scroll listener.
+function positionImageHandles(img: HTMLImageElement, handles: Partial<Record<ImageCorner, HTMLElement>>, doc: Document) {
+  const rect = img.getBoundingClientRect();
+  const win = doc.defaultView;
+  const scrollX = win?.scrollX ?? 0;
+  const scrollY = win?.scrollY ?? 0;
+  const left = rect.left + scrollX;
+  const top = rect.top + scrollY;
+  const half = IMG_HANDLE_SIZE / 2;
+  const positions: Record<ImageCorner, [number, number]> = {
+    tl: [left, top],
+    tr: [left + rect.width, top],
+    bl: [left, top + rect.height],
+    br: [left + rect.width, top + rect.height],
+  };
+  (Object.keys(positions) as ImageCorner[]).forEach((corner) => {
+    const handle = handles[corner];
+    if (!handle) return;
+    const [x, y] = positions[corner];
+    handle.style.left = `${x - half}px`;
+    handle.style.top = `${y - half}px`;
+  });
+}
+
+const IMAGE_MIN_WIDTH = 40;
+
+// Only corner handles (no edge handles) — resizing always scales
+// proportionally (width in px, height:auto) rather than allowing distortion,
+// which is what you almost always want for a photo. Horizontal mouse
+// movement alone drives the resize; a left-side handle growing means
+// dragging left, a right-side handle growing means dragging right — both
+// read as "drag outward from the image to grow it," regardless of which
+// corner you happen to grab.
+function startImageDrag(
+  corner: ImageCorner,
+  startEvent: MouseEvent,
+  img: HTMLImageElement,
+  doc: Document,
+  handles: Partial<Record<ImageCorner, HTMLElement>>,
+  onCommit: () => void,
+) {
+  startEvent.preventDefault();
+  startEvent.stopPropagation();
+  const win = doc.defaultView;
+  if (!win) return;
+  const startX = startEvent.clientX;
+  const startWidth = img.getBoundingClientRect().width;
+  const growsRight = corner === "tr" || corner === "br";
+
+  function onMouseMove(e: MouseEvent) {
+    const dx = e.clientX - startX;
+    const delta = growsRight ? dx : -dx;
+    const newWidth = Math.max(IMAGE_MIN_WIDTH, Math.round(startWidth + delta));
+    img.style.width = `${newWidth}px`;
+    img.style.maxWidth = "100%";
+    img.style.height = "auto";
+    positionImageHandles(img, handles, doc);
+  }
+  function onMouseUp() {
+    win!.removeEventListener("mousemove", onMouseMove);
+    win!.removeEventListener("mouseup", onMouseUp);
+    img.removeAttribute("width");
+    img.removeAttribute("height");
+    onCommit();
+  }
+  win.addEventListener("mousemove", onMouseMove);
+  win.addEventListener("mouseup", onMouseUp);
+}
+
+function showImageHandles(img: HTMLImageElement, doc: Document, onCommit: () => void) {
+  img.classList.add(IMG_SELECTED_CLASS);
+  const cursors: Record<ImageCorner, string> = { tl: "nwse-resize", br: "nwse-resize", tr: "nesw-resize", bl: "nesw-resize" };
+  const handles: Partial<Record<ImageCorner, HTMLElement>> = {};
+  (["tl", "tr", "bl", "br"] as ImageCorner[]).forEach((corner) => {
+    const handle = doc.createElement("div");
+    handle.className = IMG_HANDLE_CLASS;
+    handle.setAttribute("contenteditable", "false");
+    handle.style.cursor = cursors[corner];
+    handle.addEventListener("mousedown", (e) => startImageDrag(corner, e, img, doc, handles, onCommit));
+    doc.body.appendChild(handle);
+    handles[corner] = handle;
+  });
+  positionImageHandles(img, handles, doc);
+}
+
+function clearImageHandles(doc: Document) {
+  doc.querySelectorAll(`.${IMG_SELECTED_CLASS}`).forEach((el) => el.classList.remove(IMG_SELECTED_CLASS));
+  doc.querySelectorAll(`.${IMG_HANDLE_CLASS}`).forEach((el) => el.remove());
+}
+
 /**
  * Renders HTML inside a sandboxed iframe and makes it directly editable:
  * text leaves become contentEditable, and top-level <body> children get a
@@ -85,15 +192,17 @@ function normalizeUrl(url: string): string {
  * handle (applyLink/removeLink), driven by a control outside the iframe.
  */
 export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEditorProps>(
-  function HtmlVisualEditor({ html, onChange, onSelectionInfo, onFormsDetected, pickerMode = false, selectedSelector = null, onElementPicked }, ref) {
+  function HtmlVisualEditor({ html, onChange, onSelectionInfo, onFormsDetected, pickerMode = false, selectedSelector = null, onElementPicked, selectedImageSelector = null, onImageSelected }, ref) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const lastSyncedRef = useRef<string | null>(null);
   const dragSrcRef = useRef<HTMLElement | null>(null);
   const lastRangeRef = useRef<Range | null>(null);
   const pickerModeRef = useRef(pickerMode);
   const onElementPickedRef = useRef(onElementPicked);
+  const onImageSelectedRef = useRef(onImageSelected);
   useEffect(() => { pickerModeRef.current = pickerMode; }, [pickerMode]);
   useEffect(() => { onElementPickedRef.current = onElementPicked; }, [onElementPicked]);
+  useEffect(() => { onImageSelectedRef.current = onImageSelected; }, [onImageSelected]);
 
   const serialize = useCallback((): string | null => {
     const doc = iframeRef.current?.contentDocument;
@@ -110,6 +219,8 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
     clone.querySelectorAll(`[${FORM_ID_ATTR}]`).forEach((el) => el.removeAttribute(FORM_ID_ATTR));
     clone.querySelectorAll(`.${PICKED_CLASS}`).forEach((el) => el.classList.remove(PICKED_CLASS));
     clone.removeAttribute("data-picker-mode");
+    clone.querySelectorAll(`.${IMG_SELECTED_CLASS}`).forEach((el) => el.classList.remove(IMG_SELECTED_CLASS));
+    clone.querySelectorAll(`.${IMG_HANDLE_CLASS}`).forEach((el) => el.remove());
     return "<!DOCTYPE html>\n" + clone.outerHTML;
   }, []);
 
@@ -211,6 +322,16 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
          (e.g. a mobile nav that's opacity:0 until scrolled/toggled). Extend
          the selector if another reveal-on-scroll convention shows up. */
       .reveal, .reveal.visible { opacity: 1 !important; transform: none !important; }
+      /* Image select/resize — blue, distinct from the indigo text-edit and
+         green AI-picker outlines so all three selection states stay visually
+         unambiguous at a glance. */
+      img { cursor: pointer; }
+      .${IMG_SELECTED_CLASS} { outline: 2px solid #2563eb; outline-offset: 2px; }
+      .${IMG_HANDLE_CLASS} {
+        position: absolute; width: ${IMG_HANDLE_SIZE}px; height: ${IMG_HANDLE_SIZE}px; z-index: 999999;
+        background: #2563eb; border: 2px solid #fff; border-radius: 50%;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      }
     `;
 
     const sections = Array.from(doc.body.children).filter(
@@ -297,15 +418,40 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
       e.stopPropagation();
     }, true);
     doc.addEventListener("click", (e) => {
-      if (!pickerModeRef.current) return;
-      e.preventDefault();
-      e.stopPropagation();
+      if (pickerModeRef.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        const target = closestElement(e.target as Node);
+        if (!target) return;
+        onElementPickedRef.current?.({
+          selector: getUniqueSelector(target, doc),
+          label: getElementLabel(target),
+        });
+        return;
+      }
+      // Image select/resize/replace — clicking any <img> selects it (reported
+      // up so the parent tracks it the same sticky way as the AI picker's
+      // selection); clicking anything else deselects whatever was selected.
       const target = closestElement(e.target as Node);
-      if (!target) return;
-      onElementPickedRef.current?.({
-        selector: getUniqueSelector(target, doc),
-        label: getElementLabel(target),
-      });
+      if (target?.tagName === "IMG") {
+        e.preventDefault();
+        const img = target as HTMLImageElement;
+        onImageSelectedRef.current?.({
+          selector: getUniqueSelector(img, doc),
+          src: img.getAttribute("src") ?? "",
+          widthPx: Math.round(img.getBoundingClientRect().width),
+        });
+      } else {
+        onImageSelectedRef.current?.(null);
+      }
+    }, true);
+
+    // Browsers let you drag any <img> by default (e.g. to drop it into
+    // another app) — that native drag would fight with the custom resize-
+    // handle dragging above, so it's suppressed entirely rather than trying
+    // to out-race it with preventDefault timing on mousedown.
+    doc.addEventListener("dragstart", (e) => {
+      if (closestElement(e.target as Node)?.tagName === "IMG") e.preventDefault();
     }, true);
 
     scanForms(doc);
@@ -423,7 +569,28 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
       emitChange();
       scanForms(doc);
     },
-  }), [emitChange, reportSelection, scanForms]);
+    resizeSelectedImage(width: number | "full") {
+      const doc = iframeRef.current?.contentDocument;
+      if (!doc || !selectedImageSelector) return;
+      const el = queryIgnoringInjectedSiblings(selectedImageSelector, doc);
+      if (!el || el.tagName !== "IMG") return;
+      const img = el as HTMLImageElement;
+      img.style.maxWidth = "100%";
+      img.style.height = "auto";
+      img.style.width = width === "full" ? "100%" : `${Math.max(IMAGE_MIN_WIDTH, Math.round(width))}px`;
+      img.removeAttribute("width");
+      img.removeAttribute("height");
+      emitChange();
+    },
+    replaceSelectedImageSrc(url: string) {
+      const doc = iframeRef.current?.contentDocument;
+      if (!doc || !selectedImageSelector) return;
+      const el = queryIgnoringInjectedSiblings(selectedImageSelector, doc);
+      if (!el || el.tagName !== "IMG") return;
+      el.setAttribute("src", url);
+      emitChange();
+    },
+  }), [emitChange, reportSelection, scanForms, selectedImageSelector]);
 
   useEffect(() => {
     const iframe = iframeRef.current;
@@ -466,6 +633,37 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
       onElementPickedRef.current?.(null);
     }
   }, [selectedSelector, html]);
+
+  // Same sticky, self-revalidating pattern as the AI-picker effect above, for
+  // the selected-image handles. Also re-runs after emitChange() from a resize
+  // or replace commits (those change `html`, which re-triggers the html-sync
+  // effect first — same-commit effects run in declaration order — then this
+  // one), which is what keeps the handles correctly positioned/re-created
+  // against the freshly rewritten DOM after every edit — and, via the
+  // unconditional report() below, keeps the sidebar's displayed width/preview
+  // in sync no matter which path changed it (a canvas drag, the sidebar's own
+  // width field, a preset button, or a replace), not just a canvas drag.
+  useEffect(() => {
+    const doc = iframeRef.current?.contentDocument;
+    if (!doc?.body) return;
+    clearImageHandles(doc);
+    if (!selectedImageSelector) return;
+    const matched = queryIgnoringInjectedSiblings(selectedImageSelector, doc);
+    if (matched && matched.tagName === "IMG") {
+      const img = matched as HTMLImageElement;
+      const report = () => {
+        onImageSelectedRef.current?.({
+          selector: selectedImageSelector,
+          src: img.getAttribute("src") ?? "",
+          widthPx: Math.round(img.getBoundingClientRect().width),
+        });
+      };
+      showImageHandles(img, doc, () => { emitChange(); report(); });
+      report();
+    } else {
+      onImageSelectedRef.current?.(null);
+    }
+  }, [selectedImageSelector, html, emitChange]);
 
   return (
     <iframe
