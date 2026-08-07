@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Upload, Code2, Eye, MousePointerClick, ExternalLink, Wand2, Save, Loader2, Check, Globe, Settings, Link2, Unlink, ClipboardList, AlertCircle, Sparkles, Palette, X, Crosshair, Image as ImageIcon } from "lucide-react";
+import { ArrowLeft, Upload, Code2, Eye, MousePointerClick, ExternalLink, Wand2, Save, Loader2, Check, Globe, Settings, Link2, Unlink, ClipboardList, AlertCircle, Sparkles, Palette, X, Crosshair, Image as ImageIcon, Undo2, Redo2 } from "lucide-react";
 import Link from "next/link";
 import { applyCustomStyle } from "@/lib/actions/html-pages";
 import { togglePagePublished, saveSitePage } from "@/lib/actions/sites";
@@ -54,6 +54,9 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
   const imageFileRef = useRef<HTMLInputElement>(null);
+  const [history, setHistory] = useState<string[]>([]);
+  const [future, setFuture] = useState<string[]>([]);
+  const lastHistoryPushRef = useRef(0);
 
   const isPublished = page.status === "published";
 
@@ -131,12 +134,56 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
     }
   }
 
+  const HISTORY_LIMIT = 50;
+  // Every mutation source in this editor (typing, drag-reorder, link/color,
+  // image resize/replace, a raw-HTML paste, a re-uploaded file, and AI edits)
+  // already funnels through this one function via onChange/onHtmlUpdate, so
+  // hooking undo here covers all of them uniformly with no per-source
+  // wiring. Pushes are time-coalesced (skipped if the last push was under a
+  // second ago) so a burst of rapid changes — several AI tool calls in one
+  // turn, or the debounced-but-still-frequent updates while typing — collapse
+  // into a single undo step instead of one step per intermediate change.
   function handleChange(value: string) {
+    const now = Date.now();
+    if (now - lastHistoryPushRef.current > 1000) {
+      setHistory((prev) => {
+        const next = [...prev, html];
+        return next.length > HISTORY_LIMIT ? next.slice(next.length - HISTORY_LIMIT) : next;
+      });
+      setFuture([]);
+    }
+    lastHistoryPushRef.current = now;
     setHtml(value);
     setIsDirty(true);
     setSaved(false);
     setExtractedTokens(null);
     setStyleApplied(false);
+  }
+
+  function handleUndo() {
+    if (history.length === 0) return;
+    const previous = history[history.length - 1];
+    setHistory((prev) => prev.slice(0, -1));
+    setFuture((prev) => [html, ...prev]);
+    setHtml(previous);
+    setIsDirty(true);
+    setSaved(false);
+    setSelection(null);
+    setSelectedImage(null);
+    lastHistoryPushRef.current = 0; // next edit always starts a fresh step, never coalesces into the undone one
+  }
+
+  function handleRedo() {
+    if (future.length === 0) return;
+    const next = future[0];
+    setFuture((prev) => prev.slice(1));
+    setHistory((prev) => [...prev, html]);
+    setHtml(next);
+    setIsDirty(true);
+    setSaved(false);
+    setSelection(null);
+    setSelectedImage(null);
+    lastHistoryPushRef.current = 0;
   }
 
   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -244,6 +291,25 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
         </div>
 
         <div className="flex items-center gap-2">
+          <div className="flex items-center gap-0.5 mr-1">
+            <button
+              onClick={handleUndo}
+              disabled={history.length === 0}
+              title="Undo"
+              className="flex items-center justify-center w-7 h-7 rounded-lg text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors disabled:opacity-30 disabled:pointer-events-none"
+            >
+              <Undo2 size={14} />
+            </button>
+            <button
+              onClick={handleRedo}
+              disabled={future.length === 0}
+              title="Redo"
+              className="flex items-center justify-center w-7 h-7 rounded-lg text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors disabled:opacity-30 disabled:pointer-events-none"
+            >
+              <Redo2 size={14} />
+            </button>
+          </div>
+
           <button
             onClick={() => setAiPanelOpen((o) => !o)}
             title="AI Assistant"
