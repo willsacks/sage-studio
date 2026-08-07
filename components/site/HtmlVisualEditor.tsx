@@ -193,6 +193,17 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
       body[data-picker-mode="true"] * { cursor: crosshair !important; }
       body[data-picker-mode="true"] *:hover { outline: 1px dashed #16a34a !important; outline-offset: 1px; }
       .${PICKED_CLASS} { outline: 2px solid #16a34a !important; outline-offset: 2px; background: rgba(22,163,74,0.06) !important; }
+      /* Scroll-reveal neutralizer: this iframe has no allow-scripts (see the
+         sandbox comment below), so a page's own IntersectionObserver-driven
+         "reveal on scroll" script never runs and .reveal content never gets
+         its "visible" class added — it stays at opacity:0 forever, looking
+         like it vanished even though the DOM is there. Scoped to this named
+         convention (see scripts/add-adorn-copy-and-parallax.ts) rather than
+         forcing every low-opacity element visible, since that would also
+         force-reveal legitimately hover/click-gated UI elsewhere in the site
+         (e.g. a mobile nav that's opacity:0 until scrolled/toggled). Extend
+         the selector if another reveal-on-scroll convention shows up. */
+      .reveal, .reveal.visible { opacity: 1 !important; transform: none !important; }
     `;
 
     const sections = Array.from(doc.body.children).filter(
@@ -251,11 +262,9 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
     };
 
     doc.body.querySelectorAll(EDITABLE_SELECTOR).forEach((el) => {
-      const hasDirectText = Array.from(el.childNodes).some(
-        (n) => n.nodeType === Node.TEXT_NODE && !!n.textContent?.trim()
-      );
-      const hasElementChildren = el.children.length > 0;
-      if (hasDirectText && !hasElementChildren) {
+      if (el.hasAttribute(HANDLE_ATTR)) return; // drag handle glyph, never user text
+      if (el.closest('[contenteditable="true"]')) return; // already inside a marked ancestor
+      if (el.textContent?.trim() && isTextLikeElement(el)) {
         el.setAttribute("contenteditable", "true");
       }
     });
