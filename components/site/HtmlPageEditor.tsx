@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Upload, Code2, Eye, MousePointerClick, ExternalLink, Wand2, Save, Loader2, Check, Globe, Settings, Link2, Unlink, ClipboardList, AlertCircle, Sparkles, Palette, X } from "lucide-react";
 import Link from "next/link";
-import { updateHtmlPage, applyCustomStyle } from "@/lib/actions/html-pages";
+import { applyCustomStyle } from "@/lib/actions/html-pages";
 import { togglePagePublished, saveSitePage } from "@/lib/actions/sites";
 import { extractStyleFromHtml } from "@/lib/utils/extract-html-style";
 import { HtmlVisualEditor, type HtmlVisualEditorHandle, type SelectionInfo, type FormInfo } from "@/components/site/HtmlVisualEditor";
@@ -123,9 +123,14 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
     setSaveError(null);
     startSave(async () => {
       try {
-        const result = await updateHtmlPage(page.id, html);
-        if (result.error) {
-          setSaveError(result.error);
+        const res = await fetch("/api/site-pages/update-html", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pageId: page.id, htmlContent: html }),
+        });
+        const result = await res.json() as { ok?: boolean; error?: string };
+        if (!res.ok || result.error) {
+          setSaveError(result.error ?? "Save failed.");
           return;
         }
         setIsDirty(false);

@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils/cn";
 import { addSitePage } from "@/lib/actions/sites";
-import { createHtmlPage, applyCustomStyle } from "@/lib/actions/html-pages";
+import { applyCustomStyle } from "@/lib/actions/html-pages";
 import { extractStyleFromHtml } from "@/lib/utils/extract-html-style";
 import { THEMES_BY_KEY, DEFAULT_STYLE_KEY } from "@/lib/styles";
 import type { StyleTokens } from "@/lib/styles/types";
@@ -183,7 +183,12 @@ export function PageTypePicker({ siteId, templates }: PageTypePickerProps) {
     if (selection.kind === "html-import") {
       if (!htmlContent.trim()) { setError("Please paste or upload HTML content."); return; }
       startTransition(async () => {
-        const result = await createHtmlPage(siteId, resolvedTitle, htmlContent);
+        const res = await fetch("/api/site-pages/import-html", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ siteId, title: resolvedTitle, htmlContent }),
+        });
+        const result = await res.json() as { pageId?: string; error?: string };
         if (result.error) { setError(result.error); return; }
         const extracted = extractStyleFromHtml(htmlContent);
         if (Object.keys(extracted).length > 0) {

@@ -13,7 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { createHtmlPage, applyCustomStyle } from "@/lib/actions/html-pages";
+import { applyCustomStyle } from "@/lib/actions/html-pages";
 import { extractStyleFromHtml } from "@/lib/utils/extract-html-style";
 import { THEMES_BY_KEY, DEFAULT_STYLE_KEY } from "@/lib/styles";
 import type { StyleTokens } from "@/lib/styles/types";
@@ -55,7 +55,12 @@ export function ImportHtmlButton({ siteId }: ImportHtmlButtonProps) {
     const resolvedTitle = title.trim() || "Imported Page";
 
     startTransition(async () => {
-      const result = await createHtmlPage(siteId, resolvedTitle, htmlContent);
+      const res = await fetch("/api/site-pages/import-html", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId, title: resolvedTitle, htmlContent }),
+      });
+      const result = await res.json() as { pageId?: string; error?: string };
       if (result.error) { setError(result.error); return; }
 
       // Silently extract and apply style if CSS variables are found
