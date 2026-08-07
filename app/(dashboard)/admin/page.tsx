@@ -6,7 +6,8 @@ import { LayoutDashboard, UserPlus, Globe, Zap, MessageSquare, BrainCircuit } fr
 import { formatDistanceToNow } from "date-fns";
 import { AiAccessTable, type UserRow } from "@/components/admin/AiAccessTable";
 import { AiPromptEditor } from "@/components/admin/AiPromptEditor";
-import { getAiPrompts } from "@/lib/actions/admin";
+import { AiModelSelector } from "@/components/admin/AiModelSelector";
+import { getAiPrompts, getAiModel } from "@/lib/actions/admin";
 import { DEFAULT_SYSTEM_BLOCK, DEFAULT_SYSTEM_HTML } from "@/lib/ai/prompts";
 
 export const metadata: Metadata = { title: "Admin — Sage Studio" };
@@ -225,7 +226,7 @@ export default async function AdminPage() {
 
   if (profile?.role !== "admin") redirect("/my-site");
 
-  const [m, feed, aiUsers, aiPrompts] = await Promise.all([getMetrics(), getActivityFeed(), getAiAccessUsers(), getAiPrompts()]);
+  const [m, feed, aiUsers, aiPrompts, aiModel] = await Promise.all([getMetrics(), getActivityFeed(), getAiAccessUsers(), getAiPrompts(), getAiModel()]);
 
   return (
     <div className="space-y-8">
@@ -286,6 +287,15 @@ export default async function AdminPage() {
           Enable the AI page-editing assistant for specific accounts. Off by default. Click a row to toggle.
         </p>
         <AiAccessTable users={aiUsers} />
+      </section>
+
+      {/* AI Model */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-[var(--muted-foreground)] uppercase tracking-wide">AI Assistant Model</h2>
+        <p className="text-xs text-[var(--muted-foreground)]">
+          Which Claude model the AI assistant uses when editing pages. Takes effect on the next AI request, no deploy needed.
+        </p>
+        <AiModelSelector currentModel={aiModel} />
       </section>
 
       {/* AI Prompt */}

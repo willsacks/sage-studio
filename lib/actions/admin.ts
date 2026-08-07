@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { DEFAULT_SYSTEM_BLOCK, DEFAULT_SYSTEM_HTML } from "@/lib/ai/prompts";
+import { DEFAULT_AI_MODEL } from "@/lib/ai/models";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyClient = any;
@@ -44,6 +45,22 @@ export async function saveAiPrompts(blockPrompt: string, htmlPrompt: string) {
   const { error } = await admin
     .from("platform_settings")
     .upsert({ id: true, ai_block_system_prompt: blockPrompt, ai_html_system_prompt: htmlPrompt, updated_at: new Date().toISOString() });
+  if (error) return { error: error.message };
+  revalidatePath("/admin");
+  return { success: true };
+}
+
+export async function getAiModel() {
+  const admin = await requireAdmin();
+  const { data } = await admin.from("platform_settings").select("ai_model").maybeSingle();
+  return data?.ai_model || DEFAULT_AI_MODEL;
+}
+
+export async function saveAiModel(model: string) {
+  const admin = await requireAdmin();
+  const { error } = await admin
+    .from("platform_settings")
+    .upsert({ id: true, ai_model: model, updated_at: new Date().toISOString() });
   if (error) return { error: error.message };
   revalidatePath("/admin");
   return { success: true };

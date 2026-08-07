@@ -22,6 +22,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { DEFAULT_SYSTEM_BLOCK, DEFAULT_SYSTEM_HTML } from "@/lib/ai/prompts";
+import { DEFAULT_AI_MODEL } from "@/lib/ai/models";
 import { BLOCK_TOOLS, HTML_TOOLS, toolCallLabel } from "@/lib/utils/ai-tools";
 import {
   addBlock, updateBlockData, moveBlock, removeBlock, duplicateBlock,
@@ -41,22 +42,22 @@ function unknownBlockFields(type: BlockType, data: Record<string, unknown>): str
   return Object.keys(data).filter((k) => !validKeys.has(k));
 }
 
-const MODEL = "claude-sonnet-4-6";
 const MAX_TURNS = 20;
 
-/** Admin-editable overrides (see /admin -> AI Assistant Prompt) fall back to the
- * hardcoded defaults when no override has been saved. platform_settings has no
- * RLS policies, so this must go through the service-role admin client. */
-async function getSystemPrompts(): Promise<{ block: string; html: string }> {
+/** Admin-editable overrides (see /admin -> AI Assistant Prompt / AI Assistant Model)
+ * fall back to the hardcoded defaults when no override has been saved. platform_settings
+ * has no RLS policies, so this must go through the service-role admin client. */
+async function getPlatformAiSettings(): Promise<{ block: string; html: string; model: string }> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const { data } = await admin
     .from("platform_settings")
-    .select("ai_block_system_prompt, ai_html_system_prompt")
+    .select("ai_block_system_prompt, ai_html_system_prompt, ai_model")
     .maybeSingle();
   return {
     block: data?.ai_block_system_prompt || DEFAULT_SYSTEM_BLOCK,
     html: data?.ai_html_system_prompt || DEFAULT_SYSTEM_HTML,
+    model: data?.ai_model || DEFAULT_AI_MODEL,
   };
 }
 
@@ -178,12 +179,12 @@ export async function POST(request: NextRequest) {
 
   const { editorType, messages, pageTitle = "this page" } = body;
   const tools = editorType === "block" ? BLOCK_TOOLS : HTML_TOOLS;
-  const systemPrompts = await getSystemPrompts();
+  const aiSettings = await getPlatformAiSettings();
   const system = editorType === "block"
-    ? `${systemPrompts.block}\nPage title: ${pageTitle}`
+    ? `${aiSettings.block}\nPage title: ${pageTitle}`
     : (() => {
         const summary = body.html ? buildPageSummary(body.html) : "";
-        return `${systemPrompts.html}\nPage title: ${pageTitle}\n\nPage structure:\n${summary}`;
+        return `${aiSettings.html}\nPage title: ${pageTitle}\n\nPage structure:\n${summary}`;
       })();
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
@@ -200,7 +201,7 @@ export async function POST(request: NextRequest) {
         while (turns < MAX_TURNS) {
           turns++;
           const messageStream = anthropic.messages.stream({
-            model: MODEL,
+            model: aiSettings.model,
             max_tokens: 4096,
             system,
             tools,
