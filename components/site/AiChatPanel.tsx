@@ -4,11 +4,37 @@ import { useEffect, useRef, useState } from "react";
 import { Send, Loader2, BrainCircuit, Sparkles } from "lucide-react";
 import type { Block } from "@/lib/types/builder";
 
+// An assistant turn can interleave text and tool calls in any order (e.g.
+// "Let me check..." -> reads a section -> "Now I'll center it" -> several
+// style updates -> "Done!"). Modeling it as an ordered list of parts (instead
+// of one big text blob plus a separate tool-call list) lets the UI show that
+// real sequence as it happens, rather than clumping everything by kind.
+type AssistantPart =
+  | { type: "text"; content: string }
+  | { type: "tool_call"; name: string; label: string };
+
 interface Message {
   role: "user" | "assistant";
-  content: string;
-  toolCalls?: { name: string; label: string }[];
+  content: string; // user messages only
+  parts?: AssistantPart[]; // assistant messages only, in arrival order
   isStreaming?: boolean;
+}
+
+/** Three-dot "typing" indicator — shown while the assistant is working and
+ * hasn't streamed any text yet (tool-call-only turns can otherwise look idle
+ * for several seconds even though tool calls are actively being made). */
+function ThinkingDots() {
+  return (
+    <span className="inline-flex items-center gap-1 py-0.5">
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className="w-1.5 h-1.5 rounded-full bg-current opacity-60 animate-bounce"
+          style={{ animationDelay: `${i * 150}ms` }}
+        />
+      ))}
+    </span>
+  );
 }
 
 export interface AiChatPanelProps {
@@ -44,15 +70,19 @@ export function AiChatPanel({
     setInput("");
 
     const userMsg: Message = { role: "user", content: text };
-    const assistantMsg: Message = { role: "assistant", content: "", toolCalls: [], isStreaming: true };
+    const assistantMsg: Message = { role: "assistant", content: "", parts: [], isStreaming: true };
 
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
     setIsStreaming(true);
 
-    // Build the messages array for the API in the Anthropic format
+    // Build the messages array for the API in the Anthropic format — the API
+    // only needs the assistant's text, not its tool-call parts (the server
+    // already resolved those within that request's own tool loop).
     const history = [...messages, userMsg].map((m) => ({
       role: m.role as "user" | "assistant",
-      content: m.content,
+      content: m.role === "assistant"
+        ? (m.parts ?? []).filter((p) => p.type === "text").map((p) => p.content).join("")
+        : m.content,
     }));
 
     try {
@@ -71,7 +101,9 @@ export function AiChatPanel({
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Request failed" }));
         setMessages((prev) => prev.map((m, i) =>
-          i === prev.length - 1 ? { ...m, content: `Error: ${err.error ?? "Something went wrong."}`, isStreaming: false } : m
+          i === prev.length - 1
+            ? { ...m, parts: [{ type: "text", content: `Error: ${err.error ?? "Something went wrong."}` }], isStreaming: false }
+            : m
         ));
         setIsStreaming(false);
         return;
@@ -90,13 +122,23 @@ export function AiChatPanel({
           try { event = JSON.parse(line); } catch { continue; }
 
           if (event.type === "text") {
-            setMessages((prev) => prev.map((m, i) =>
-              i === prev.length - 1 ? { ...m, content: m.content + (event.content as string) } : m
-            ));
+            setMessages((prev) => prev.map((m, i) => {
+              if (i !== prev.length - 1) return m;
+              const parts = [...(m.parts ?? [])];
+              const last = parts[parts.length - 1];
+              // Consecutive text events are chunks of one continuous reply —
+              // append to the running text part rather than starting a new one.
+              if (last?.type === "text") {
+                parts[parts.length - 1] = { ...last, content: last.content + (event.content as string) };
+              } else {
+                parts.push({ type: "text", content: event.content as string });
+              }
+              return { ...m, parts };
+            }));
           } else if (event.type === "tool_call") {
             setMessages((prev) => prev.map((m, i) =>
               i === prev.length - 1
-                ? { ...m, toolCalls: [...(m.toolCalls ?? []), { name: event.name as string, label: event.label as string }] }
+                ? { ...m, parts: [...(m.parts ?? []), { type: "tool_call", name: event.name as string, label: event.label as string }] }
                 : m
             ));
           } else if (event.type === "state_update" || event.type === "final_state") {
@@ -108,7 +150,7 @@ export function AiChatPanel({
           } else if (event.type === "error") {
             setMessages((prev) => prev.map((m, i) =>
               i === prev.length - 1
-                ? { ...m, content: (m.content || "") + `\n\nError: ${event.message as string}`, isStreaming: false }
+                ? { ...m, parts: [...(m.parts ?? []), { type: "text", content: `Error: ${event.message as string}` }], isStreaming: false }
                 : m
             ));
           } else if (event.type === "done") {
@@ -121,7 +163,7 @@ export function AiChatPanel({
     } catch (err) {
       setMessages((prev) => prev.map((m, i) =>
         i === prev.length - 1
-          ? { ...m, content: "Network error. Please try again.", isStreaming: false }
+          ? { ...m, parts: [...(m.parts ?? []), { type: "text", content: "Network error. Please try again." }], isStreaming: false }
           : m
       ));
     } finally {
@@ -145,6 +187,7 @@ export function AiChatPanel({
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[var(--border)] flex-shrink-0">
         <Sparkles size={14} className="text-[var(--primary)]" />
         <span className="text-xs font-semibold text-[var(--foreground)]">AI Assistant</span>
+        {isStreaming && <Loader2 size={12} className="animate-spin text-[var(--muted-foreground)]" />}
         <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] font-medium">Beta</span>
       </div>
 
@@ -160,34 +203,54 @@ export function AiChatPanel({
             </p>
           </div>
         )}
-        {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[85%] space-y-1.5 ${msg.role === "user" ? "items-end" : "items-start"} flex flex-col`}>
-              <div
-                className={`rounded-xl px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap ${
-                  msg.role === "user"
-                    ? "bg-[var(--primary)] text-[var(--primary-foreground)]"
-                    : "bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)]"
-                }`}
-              >
-                {msg.content || (msg.isStreaming ? <span className="opacity-50">Thinking…</span> : null)}
-                {msg.isStreaming && msg.content && (
-                  <span className="inline-block w-1.5 h-3 bg-current opacity-60 ml-0.5 animate-pulse" />
-                )}
+        {messages.map((msg, i) => {
+          if (msg.role === "user") {
+            return (
+              <div key={i} className="flex justify-end">
+                <div className="max-w-[85%] rounded-xl px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap bg-[var(--primary)] text-[var(--primary-foreground)]">
+                  {msg.content}
+                </div>
               </div>
-              {(msg.toolCalls?.length ?? 0) > 0 && (
-                <div className="space-y-1 w-full">
-                  {msg.toolCalls!.map((tc, j) => (
+            );
+          }
+
+          const parts = msg.parts ?? [];
+          const lastPart = parts[parts.length - 1];
+          // Waiting for the next thing to arrive — either nothing has come in
+          // yet, or the last thing was a tool call (no text to blink a cursor
+          // onto) and the model is deciding what to do next.
+          const showTrailingThinking = msg.isStreaming && (!lastPart || lastPart.type === "tool_call");
+
+          return (
+            <div key={i} className="flex justify-start">
+              <div className="max-w-[85%] space-y-1.5 items-start flex flex-col">
+                {parts.map((part, j) =>
+                  part.type === "text" ? (
+                    <div
+                      key={j}
+                      className="rounded-xl px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)]"
+                    >
+                      {part.content}
+                      {j === parts.length - 1 && msg.isStreaming && (
+                        <span className="inline-block w-1.5 h-3 bg-current opacity-60 ml-0.5 animate-pulse" />
+                      )}
+                    </div>
+                  ) : (
                     <div key={j} className="flex items-center gap-1.5 text-[10px] text-[var(--muted-foreground)] px-1">
                       <Sparkles size={10} className="text-[var(--primary)] flex-shrink-0" />
-                      {tc.label}
+                      {part.label}
                     </div>
-                  ))}
-                </div>
-              )}
+                  )
+                )}
+                {showTrailingThinking && (
+                  <div className="rounded-xl px-3 py-2 bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)]">
+                    <ThinkingDots />
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         <div ref={messagesEndRef} />
       </div>
 
