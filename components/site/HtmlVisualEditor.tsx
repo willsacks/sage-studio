@@ -174,7 +174,14 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
     styleEl.textContent = `
       [contenteditable="true"] { outline: none; cursor: text; }
       [contenteditable="true"]:hover { outline: 1px dashed #6366f1; outline-offset: 2px; }
-      [contenteditable="true"]:focus { outline: 2px solid #6366f1; outline-offset: 2px; background: rgba(99,102,241,0.05); }
+      /* No background here (only outline) — a background tint, even a faint
+         one, wins specificity over the page's own single-class background
+         rules (e.g. ".submit-btn { background: var(--ink) }"), silently
+         replacing a dark button's real background while its light text stays
+         light, making it unreadable while editing. Outline alone doesn't
+         have this problem since it never competes with the element's own
+         background/color. */
+      [contenteditable="true"]:focus { outline: 2px solid #6366f1; outline-offset: 2px; }
       .${HANDLE_CLASS} {
         position: absolute; top: 6px; left: 6px; z-index: 999999;
         width: 24px; height: 24px; border-radius: 6px;
