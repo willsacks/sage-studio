@@ -158,7 +158,7 @@ export const HTML_TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "get_element_html",
-    description: "Read-only. Returns the outer HTML of an element. Use this when you need to inspect a specific section before deciding how to modify or replace it.",
+    description: "Read-only. Returns the outer HTML of an element, truncated if very large. Target a specific section (a class or id from the page structure below) rather than body/html — pages can be huge, and a broad selector wastes context on markup you don't need.",
     input_schema: {
       type: "object",
       properties: { selector: { type: "string" } },

@@ -133,8 +133,19 @@ export function addLink(html: string, textToLink: string, href: string): string 
   return serialize(doc);
 }
 
+// Real imported pages can run well past 1MB — an unbounded outerHTML dump from a
+// broad selector (e.g. "body") can by itself exceed the model's context window,
+// and since each tool result stays in the conversation for the rest of the
+// tool-calling loop, it gets re-billed as input tokens on every subsequent turn.
+// Capping here is the actual guardrail; the model is only ever nudged toward
+// specific selectors via the tool description and system prompt.
+const MAX_ELEMENT_HTML_CHARS = 8000;
+
 export function getElementHtml(html: string, selector: string): string | null {
   const doc = parse(html);
   const el = sel(doc, selector);
-  return el ? el.outerHTML : null;
+  if (!el) return null;
+  const outerHtml = el.outerHTML;
+  if (outerHtml.length <= MAX_ELEMENT_HTML_CHARS) return outerHtml;
+  return `${outerHtml.slice(0, MAX_ELEMENT_HTML_CHARS)}\n\n[Truncated — this element is ${outerHtml.length.toLocaleString()} characters total. Target a more specific selector (a class or id on a smaller section within it) instead of reading the whole thing.]`;
 }
