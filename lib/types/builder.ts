@@ -376,6 +376,24 @@ export const BLOCK_LABELS: Record<BlockType, string> = {
   simple_form: "Simple Form",
 };
 
+/** A readable name for a block in the AI-assistant selection chip — the type
+ * label plus a truncated snippet of whichever identifying text field the
+ * block happens to have (they differ per type: "headline" on hero, "heading"
+ * on feature_grid, etc.), or just the type label alone if none apply. */
+const LABEL_FIELD_PRIORITY = ["headline", "heading", "sectionHeading", "welcomeTitle", "albumTitle", "content", "body", "caption"];
+
+export function getBlockLabel(block: Block): string {
+  const data = block.data as Record<string, unknown>;
+  for (const key of LABEL_FIELD_PRIORITY) {
+    const value = data[key];
+    if (typeof value === "string" && value.trim()) {
+      const text = value.replace(/<[^>]+>/g, "").trim().slice(0, 40);
+      if (text) return `${BLOCK_LABELS[block.type]}: "${text}${value.trim().length > 40 ? "…" : ""}"`;
+    }
+  }
+  return BLOCK_LABELS[block.type];
+}
+
 export function createBlock(type: BlockType): Block {
   const id = crypto.randomUUID();
   const defaults: Record<BlockType, BlockData> = {

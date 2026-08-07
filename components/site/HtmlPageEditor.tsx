@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Upload, Code2, Eye, MousePointerClick, ExternalLink, Wand2, Save, Loader2, Check, Globe, Settings, Link2, Unlink, ClipboardList, AlertCircle, Sparkles, Palette, X } from "lucide-react";
+import { ArrowLeft, Upload, Code2, Eye, MousePointerClick, ExternalLink, Wand2, Save, Loader2, Check, Globe, Settings, Link2, Unlink, ClipboardList, AlertCircle, Sparkles, Palette, X, Crosshair } from "lucide-react";
 import Link from "next/link";
 import { applyCustomStyle } from "@/lib/actions/html-pages";
 import { togglePagePublished, saveSitePage } from "@/lib/actions/sites";
@@ -46,6 +46,8 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
   const [textColor, setTextColor] = useState("#000000");
   const [forms, setForms] = useState<FormInfo[]>([]);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [pickerMode, setPickerMode] = useState(false);
+  const [selectedElement, setSelectedElement] = useState<{ selector: string; label: string } | null>(null);
 
   const isPublished = page.status === "published";
 
@@ -74,6 +76,22 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
 
   function handleToggleForm(formId: string, connected: boolean) {
     editorRef.current?.toggleForm(formId, connected);
+  }
+
+  function handleElementPicked(info: { selector: string; label: string } | null) {
+    setSelectedElement(info);
+    if (info) setPickerMode(false); // picked something — done pointing, now type in the AI panel
+  }
+
+  function handleTogglePickerMode() {
+    setPickerMode((prev) => {
+      const next = !prev;
+      if (next) {
+        setView("edit"); // picking only works in the Edit view
+        setAiPanelOpen(true);
+      }
+      return next;
+    });
   }
 
   function handleChange(value: string) {
@@ -202,6 +220,18 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
           </button>
 
           <button
+            onClick={handleTogglePickerMode}
+            title="Click an element on the page to direct the AI to it"
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border transition-colors ${
+              pickerMode
+                ? "border-green-600/50 bg-green-600/10 text-green-600"
+                : "border-[var(--border)] hover:bg-[var(--accent)] text-[var(--muted-foreground)]"
+            }`}
+          >
+            <Crosshair size={13} /> {pickerMode ? "Click an element…" : "Select for AI"}
+          </button>
+
+          <button
             onClick={handlePreview}
             title="Open in new tab"
             className="flex items-center gap-1.5 px-2 py-1.5 text-xs rounded-lg border border-[var(--border)] hover:bg-[var(--accent)] transition-colors"
@@ -261,6 +291,8 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
               pageTitle={pageTitle}
               html={html}
               onHtmlUpdate={handleChange}
+              selectedContext={selectedElement ? { label: selectedElement.label, key: selectedElement.selector } : null}
+              onClearSelection={() => setSelectedElement(null)}
             />
           </div>
         )}
@@ -324,7 +356,16 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
 
           {/* Content */}
           {view === "edit" ? (
-            <HtmlVisualEditor ref={editorRef} html={html} onChange={handleChange} onSelectionInfo={setSelection} onFormsDetected={setForms} />
+            <HtmlVisualEditor
+              ref={editorRef}
+              html={html}
+              onChange={handleChange}
+              onSelectionInfo={setSelection}
+              onFormsDetected={setForms}
+              pickerMode={pickerMode}
+              selectedSelector={selectedElement?.selector ?? null}
+              onElementPicked={handleElementPicked}
+            />
           ) : view === "preview" ? (
             <iframe
               srcDoc={injectFormCaptureScript(html, siteSlug)}

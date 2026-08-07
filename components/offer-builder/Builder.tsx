@@ -7,7 +7,7 @@ import { useBuilderStore, type SitePageRef } from "@/lib/store/builder";
 import { saveOfferPage, publishOfferPage } from "@/lib/actions/offer-pages";
 import type { OfferPage } from "@/lib/queries/offer-pages";
 import type { OfferTemplate } from "@/lib/queries/offer-templates";
-import type { PageData, PageTheme } from "@/lib/types/builder";
+import { getBlockLabel, type PageData, type PageTheme } from "@/lib/types/builder";
 import { BlockLibrary } from "./BlockLibrary";
 import { Canvas } from "./Canvas";
 import { BlockSettings } from "./BlockSettings";
@@ -48,7 +48,10 @@ const VIEWPORT_BUTTONS: { id: Viewport; icon: typeof Monitor; label: string }[] 
 ];
 
 export function Builder({ page, artistUsername, isAdmin, aiEnabled = false, templates, saveAction, publishAction, saveSettingsAction, siteContext, siteStyleVars, ornamentStyleVars, previewUrlOverride, backUrl }: BuilderProps) {
-  const { reset, blocks, theme, isDirty, markSaved, selectedBlockId, setSiteContext, setBlocks } = useBuilderStore();
+  const { reset, blocks, theme, isDirty, markSaved, selectedBlockId, setSiteContext, setBlocks, selectBlock } = useBuilderStore();
+
+  const selectedBlock = selectedBlockId ? blocks.find((b) => b.id === selectedBlockId) : null;
+  const selectedContext = selectedBlock ? { label: getBlockLabel(selectedBlock), key: selectedBlock.id } : null;
 
   const [modal, setModal] = useState<Modal>(null);
   const [viewport, setViewport] = useState<Viewport>("desktop");
@@ -269,6 +272,8 @@ export function Builder({ page, artistUsername, isAdmin, aiEnabled = false, temp
               pageTitle={page.title}
               blocks={blocks}
               onBlocksUpdate={setBlocks}
+              selectedContext={selectedContext}
+              onClearSelection={() => selectBlock(null)}
             />
           </div>
         ) : (

@@ -175,16 +175,30 @@ export async function POST(request: NextRequest) {
     blocks?: Block[];
     html?: string;
     pageTitle?: string;
+    selectedBlockId?: string;
+    selectedSelector?: string;
   };
 
   const { editorType, messages, pageTitle = "this page" } = body;
   const tools = editorType === "block" ? BLOCK_TOOLS : HTML_TOOLS;
   const aiSettings = await getPlatformAiSettings();
   const system = editorType === "block"
-    ? `${aiSettings.block}\nPage title: ${pageTitle}`
+    ? (() => {
+        let s = `${aiSettings.block}\nPage title: ${pageTitle}`;
+        const selected = body.selectedBlockId ? (body.blocks ?? []).find((b) => b.id === body.selectedBlockId) : null;
+        if (selected) {
+          s += `\n\nThe user has selected this block to focus on (clicked it in the editor):\nBlock ID: ${selected.id}\nType: ${selected.type}\nCurrent data: ${JSON.stringify(selected.data)}\n\nPrioritize edits on this exact block (update_block_data / remove_block / duplicate_block with this block_id) unless the user's message clearly indicates otherwise.`;
+        }
+        return s;
+      })()
     : (() => {
         const summary = body.html ? buildPageSummary(body.html) : "";
-        return `${aiSettings.html}\nPage title: ${pageTitle}\n\nPage structure:\n${summary}`;
+        let s = `${aiSettings.html}\nPage title: ${pageTitle}\n\nPage structure:\n${summary}`;
+        const snippet = body.selectedSelector && body.html ? getElementHtml(body.html, body.selectedSelector) : null;
+        if (snippet) {
+          s += `\n\nThe user has selected this element to focus on (clicked it in the editor):\nSelector: ${body.selectedSelector}\nCurrent markup:\n${snippet}\n\nPrioritize edits on this exact element (or its children) unless the user's message clearly indicates otherwise.`;
+        }
+        return s;
       })();
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });

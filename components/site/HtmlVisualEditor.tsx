@@ -1,6 +1,7 @@
 "use client";
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
+import { getUniqueSelector, getElementLabel, queryIgnoringInjectedSiblings } from "@/lib/utils/dom-selector";
 
 export interface SelectionInfo {
   hasSelection: boolean;
@@ -26,6 +27,10 @@ interface HtmlVisualEditorProps {
   onChange: (html: string) => void;
   onSelectionInfo?: (info: SelectionInfo | null) => void;
   onFormsDetected?: (forms: FormInfo[]) => void;
+  // AI-assistant element picker — see the "Element picker" section below.
+  pickerMode?: boolean;
+  selectedSelector?: string | null;
+  onElementPicked?: (info: { selector: string; label: string } | null) => void;
 }
 
 const EDIT_STYLE_ID = "__sage_edit_styles__";
@@ -36,10 +41,29 @@ const DROP_INDICATOR_CLASS = "__sage_drop_indicator__";
 const DRAGGING_CLASS = "__sage_dragging__";
 const FORM_ID_ATTR = "data-sage-form-id";
 const FORM_CONNECTED_ATTR = "data-sage-form";
+const PICKED_CLASS = "__sage_ai_picked__";
 
-// Leaf elements whose direct text content can be edited in place.
+// Candidate elements whose text content can be edited in place. Whichever of
+// these is the outermost "text-like" wrapper (see isTextLikeElement) becomes
+// the actual contentEditable host — see the marking loop in setupEditing.
 const EDITABLE_SELECTOR =
   "h1,h2,h3,h4,h5,h6,p,span,a,li,td,th,button,figcaption,label,blockquote,strong,em,small,div";
+
+// Presentational inline-formatting tags. An element is "text-like" — safe to
+// make the single contentEditable host for its whole subtree — if every
+// element it contains (recursively) is one of these, e.g. <em>/<strong>/<br>
+// inside a heading. Any other descendant tag (p, div, li, heading, ul,
+// table, img...) marks it as a structural wrapper instead, so inner blocks
+// stay independently editable rather than merging into one editable region.
+const INLINE_FORMATTING_TAGS = new Set([
+  "br", "em", "strong", "b", "i", "span", "small", "sub", "sup", "mark", "u", "a",
+]);
+
+function isTextLikeElement(el: Element): boolean {
+  return Array.from(el.children).every(
+    (child) => INLINE_FORMATTING_TAGS.has(child.tagName.toLowerCase()) && isTextLikeElement(child)
+  );
+}
 
 function closestElement(node: Node | null): HTMLElement | null {
   while (node && node.nodeType !== Node.ELEMENT_NODE) node = node.parentNode;
@@ -61,11 +85,15 @@ function normalizeUrl(url: string): string {
  * handle (applyLink/removeLink), driven by a control outside the iframe.
  */
 export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEditorProps>(
-  function HtmlVisualEditor({ html, onChange, onSelectionInfo, onFormsDetected }, ref) {
+  function HtmlVisualEditor({ html, onChange, onSelectionInfo, onFormsDetected, pickerMode = false, selectedSelector = null, onElementPicked }, ref) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const lastSyncedRef = useRef<string | null>(null);
   const dragSrcRef = useRef<HTMLElement | null>(null);
   const lastRangeRef = useRef<Range | null>(null);
+  const pickerModeRef = useRef(pickerMode);
+  const onElementPickedRef = useRef(onElementPicked);
+  useEffect(() => { pickerModeRef.current = pickerMode; }, [pickerMode]);
+  useEffect(() => { onElementPickedRef.current = onElementPicked; }, [onElementPicked]);
 
   const serialize = useCallback((): string | null => {
     const doc = iframeRef.current?.contentDocument;
@@ -80,6 +108,8 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
       el.classList.remove(DRAGGING_CLASS);
     });
     clone.querySelectorAll(`[${FORM_ID_ATTR}]`).forEach((el) => el.removeAttribute(FORM_ID_ATTR));
+    clone.querySelectorAll(`.${PICKED_CLASS}`).forEach((el) => el.classList.remove(PICKED_CLASS));
+    clone.removeAttribute("data-picker-mode");
     return "<!DOCTYPE html>\n" + clone.outerHTML;
   }, []);
 
@@ -157,6 +187,12 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
       [${SECTION_ATTR}]:hover > .${HANDLE_CLASS} { opacity: 1; }
       [${SECTION_ATTR}].${DRAGGING_CLASS} { opacity: 0.4; }
       .${DROP_INDICATOR_CLASS} { height: 3px; background: #6366f1; border-radius: 2px; margin: 2px 0; }
+      /* AI-assistant element picker — solid green, distinct from the indigo
+         dashed hover/edit outlines above so "picked for AI" never reads as
+         just another hover state. */
+      body[data-picker-mode="true"] * { cursor: crosshair !important; }
+      body[data-picker-mode="true"] *:hover { outline: 1px dashed #16a34a !important; outline-offset: 1px; }
+      .${PICKED_CLASS} { outline: 2px solid #16a34a !important; outline-offset: 2px; background: rgba(22,163,74,0.06) !important; }
     `;
 
     const sections = Array.from(doc.body.children).filter(
@@ -233,6 +269,28 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
     doc.addEventListener("selectionchange", () => reportSelection(doc));
     doc.body.addEventListener("mouseup", () => reportSelection(doc));
     doc.body.addEventListener("keyup", () => reportSelection(doc));
+
+    // Element picker for the AI assistant. Reads pickerModeRef (rather than a
+    // closed-over prop) so toggling picker mode doesn't require re-running
+    // this whole setup — mousedown is intercepted (not just click) because
+    // contenteditable's native cursor placement happens on mousedown, before
+    // a click handler alone could prevent it.
+    doc.addEventListener("mousedown", (e) => {
+      if (!pickerModeRef.current) return;
+      e.preventDefault();
+      e.stopPropagation();
+    }, true);
+    doc.addEventListener("click", (e) => {
+      if (!pickerModeRef.current) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const target = closestElement(e.target as Node);
+      if (!target) return;
+      onElementPickedRef.current?.({
+        selector: getUniqueSelector(target, doc),
+        label: getElementLabel(target),
+      });
+    }, true);
 
     scanForms(doc);
   }, [emitChange, reportSelection, scanForms]);
@@ -363,6 +421,35 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
     lastSyncedRef.current = html;
     setupEditing();
   }, [html, setupEditing]);
+
+  // Picker-mode hover/cursor styling — independent of the html-sync effect
+  // above (which only fires on an actual html change) since toggling picker
+  // mode alone shouldn't force a full doc rewrite. Also re-runs after an html
+  // change, since doc.write() replaces <body> and drops the attribute.
+  useEffect(() => {
+    const doc = iframeRef.current?.contentDocument;
+    if (!doc?.body) return;
+    if (pickerMode) doc.body.setAttribute("data-picker-mode", "true");
+    else doc.body.removeAttribute("data-picker-mode");
+  }, [pickerMode, html]);
+
+  // Keeps the picked-element highlight in sync with selectedSelector. Also
+  // re-validates on every html change (an AI edit, a manual textarea edit, a
+  // new file upload) — if the selector no longer matches anything, clears the
+  // selection, since an element the edit just removed can't stay silently
+  // "selected" in a sticky, multi-turn context.
+  useEffect(() => {
+    const doc = iframeRef.current?.contentDocument;
+    if (!doc?.body) return;
+    doc.querySelectorAll(`.${PICKED_CLASS}`).forEach((el) => el.classList.remove(PICKED_CLASS));
+    if (!selectedSelector) return;
+    const matched = queryIgnoringInjectedSiblings(selectedSelector, doc);
+    if (matched) {
+      matched.classList.add(PICKED_CLASS);
+    } else {
+      onElementPickedRef.current?.(null);
+    }
+  }, [selectedSelector, html]);
 
   return (
     <iframe

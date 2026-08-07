@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Send, Loader2, BrainCircuit, Sparkles } from "lucide-react";
+import { Send, Loader2, BrainCircuit, Sparkles, MousePointerClick, X } from "lucide-react";
 import type { Block } from "@/lib/types/builder";
 
 // An assistant turn can interleave text and tool calls in any order (e.g.
@@ -18,6 +18,7 @@ interface Message {
   content: string; // user messages only
   parts?: AssistantPart[]; // assistant messages only, in arrival order
   isStreaming?: boolean;
+  selectedContextLabel?: string; // user messages only — snapshot of what was selected when sent
 }
 
 /** Three-dot "typing" indicator — shown while the assistant is working and
@@ -48,10 +49,16 @@ export interface AiChatPanelProps {
   // HTML editor
   html?: string;
   onHtmlUpdate?: (html: string) => void;
+  // Selected element/block context — `key` is opaque here (a CSS selector for
+  // the HTML editor, a block id for the block editor); shown as a persistent
+  // chip and sent with every request until cleared.
+  selectedContext?: { label: string; key: string } | null;
+  onClearSelection?: () => void;
 }
 
 export function AiChatPanel({
   editorType, aiEnabled, pageId, pageTitle, blocks, onBlocksUpdate, html, onHtmlUpdate,
+  selectedContext, onClearSelection,
 }: AiChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -69,7 +76,7 @@ export function AiChatPanel({
     if (!text || isStreaming) return;
     setInput("");
 
-    const userMsg: Message = { role: "user", content: text };
+    const userMsg: Message = { role: "user", content: text, selectedContextLabel: selectedContext?.label };
     const assistantMsg: Message = { role: "assistant", content: "", parts: [], isStreaming: true };
 
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
@@ -95,6 +102,8 @@ export function AiChatPanel({
           pageTitle,
           blocks: editorType === "block" ? blocks : undefined,
           html: editorType === "html" ? html : undefined,
+          selectedBlockId: editorType === "block" ? selectedContext?.key : undefined,
+          selectedSelector: editorType === "html" ? selectedContext?.key : undefined,
         }),
       });
 
@@ -206,7 +215,13 @@ export function AiChatPanel({
         {messages.map((msg, i) => {
           if (msg.role === "user") {
             return (
-              <div key={i} className="flex justify-end">
+              <div key={i} className="flex flex-col items-end gap-1">
+                {msg.selectedContextLabel && (
+                  <div className="flex items-center gap-1 text-[10px] text-[var(--muted-foreground)] px-1">
+                    <MousePointerClick size={10} className="text-[var(--primary)] flex-shrink-0" />
+                    <span className="truncate max-w-[220px]">{msg.selectedContextLabel}</span>
+                  </div>
+                )}
                 <div className="max-w-[85%] rounded-xl px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap bg-[var(--primary)] text-[var(--primary-foreground)]">
                   {msg.content}
                 </div>
@@ -256,6 +271,20 @@ export function AiChatPanel({
 
       {/* Input */}
       <div className="flex-shrink-0 border-t border-[var(--border)] p-3">
+        {selectedContext && (
+          <div className="flex items-center gap-1.5 mb-2 pl-2 pr-1 py-1 rounded-lg bg-[var(--primary)]/10 text-[var(--primary)] text-[11px]">
+            <MousePointerClick size={11} className="flex-shrink-0" />
+            <span className="flex-1 truncate font-medium">{selectedContext.label}</span>
+            <button
+              type="button"
+              onClick={onClearSelection}
+              title="Clear selection"
+              className="p-0.5 rounded hover:bg-[var(--primary)]/15 flex-shrink-0"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="flex items-end gap-2">
           <textarea
             ref={inputRef}
