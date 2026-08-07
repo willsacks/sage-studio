@@ -651,25 +651,31 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
                     />
                   </div>
 
-                  <div className="flex rounded-lg border border-[var(--border)] overflow-hidden text-[11px] font-medium">
-                    {([["Small", 200], ["Medium", 400], ["Large", 800]] as const).map(([label, px]) => (
+                  {selectedImage.siblingCount > 1 ? (
+                    <p className="text-[11px] text-[var(--muted-foreground)] leading-snug bg-[var(--muted)]/40 rounded-lg px-2.5 py-2">
+                      Part of a matching set of {selectedImage.siblingCount} images — resizing keeps them all uniform instead of distorting just this one.
+                    </p>
+                  ) : (
+                    <div className="flex rounded-lg border border-[var(--border)] overflow-hidden text-[11px] font-medium">
+                      {([["Small", 200], ["Medium", 400], ["Large", 800]] as const).map(([label, px]) => (
+                        <button
+                          key={label}
+                          type="button"
+                          onClick={() => editorRef.current?.resizeSelectedImage(px)}
+                          className="flex-1 py-1.5 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors border-r border-[var(--border)]"
+                        >
+                          {label}
+                        </button>
+                      ))}
                       <button
-                        key={label}
                         type="button"
-                        onClick={() => editorRef.current?.resizeSelectedImage(px)}
-                        className="flex-1 py-1.5 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors border-r border-[var(--border)]"
+                        onClick={() => editorRef.current?.resizeSelectedImage("full")}
+                        className="flex-1 py-1.5 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
                       >
-                        {label}
+                        Full
                       </button>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => editorRef.current?.resizeSelectedImage("full")}
-                      className="flex-1 py-1.5 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
-                    >
-                      Full
-                    </button>
-                  </div>
+                    </div>
+                  )}
 
                   <label className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs hover:bg-[var(--accent)] transition-colors cursor-pointer">
                     {isUploadingImage ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}

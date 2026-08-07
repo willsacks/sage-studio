@@ -18,6 +18,11 @@ export interface ImageSelectionInfo {
   selector: string;
   src: string;
   widthPx: number;
+  // > 1 when this image is rendered at the exact same size as one or more
+  // other images by the page's own CSS (an icon row, a photo grid, etc.) —
+  // see findSizeSiblings. Lets the sidebar warn that resizing will move the
+  // whole set together rather than distorting just this one instance.
+  siblingCount: number;
 }
 
 export interface HtmlVisualEditorHandle {
@@ -119,19 +124,73 @@ function positionImageHandles(img: HTMLImageElement, handles: Partial<Record<Ima
 
 const IMAGE_MIN_WIDTH = 40;
 
+// Detects whether an image is one of a repeated/grid set (an icon row, a
+// team-photo grid, a partner-logo strip...) rather than a standalone content
+// image. Purely empirical — images the page's own CSS currently renders at
+// the exact same size, with no inline override on any of them yet, are
+// treated as one family — regardless of which selector or combination of
+// rules is actually responsible. This sidesteps needing to parse or match
+// the page's stylesheets at all, and is what lets resizing keep a design
+// like a fixed-aspect-ratio circular-crop grid uniform instead of distorting
+// just the one clicked image relative to its siblings.
+function findSizeSiblings(img: HTMLImageElement, doc: Document): HTMLImageElement[] {
+  if (img.style.width || img.style.height) return [];
+  const rect = img.getBoundingClientRect();
+  const w = Math.round(rect.width);
+  const h = Math.round(rect.height);
+  if (w < 1 || h < 1) return [];
+  const all = Array.from(doc.querySelectorAll("img")) as HTMLImageElement[];
+  const group = all.filter((other) => {
+    if (other !== img && (other.style.width || other.style.height)) return false;
+    const r = other.getBoundingClientRect();
+    return Math.round(r.width) === w && Math.round(r.height) === h;
+  });
+  return group.length > 1 ? group : [];
+}
+
+// Resizes a whole sibling group together by setting inline width/height
+// directly on each element's live DOM reference — deliberately NOT a shared
+// stylesheet rule matched by a generated selector. This editor injects a
+// drag-reorder handle as the first child of every top-level body section
+// (see setupEditing below), which shifts nth-child positions in the live,
+// currently-being-edited DOM relative to the clean structure a selector gets
+// generated against — harmless for the existing single-element selectors
+// here (always re-queried through the same handle-stripped helper that
+// generated them), but a real correctness bug for a selector meant to be
+// matched as a literal CSS rule against the live DOM continuously while
+// editing. Direct reference mutation sidesteps selector matching entirely,
+// so it's correct regardless of handle position — the same reason the solo
+// (non-grouped) resize path below never needed a selector either.
+function applyGroupResize(elements: HTMLImageElement[], widthPx: number, heightPx: number) {
+  elements.forEach((el) => {
+    el.style.width = `${widthPx}px`;
+    el.style.height = `${heightPx}px`;
+    el.style.maxWidth = "100%";
+    el.removeAttribute("width");
+    el.removeAttribute("height");
+  });
+}
+
 // Only corner handles (no edge handles) — resizing always scales
-// proportionally (width in px, height:auto) rather than allowing distortion,
-// which is what you almost always want for a photo. Horizontal mouse
-// movement alone drives the resize; a left-side handle growing means
-// dragging left, a right-side handle growing means dragging right — both
-// read as "drag outward from the image to grow it," regardless of which
-// corner you happen to grab.
+// proportionally rather than allowing distortion, which is what you almost
+// always want for a photo. Horizontal mouse movement alone drives the
+// resize; a left-side handle growing means dragging left, a right-side
+// handle growing means dragging right — both read as "drag outward from the
+// image to grow it," regardless of which corner you happen to grab.
+//
+// When the image is part of a detected sibling group (see
+// findSizeSiblings), the drag resizes the whole group together, scaling
+// height by the same ratio as width so a fixed crop box (e.g.
+// object-fit:cover circles) keeps its shape — rather than the solo path's
+// width:Npx;height:auto, which would stretch/crop it differently from its
+// siblings.
 function startImageDrag(
   corner: ImageCorner,
   startEvent: MouseEvent,
   img: HTMLImageElement,
   doc: Document,
   handles: Partial<Record<ImageCorner, HTMLElement>>,
+  siblings: HTMLImageElement[],
   onCommit: () => void,
 ) {
   startEvent.preventDefault();
@@ -139,23 +198,33 @@ function startImageDrag(
   const win = doc.defaultView;
   if (!win) return;
   const startX = startEvent.clientX;
-  const startWidth = img.getBoundingClientRect().width;
+  const startRect = img.getBoundingClientRect();
+  const startWidth = startRect.width;
+  const startHeight = startRect.height;
   const growsRight = corner === "tr" || corner === "br";
+  const isGrouped = siblings.length > 1;
 
   function onMouseMove(e: MouseEvent) {
     const dx = e.clientX - startX;
     const delta = growsRight ? dx : -dx;
     const newWidth = Math.max(IMAGE_MIN_WIDTH, Math.round(startWidth + delta));
-    img.style.width = `${newWidth}px`;
-    img.style.maxWidth = "100%";
-    img.style.height = "auto";
+    if (isGrouped) {
+      const newHeight = Math.max(IMAGE_MIN_WIDTH, Math.round(startHeight * (newWidth / startWidth)));
+      applyGroupResize(siblings, newWidth, newHeight);
+    } else {
+      img.style.width = `${newWidth}px`;
+      img.style.maxWidth = "100%";
+      img.style.height = "auto";
+    }
     positionImageHandles(img, handles, doc);
   }
   function onMouseUp() {
     win!.removeEventListener("mousemove", onMouseMove);
     win!.removeEventListener("mouseup", onMouseUp);
-    img.removeAttribute("width");
-    img.removeAttribute("height");
+    if (!isGrouped) {
+      img.removeAttribute("width");
+      img.removeAttribute("height");
+    }
     onCommit();
   }
   win.addEventListener("mousemove", onMouseMove);
@@ -166,12 +235,13 @@ function showImageHandles(img: HTMLImageElement, doc: Document, onCommit: () => 
   img.classList.add(IMG_SELECTED_CLASS);
   const cursors: Record<ImageCorner, string> = { tl: "nwse-resize", br: "nwse-resize", tr: "nesw-resize", bl: "nesw-resize" };
   const handles: Partial<Record<ImageCorner, HTMLElement>> = {};
+  const siblings = findSizeSiblings(img, doc);
   (["tl", "tr", "bl", "br"] as ImageCorner[]).forEach((corner) => {
     const handle = doc.createElement("div");
     handle.className = IMG_HANDLE_CLASS;
     handle.setAttribute("contenteditable", "false");
     handle.style.cursor = cursors[corner];
-    handle.addEventListener("mousedown", (e) => startImageDrag(corner, e, img, doc, handles, onCommit));
+    handle.addEventListener("mousedown", (e) => startImageDrag(corner, e, img, doc, handles, siblings, onCommit));
     doc.body.appendChild(handle);
     handles[corner] = handle;
   });
@@ -440,6 +510,7 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
           selector: getUniqueSelector(img, doc),
           src: img.getAttribute("src") ?? "",
           widthPx: Math.round(img.getBoundingClientRect().width),
+          siblingCount: findSizeSiblings(img, doc).length,
         });
       } else {
         onImageSelectedRef.current?.(null);
@@ -575,6 +646,15 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
       const el = queryIgnoringInjectedSiblings(selectedImageSelector, doc);
       if (!el || el.tagName !== "IMG") return;
       const img = el as HTMLImageElement;
+      const siblings = findSizeSiblings(img, doc);
+      if (siblings.length > 1 && width !== "full") {
+        const rect = img.getBoundingClientRect();
+        const newWidth = Math.max(IMAGE_MIN_WIDTH, Math.round(width));
+        const newHeight = Math.max(IMAGE_MIN_WIDTH, Math.round(rect.height * (newWidth / rect.width)));
+        applyGroupResize(siblings, newWidth, newHeight);
+        emitChange();
+        return;
+      }
       img.style.maxWidth = "100%";
       img.style.height = "auto";
       img.style.width = width === "full" ? "100%" : `${Math.max(IMAGE_MIN_WIDTH, Math.round(width))}px`;
@@ -656,6 +736,7 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
           selector: selectedImageSelector,
           src: img.getAttribute("src") ?? "",
           widthPx: Math.round(img.getBoundingClientRect().width),
+          siblingCount: findSizeSiblings(img, doc).length,
         });
       };
       showImageHandles(img, doc, () => { emitChange(); report(); });
