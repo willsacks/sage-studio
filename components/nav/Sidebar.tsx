@@ -11,7 +11,7 @@ interface SidebarProps {
   isAdmin?: boolean;
 }
 
-const NAV = [
+export const NAV = [
   { href: "/my-site", label: "Sites", icon: Globe },
   { href: "/todos", label: "To Do's", icon: CheckSquare },
   { href: "/tasks", label: "Time Tracker", icon: Timer },
@@ -20,17 +20,28 @@ const NAV = [
   { href: "/knowledge", label: "Knowledge", icon: BookOpen },
 ];
 
-const SETTINGS_NAV = [
+export const SETTINGS_NAV = [
   { href: "/billing", label: "Billing", icon: CreditCard },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-function NavItem({ href, label, icon: Icon }: { href: string; label: string; icon: React.ElementType }) {
+export function NavItem({
+  href,
+  label,
+  icon: Icon,
+  onNavigate,
+}: {
+  href: string;
+  label: string;
+  icon: React.ElementType;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
   const active = pathname === href || pathname.startsWith(`${href}/`);
   return (
     <Link
       href={href}
+      onClick={onNavigate}
       className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors ${
         active
           ? "bg-[var(--sidebar-accent)] text-[var(--sidebar-primary)] font-medium"
@@ -40,6 +51,36 @@ function NavItem({ href, label, icon: Icon }: { href: string; label: string; ico
       <Icon size={16} className="flex-shrink-0" />
       {label}
     </Link>
+  );
+}
+
+export function NavLinks({ isAdmin, onNavigate }: { isAdmin?: boolean; onNavigate?: () => void }) {
+  return (
+    <>
+      {NAV.map((item) => (
+        <NavItem key={item.href} {...item} onNavigate={onNavigate} />
+      ))}
+
+      <div className="pt-4 pb-1">
+        <p className="px-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+          Account
+        </p>
+      </div>
+      {SETTINGS_NAV.map((item) => (
+        <NavItem key={item.href} {...item} onNavigate={onNavigate} />
+      ))}
+
+      {isAdmin && (
+        <>
+          <div className="pt-4 pb-1">
+            <p className="px-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+              Admin
+            </p>
+          </div>
+          <NavItem href="/admin" label="Platform Admin" icon={LayoutDashboard} onNavigate={onNavigate} />
+        </>
+      )}
+    </>
   );
 }
 
@@ -58,30 +99,7 @@ export function Sidebar({ displayName, plan, isAdmin }: SidebarProps) {
 
       {/* Main nav */}
       <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-        {NAV.map((item) => (
-          <NavItem key={item.href} {...item} />
-        ))}
-
-        <div className="pt-4 pb-1">
-          <p className="px-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-            Account
-          </p>
-        </div>
-        {SETTINGS_NAV.map((item) => (
-          <NavItem key={item.href} {...item} />
-        ))}
-
-        {isAdmin && (
-          <>
-            <div className="pt-4 pb-1">
-              <p className="px-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-                Admin
-              </p>
-            </div>
-            <NavItem href="/admin" label="Platform Admin" icon={LayoutDashboard} />
-          </>
-        )}
-
+        <NavLinks isAdmin={isAdmin} />
       </nav>
 
       {/* User footer */}
