@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Upload, Code2, Eye, MousePointerClick, ExternalLink, Wand2, Save, Loader2, Check, Globe, Settings, Link2, Unlink, ClipboardList, AlertCircle, Sparkles, Palette, X, Crosshair, Image as ImageIcon, Undo2, Redo2, Trash2, MousePointerSquareDashed } from "lucide-react";
+import { ArrowLeft, Upload, Code2, Eye, MousePointerClick, ExternalLink, Wand2, Save, Loader2, Check, Globe, Settings, Link2, Unlink, ClipboardList, AlertCircle, Sparkles, Palette, X, Crosshair, Image as ImageIcon, Undo2, Redo2, Trash2, MousePointerSquareDashed, Type } from "lucide-react";
 import Link from "next/link";
 import { applyCustomStyle } from "@/lib/actions/html-pages";
 import { togglePagePublished, saveSitePage } from "@/lib/actions/sites";
@@ -14,6 +14,8 @@ import { AiChatPanel } from "@/components/site/AiChatPanel";
 import type { Tables } from "@/lib/db";
 import type { StyleTokens } from "@/lib/styles/types";
 import { THEMES_BY_KEY, DEFAULT_STYLE_KEY } from "@/lib/styles";
+import { buildGoogleFontsUrl } from "@/lib/styles/utils";
+import { FONT_OPTIONS, FONT_CATEGORIES, findFontOption } from "@/lib/utils/font-options";
 
 type Page = Tables<"site_pages"> & { html_content?: string | null };
 
@@ -68,6 +70,21 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
     setLinkUrl(selection?.href ?? "");
   }, [selection]);
 
+  // Loads the full curated font list once in the *parent* document (not the
+  // iframe) so the Font picker's own <option> elements can render each name
+  // in its real typeface for a visual preview — separate from
+  // ensureGoogleFontLoaded in HtmlVisualEditor.tsx, which only loads a font
+  // into the edited page itself once it's actually applied.
+  useEffect(() => {
+    const id = "sage-font-picker-preview-fonts";
+    if (document.getElementById(id)) return;
+    const link = document.createElement("link");
+    link.id = id;
+    link.rel = "stylesheet";
+    link.href = buildGoogleFontsUrl(FONT_OPTIONS.map((f) => f.family));
+    document.head.appendChild(link);
+  }, []);
+
   // Resizing (drag, a preset button, or this very field) only ever commits
   // on blur/Enter, never per-keystroke, so there's no live typing state this
   // could clobber — safe to resync on every width change, which is what
@@ -94,6 +111,15 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
 
   function handleClearColor() {
     editorRef.current?.clearColor();
+  }
+
+  function handleApplyFont(family: string) {
+    if (!family) {
+      editorRef.current?.clearFont();
+      return;
+    }
+    const option = findFontOption(family);
+    editorRef.current?.applyFont(family, option?.fallback ?? "sans-serif");
   }
 
   function handleToggleForm(formId: string, connected: boolean) {
@@ -632,6 +658,45 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
               ) : (
                 <p className="text-[11px] text-[var(--muted-foreground)] leading-snug">
                   Select some text, then pick a color to apply it.
+                </p>
+              )}
+            </div>
+          )}
+
+          {view === "edit" && (
+            <div className="p-4 border-b border-[var(--border)] space-y-3">
+              <div className="flex items-center gap-1.5">
+                <Type size={12} className="text-[var(--muted-foreground)]" />
+                <p className="text-xs font-semibold text-[var(--foreground)]">Font</p>
+              </div>
+
+              {selection ? (
+                <div className="space-y-1.5">
+                  <select
+                    value={findFontOption(selection.currentFont)?.family ?? ""}
+                    onChange={(e) => handleApplyFont(e.target.value)}
+                    className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/30"
+                  >
+                    <option value="">Default</option>
+                    {FONT_CATEGORIES.map((category) => (
+                      <optgroup key={category} label={category}>
+                        {FONT_OPTIONS.filter((f) => f.category === category).map((f) => (
+                          <option key={f.family} value={f.family} style={{ fontFamily: `'${f.family}', ${f.fallback}` }}>
+                            {f.family}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                  {selection.currentFont && !findFontOption(selection.currentFont) && (
+                    <p className="text-[11px] text-[var(--muted-foreground)] truncate">
+                      Currently: <span style={{ fontFamily: `'${selection.currentFont}'` }}>{selection.currentFont}</span> (not in this list)
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-[11px] text-[var(--muted-foreground)] leading-snug">
+                  Click into any text to change its font.
                 </p>
               )}
             </div>

@@ -2,10 +2,16 @@
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
 import { getUniqueSelector, getElementLabel, queryIgnoringInjectedSiblings } from "@/lib/utils/dom-selector";
+import { buildGoogleFontsUrl } from "@/lib/styles/utils";
+import { firstFontName } from "@/lib/utils/font-options";
 
 export interface SelectionInfo {
   hasSelection: boolean;
   href: string | null;
+  // Best-effort read of the focused text element's current font (first name
+  // in its computed font-family stack) — lets the sidebar's Font picker show
+  // what's actually applied right now instead of always starting blank.
+  currentFont: string | null;
 }
 
 export interface FormInfo {
@@ -35,6 +41,8 @@ export interface HtmlVisualEditorHandle {
   removeLink: () => void;
   applyColor: (color: string) => void;
   clearColor: () => void;
+  applyFont: (family: string, fallback: string) => void;
+  clearFont: () => void;
   toggleForm: (formId: string, connected: boolean) => void;
   resizeSelectedImage: (width: number | "full") => void;
   replaceSelectedImageSrc: (url: string) => void;
@@ -108,6 +116,46 @@ function normalizeUrl(url: string): string {
   const trimmed = url.trim();
   if (/^(https?:|mailto:|tel:|\/|#)/i.test(trimmed)) return trimmed;
   return `https://${trimmed}`;
+}
+
+const GOOGLE_FONTS_LINK_SELECTOR = 'link[href*="fonts.googleapis.com/css2"]';
+
+// Reads which font families a page's *existing* Google Fonts <link> already
+// declares, so applying a new font can extend that one link's family list
+// instead of adding a redundant second <link> every time.
+function collectLoadedGoogleFonts(doc: Document): string[] {
+  const link = doc.head?.querySelector(GOOGLE_FONTS_LINK_SELECTOR) as HTMLLinkElement | null;
+  if (!link) return [];
+  try {
+    const url = new URL(link.href);
+    return url.searchParams
+      .getAll("family")
+      .map((f) => decodeURIComponent(f.split(":")[0]).replace(/\+/g, " "))
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+// Ensures a Google Font is actually loadable in the iframe before it's
+// applied — picking a font from the sidebar should always render correctly,
+// not just set a font-family the browser silently falls back away from.
+// Extends the page's existing combined Google Fonts <link> (the convention
+// every page built by this editor already uses) rather than adding a new
+// one, so a page never accumulates multiple redundant font <link> tags.
+function ensureGoogleFontLoaded(doc: Document, family: string) {
+  const loaded = collectLoadedGoogleFonts(doc);
+  if (loaded.some((f) => f.toLowerCase() === family.toLowerCase())) return;
+  const href = buildGoogleFontsUrl([...loaded, family]);
+  const existing = doc.head?.querySelector(GOOGLE_FONTS_LINK_SELECTOR) as HTMLLinkElement | null;
+  if (existing) {
+    existing.setAttribute("href", href);
+    return;
+  }
+  const link = doc.createElement("link");
+  link.rel = "stylesheet";
+  link.href = href;
+  doc.head?.appendChild(link);
 }
 
 // Image selection handles — positioned as document-flow-relative (not
@@ -356,6 +404,7 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
     onSelectionInfo({
       hasSelection: !range.collapsed || !!linkEl,
       href: linkEl?.getAttribute("href") ?? null,
+      currentFont: firstFontName(doc.defaultView?.getComputedStyle(editableEl).fontFamily),
     });
   }, [onSelectionInfo]);
 
@@ -706,6 +755,52 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
       } else {
         return; // same guard as applyColor/applyLink — nothing safe to clear.
       }
+      emitChange();
+      reportSelection(doc);
+    },
+    // Font applies to the whole focused text element (the closest
+    // contenteditable host), not a highlighted run within it — unlike color/
+    // link, mixing two fonts inside one heading or paragraph is never really
+    // what "change the font" means, and going straight to the DOM here
+    // (rather than execCommand on a range) sidesteps the exact class of
+    // empty-phantom-element bug execCommand produced for createLink/
+    // foreColor on a collapsed selection.
+    applyFont(family: string, fallback: string) {
+      const doc = iframeRef.current?.contentDocument;
+      const win = iframeRef.current?.contentWindow;
+      if (!doc || !win) return;
+
+      win.focus();
+      const sel = doc.getSelection();
+      const range = lastRangeRef.current;
+      if (sel && range) {
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+
+      const el = closestElement(sel?.anchorNode ?? null)?.closest('[contenteditable="true"]') as HTMLElement | null;
+      if (!el) return;
+      ensureGoogleFontLoaded(doc, family);
+      el.style.fontFamily = `'${family}', ${fallback}`;
+      emitChange();
+      reportSelection(doc);
+    },
+    clearFont() {
+      const doc = iframeRef.current?.contentDocument;
+      const win = iframeRef.current?.contentWindow;
+      if (!doc || !win) return;
+
+      win.focus();
+      const sel = doc.getSelection();
+      const range = lastRangeRef.current;
+      if (sel && range) {
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+
+      const el = closestElement(sel?.anchorNode ?? null)?.closest('[contenteditable="true"]') as HTMLElement | null;
+      if (!el) return;
+      el.style.removeProperty("font-family");
       emitChange();
       reportSelection(doc);
     },
