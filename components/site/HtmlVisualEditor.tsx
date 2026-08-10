@@ -522,6 +522,18 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
         });
         return;
       }
+      // Links are never "live" while editing — a real <a href> (a nav item,
+      // a "Visit" button, anything with real text) would otherwise navigate
+      // the iframe itself on click (sandboxed iframes still permit same-
+      // frame navigation even without allow-scripts), landing on a 404 for
+      // any relative/site-specific href and hijacking the click that was
+      // meant to place a cursor or select the element instead. This runs
+      // before any other click logic below so it applies regardless of
+      // whether the link ends up being the contenteditable host itself, a
+      // descendant of one, or neither.
+      const linkAncestor = closestElement(e.target as Node)?.closest("a[href]");
+      if (linkAncestor) e.preventDefault();
+
       // Image select/resize/replace, and generic element select/delete —
       // clicking any <img> selects it for resize/replace (unchanged);
       // clicking any other non-text, non-structural element inside a section
