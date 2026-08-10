@@ -35,6 +35,11 @@ export function HtmlPageEditor({ page, siteId, siteSlug, customDomain = null, ai
   const [isPublishing, startPublish] = useTransition();
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveConflict, setSaveConflict] = useState(false);
+  // The updated_at this editor session last knew to be current — sent back
+  // on save so the server can reject a write if the row moved since (e.g.
+  // another tab, or a script) — see update-html/route.ts.
+  const [loadedUpdatedAt, setLoadedUpdatedAt] = useState(page.updated_at);
   const [view, setView] = useState<"edit" | "preview" | "html">("edit");
   const [pageTitle, setPageTitle] = useState(page.title);
   const [pageSlug, setPageSlug] = useState(page.slug);
@@ -304,18 +309,21 @@ export function HtmlPageEditor({ page, siteId, siteSlug, customDomain = null, ai
 
   function handleSave() {
     setSaveError(null);
+    setSaveConflict(false);
     startSave(async () => {
       try {
         const res = await fetch("/api/site-pages/update-html", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pageId: page.id, htmlContent: html }),
+          body: JSON.stringify({ pageId: page.id, htmlContent: html, expectedUpdatedAt: loadedUpdatedAt }),
         });
-        const result = await res.json() as { ok?: boolean; error?: string };
+        const result = await res.json() as { ok?: boolean; error?: string; conflict?: boolean; updatedAt?: string };
         if (!res.ok || result.error) {
           setSaveError(result.error ?? "Save failed.");
+          setSaveConflict(Boolean(result.conflict));
           return;
         }
+        if (result.updatedAt) setLoadedUpdatedAt(result.updatedAt);
         setIsDirty(false);
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
@@ -464,6 +472,15 @@ export function HtmlPageEditor({ page, siteId, siteSlug, customDomain = null, ai
       {saveError && (
         <div className="flex items-center gap-1.5 px-4 py-2 text-xs text-red-600 bg-red-500/10 border-b border-red-500/30 flex-shrink-0">
           <AlertCircle size={13} className="flex-shrink-0" /> {saveError}
+          {saveConflict && (
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="ml-2 underline hover:opacity-80 flex-shrink-0"
+            >
+              Reload latest version
+            </button>
+          )}
         </div>
       )}
 
