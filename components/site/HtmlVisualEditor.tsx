@@ -546,6 +546,23 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
       }
     });
 
+    // Every contentEditable host here is a single text leaf (p, h1-h6, span,
+    // li...), never a container meant to hold multiple block children. But a
+    // bare Enter key's default browser behavior tries to split the block —
+    // and since e.g. a <p> can't legally nest another <p>, the browser
+    // instead inserts sibling <div>s around the new line. Those <div>s are
+    // invalid inside <p>, so re-parsing the saved HTML auto-closes the
+    // paragraph early and strips the second half of the text out of its
+    // styled wrapper (wrong font size, stray gap). Force Enter to insert a
+    // <br> line break instead, keeping all the text inside one styled host.
+    doc.body.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" || e.shiftKey) return;
+      const editableEl = closestElement(doc.getSelection()?.anchorNode ?? null)?.closest('[contenteditable="true"]');
+      if (!editableEl) return;
+      e.preventDefault();
+      doc.execCommand("insertLineBreak");
+    });
+
     let debounceTimer: ReturnType<typeof setTimeout>;
     doc.body.addEventListener("input", () => {
       clearTimeout(debounceTimer);
