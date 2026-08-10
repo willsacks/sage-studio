@@ -2,12 +2,12 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Upload, Code2, Eye, MousePointerClick, ExternalLink, Wand2, Save, Loader2, Check, Globe, Settings, Link2, Unlink, ClipboardList, AlertCircle, Sparkles, Palette, X, Crosshair, Image as ImageIcon, Undo2, Redo2 } from "lucide-react";
+import { ArrowLeft, Upload, Code2, Eye, MousePointerClick, ExternalLink, Wand2, Save, Loader2, Check, Globe, Settings, Link2, Unlink, ClipboardList, AlertCircle, Sparkles, Palette, X, Crosshair, Image as ImageIcon, Undo2, Redo2, Trash2, MousePointerSquareDashed } from "lucide-react";
 import Link from "next/link";
 import { applyCustomStyle } from "@/lib/actions/html-pages";
 import { togglePagePublished, saveSitePage } from "@/lib/actions/sites";
 import { extractStyleFromHtml } from "@/lib/utils/extract-html-style";
-import { HtmlVisualEditor, type HtmlVisualEditorHandle, type SelectionInfo, type FormInfo, type ImageSelectionInfo } from "@/components/site/HtmlVisualEditor";
+import { HtmlVisualEditor, type HtmlVisualEditorHandle, type SelectionInfo, type FormInfo, type ImageSelectionInfo, type ElementSelectionInfo } from "@/components/site/HtmlVisualEditor";
 import { injectFormCaptureScript } from "@/lib/utils/form-capture-script";
 import { uploadImage } from "@/lib/utils/upload-image";
 import { AiChatPanel } from "@/components/site/AiChatPanel";
@@ -50,6 +50,10 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
   const [pickerMode, setPickerMode] = useState(false);
   const [selectedElement, setSelectedElement] = useState<{ selector: string; label: string } | null>(null);
   const [selectedImage, setSelectedImage] = useState<ImageSelectionInfo | null>(null);
+  // Named selectedForDeletion (not selectedElement, which is already the
+  // AI-picker's target state above) — an unrelated "click an element on the
+  // canvas" mechanism that drives the Delete button instead of the AI panel.
+  const [selectedForDeletion, setSelectedForDeletion] = useState<ElementSelectionInfo | null>(null);
   const [imageWidthInput, setImageWidthInput] = useState("");
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
@@ -74,7 +78,7 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
   }, [selectedImage?.selector, selectedImage?.widthPx]);
 
   function handleApplyLink() {
-    if (!linkUrl.trim()) return;
+    if (!linkUrl.trim() || !selection?.hasSelection) return;
     editorRef.current?.applyLink(linkUrl.trim());
   }
 
@@ -116,6 +120,13 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
     const px = parseInt(imageWidthInput, 10);
     if (!Number.isFinite(px) || px <= 0) return;
     editorRef.current?.resizeSelectedImage(px);
+  }
+
+  function handleDeleteSelectedElement() {
+    if (!selectedForDeletion) return;
+    if (!confirm(`Delete ${selectedForDeletion.label}? You can still Undo afterward.`)) return;
+    editorRef.current?.deleteSelectedElement();
+    setSelectedForDeletion(null);
   }
 
   async function handleReplaceImageFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -170,6 +181,7 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
     setSaved(false);
     setSelection(null);
     setSelectedImage(null);
+    setSelectedForDeletion(null);
     lastHistoryPushRef.current = 0; // next edit always starts a fresh step, never coalesces into the undone one
   }
 
@@ -183,6 +195,7 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
     setSaved(false);
     setSelection(null);
     setSelectedImage(null);
+    setSelectedForDeletion(null);
     lastHistoryPushRef.current = 0;
   }
 
@@ -416,7 +429,7 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
                 <MousePointerClick size={12} /> Edit
               </button>
               <button
-                onClick={() => { setView("preview"); setSelection(null); setSelectedImage(null); }}
+                onClick={() => { setView("preview"); setSelection(null); setSelectedImage(null); setSelectedForDeletion(null); }}
                 className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs transition-colors ${
                   view === "preview"
                     ? "bg-[var(--background)] text-[var(--foreground)] shadow-sm font-medium"
@@ -426,7 +439,7 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
                 <Eye size={12} /> Preview
               </button>
               <button
-                onClick={() => { setView("html"); setSelection(null); setSelectedImage(null); }}
+                onClick={() => { setView("html"); setSelection(null); setSelectedImage(null); setSelectedForDeletion(null); }}
                 className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs transition-colors ${
                   view === "html"
                     ? "bg-[var(--background)] text-[var(--foreground)] shadow-sm font-medium"
@@ -470,6 +483,8 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
               onElementPicked={handleElementPicked}
               selectedImageSelector={selectedImage?.selector ?? null}
               onImageSelected={setSelectedImage}
+              selectedElementSelector={selectedForDeletion?.selector ?? null}
+              onElementSelected={setSelectedForDeletion}
             />
           ) : view === "preview" ? (
             <iframe
@@ -553,7 +568,7 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
                 <p className="text-xs font-semibold text-[var(--foreground)]">Link</p>
               </div>
 
-              {selection ? (
+              {selection && selection.hasSelection ? (
                 <div className="space-y-2">
                   <input
                     type="text"
@@ -597,7 +612,7 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
                 <p className="text-xs font-semibold text-[var(--foreground)]">Text Color</p>
               </div>
 
-              {selection ? (
+              {selection && selection.hasSelection ? (
                 <div className="flex items-center gap-2">
                   <input
                     type="color"
@@ -694,6 +709,33 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
               ) : (
                 <p className="text-[11px] text-[var(--muted-foreground)] leading-snug">
                   Click an image in the page to resize or replace it.
+                </p>
+              )}
+            </div>
+          )}
+
+          {view === "edit" && (
+            <div className="p-4 border-b border-[var(--border)] space-y-3">
+              <div className="flex items-center gap-1.5">
+                <MousePointerSquareDashed size={12} className="text-[var(--muted-foreground)]" />
+                <p className="text-xs font-semibold text-[var(--foreground)]">Selected Element</p>
+              </div>
+
+              {selectedForDeletion ? (
+                <div className="space-y-2">
+                  <p className="text-[11px] font-mono text-[var(--muted-foreground)] leading-snug break-all bg-[var(--muted)]/40 rounded-lg px-2.5 py-2">
+                    {selectedForDeletion.label}
+                  </p>
+                  <button
+                    onClick={handleDeleteSelectedElement}
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-500/40 text-red-500 text-xs hover:bg-red-500/10 transition-colors"
+                  >
+                    <Trash2 size={12} /> Delete
+                  </button>
+                </div>
+              ) : (
+                <p className="text-[11px] text-[var(--muted-foreground)] leading-snug">
+                  Click a stray or empty element (not text, not an image) to select and delete it.
                 </p>
               )}
             </div>

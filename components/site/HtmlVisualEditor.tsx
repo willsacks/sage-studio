@@ -25,6 +25,11 @@ export interface ImageSelectionInfo {
   siblingCount: number;
 }
 
+export interface ElementSelectionInfo {
+  selector: string;
+  label: string;
+}
+
 export interface HtmlVisualEditorHandle {
   applyLink: (url: string) => void;
   removeLink: () => void;
@@ -33,6 +38,7 @@ export interface HtmlVisualEditorHandle {
   toggleForm: (formId: string, connected: boolean) => void;
   resizeSelectedImage: (width: number | "full") => void;
   replaceSelectedImageSrc: (url: string) => void;
+  deleteSelectedElement: () => void;
 }
 
 interface HtmlVisualEditorProps {
@@ -47,6 +53,13 @@ interface HtmlVisualEditorProps {
   // Image selection/resize/replace — see the "Image editing" section below.
   selectedImageSelector?: string | null;
   onImageSelected?: (info: ImageSelectionInfo | null) => void;
+  // Generic "select any non-text, non-image element to delete it" — see the
+  // "Generic element selection" section below. Distinct from selectedSelector/
+  // onElementPicked above (the AI-context picker) even though both are
+  // "pick an element" mechanisms — this one drives the Delete button, that one
+  // drives what gets sent to the AI assistant.
+  selectedElementSelector?: string | null;
+  onElementSelected?: (info: ElementSelectionInfo | null) => void;
 }
 
 const EDIT_STYLE_ID = "__sage_edit_styles__";
@@ -61,6 +74,7 @@ const PICKED_CLASS = "__sage_ai_picked__";
 const IMG_SELECTED_CLASS = "__sage_img_selected__";
 const IMG_HANDLE_CLASS = "__sage_img_handle__";
 const IMG_HANDLE_SIZE = 10;
+const ELEMENT_SELECTED_CLASS = "__sage_el_selected__";
 type ImageCorner = "tl" | "tr" | "bl" | "br";
 
 // Candidate elements whose text content can be edited in place. Whichever of
@@ -262,7 +276,7 @@ function clearImageHandles(doc: Document) {
  * handle (applyLink/removeLink), driven by a control outside the iframe.
  */
 export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEditorProps>(
-  function HtmlVisualEditor({ html, onChange, onSelectionInfo, onFormsDetected, pickerMode = false, selectedSelector = null, onElementPicked, selectedImageSelector = null, onImageSelected }, ref) {
+  function HtmlVisualEditor({ html, onChange, onSelectionInfo, onFormsDetected, pickerMode = false, selectedSelector = null, onElementPicked, selectedImageSelector = null, onImageSelected, selectedElementSelector = null, onElementSelected }, ref) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const lastSyncedRef = useRef<string | null>(null);
   const dragSrcRef = useRef<HTMLElement | null>(null);
@@ -270,9 +284,11 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
   const pickerModeRef = useRef(pickerMode);
   const onElementPickedRef = useRef(onElementPicked);
   const onImageSelectedRef = useRef(onImageSelected);
+  const onElementSelectedRef = useRef(onElementSelected);
   useEffect(() => { pickerModeRef.current = pickerMode; }, [pickerMode]);
   useEffect(() => { onElementPickedRef.current = onElementPicked; }, [onElementPicked]);
   useEffect(() => { onImageSelectedRef.current = onImageSelected; }, [onImageSelected]);
+  useEffect(() => { onElementSelectedRef.current = onElementSelected; }, [onElementSelected]);
 
   const serialize = useCallback((): string | null => {
     const doc = iframeRef.current?.contentDocument;
@@ -291,6 +307,7 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
     clone.removeAttribute("data-picker-mode");
     clone.querySelectorAll(`.${IMG_SELECTED_CLASS}`).forEach((el) => el.classList.remove(IMG_SELECTED_CLASS));
     clone.querySelectorAll(`.${IMG_HANDLE_CLASS}`).forEach((el) => el.remove());
+    clone.querySelectorAll(`.${ELEMENT_SELECTED_CLASS}`).forEach((el) => el.classList.remove(ELEMENT_SELECTED_CLASS));
     return "<!DOCTYPE html>\n" + clone.outerHTML;
   }, []);
 
@@ -402,6 +419,12 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
         background: #2563eb; border: 2px solid #fff; border-radius: 50%;
         box-shadow: 0 1px 3px rgba(0,0,0,0.3);
       }
+      /* Generic element select/delete — orange, distinct from the indigo
+         text-edit, green AI-picker, and blue image-select outlines above,
+         and deliberately NOT red (red is reserved for the actual destructive
+         Delete button in the sidebar, so the outline itself doesn't read as
+         "about to be deleted" before the user has clicked anything). */
+      .${ELEMENT_SELECTED_CLASS} { outline: 2px solid #f97316; outline-offset: 2px; }
     `;
 
     const sections = Array.from(doc.body.children).filter(
@@ -499,10 +522,18 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
         });
         return;
       }
-      // Image select/resize/replace — clicking any <img> selects it (reported
-      // up so the parent tracks it the same sticky way as the AI picker's
-      // selection); clicking anything else deselects whatever was selected.
-      const target = closestElement(e.target as Node);
+      // Image select/resize/replace, and generic element select/delete —
+      // clicking any <img> selects it for resize/replace (unchanged);
+      // clicking any other non-text, non-structural element inside a section
+      // selects it for deletion (see "Generic element selection" below);
+      // clicking real editable text, a section's own drag handle, or a bare
+      // section background clears both.
+      let target = closestElement(e.target as Node);
+      // An empty <br>-only node (exactly the shape of the phantom-anchor
+      // bug: an empty <a href="..."><br></a>) is never itself the
+      // meaningful thing to select — its wrapper is.
+      if (target?.tagName === "BR") target = target.parentElement;
+
       if (target?.tagName === "IMG") {
         e.preventDefault();
         const img = target as HTMLImageElement;
@@ -512,8 +543,28 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
           widthPx: Math.round(img.getBoundingClientRect().width),
           siblingCount: findSizeSiblings(img, doc).length,
         });
+        onElementSelectedRef.current?.(null);
+        return;
+      }
+      onImageSelectedRef.current?.(null);
+
+      const sectionAncestor = target?.closest(`[${SECTION_ATTR}]`) ?? null;
+      const isSelectableForDeletion =
+        !!target &&
+        target !== doc.body &&
+        !target.closest(`[${HANDLE_ATTR}]`) &&
+        !target.closest('[contenteditable="true"]') &&
+        !!sectionAncestor &&
+        target !== sectionAncestor;
+
+      if (isSelectableForDeletion && target) {
+        e.preventDefault(); // don't let a bare <a href> (e.g. the phantom link itself) navigate the iframe
+        onElementSelectedRef.current?.({
+          selector: getUniqueSelector(target, doc),
+          label: getElementLabel(target),
+        });
       } else {
-        onImageSelectedRef.current?.(null);
+        onElementSelectedRef.current?.(null);
       }
     }, true);
 
@@ -546,8 +597,20 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
       const anchorEl = closestElement(sel?.anchorNode ?? null)?.closest("a") ?? null;
       if (anchorEl) {
         anchorEl.setAttribute("href", cleanUrl);
-      } else {
+      } else if (range && !range.collapsed) {
         doc.execCommand("createLink", false, cleanUrl);
+      } else {
+        // No enclosing <a> and nothing highlighted to wrap — execCommand
+        // "createLink" on a collapsed selection is exactly what produced an
+        // empty, invisible, permanently-stuck phantom <a>: WebKit inserts an
+        // empty anchor at the cursor and bleeds the ambient
+        // [contenteditable]:focus outline color onto it as an inline style.
+        // There's nothing safe to link here — no-op rather than mutate the
+        // DOM. HtmlPageEditor.tsx already hides this control whenever
+        // selection.hasSelection is false, so this should be unreachable in
+        // normal use; kept as a hard guard at the actual DOM-mutation
+        // boundary regardless of caller.
+        return;
       }
       emitChange();
       reportSelection(doc);
@@ -595,11 +658,16 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
       const linkEl = range?.collapsed ? closestElement(sel?.anchorNode ?? null)?.closest("a") ?? null : null;
       if (linkEl) {
         linkEl.style.color = color;
-      } else {
+      } else if (range && !range.collapsed) {
         // styleWithCSS makes execCommand write `<span style="color:...">`
         // instead of the legacy `<font color="...">` tag.
         doc.execCommand("styleWithCSS", false, "true");
         doc.execCommand("foreColor", false, color);
+      } else {
+        // Same guard as applyLink — a collapsed selection with no enclosing
+        // link has nothing safe for execCommand to wrap, and produces the
+        // same class of empty, style-bleeding phantom element.
+        return;
       }
       emitChange();
       reportSelection(doc);
@@ -620,9 +688,11 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
       const linkEl = range?.collapsed ? closestElement(sel?.anchorNode ?? null)?.closest("a") ?? null : null;
       if (linkEl) {
         linkEl.style.removeProperty("color");
-      } else {
+      } else if (range && !range.collapsed) {
         doc.execCommand("styleWithCSS", false, "true");
         doc.execCommand("foreColor", false, "inherit");
+      } else {
+        return; // same guard as applyColor/applyLink — nothing safe to clear.
       }
       emitChange();
       reportSelection(doc);
@@ -670,7 +740,15 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
       el.setAttribute("src", url);
       emitChange();
     },
-  }), [emitChange, reportSelection, scanForms, selectedImageSelector]);
+    deleteSelectedElement() {
+      const doc = iframeRef.current?.contentDocument;
+      if (!doc || !selectedElementSelector) return;
+      const el = queryIgnoringInjectedSiblings(selectedElementSelector, doc);
+      if (!el) return;
+      el.remove();
+      emitChange();
+    },
+  }), [emitChange, reportSelection, scanForms, selectedImageSelector, selectedElementSelector]);
 
   useEffect(() => {
     const iframe = iframeRef.current;
@@ -745,6 +823,26 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
       onImageSelectedRef.current?.(null);
     }
   }, [selectedImageSelector, html, emitChange]);
+
+  // Keeps the generic element-selected highlight in sync with
+  // selectedElementSelector — same sticky, self-revalidating pattern as the
+  // AI-picker and image-select effects above. An AI edit, undo/redo, a raw-
+  // HTML paste, or the delete action itself can all remove the selected
+  // element from the DOM; when that happens the selector stops matching and
+  // the selection clears automatically rather than staying silently
+  // "selected" against nothing.
+  useEffect(() => {
+    const doc = iframeRef.current?.contentDocument;
+    if (!doc?.body) return;
+    doc.querySelectorAll(`.${ELEMENT_SELECTED_CLASS}`).forEach((el) => el.classList.remove(ELEMENT_SELECTED_CLASS));
+    if (!selectedElementSelector) return;
+    const matched = queryIgnoringInjectedSiblings(selectedElementSelector, doc);
+    if (matched) {
+      matched.classList.add(ELEMENT_SELECTED_CLASS);
+    } else {
+      onElementSelectedRef.current?.(null);
+    }
+  }, [selectedElementSelector, html]);
 
   return (
     <iframe
