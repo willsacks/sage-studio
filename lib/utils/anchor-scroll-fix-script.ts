@@ -36,3 +36,31 @@ export function injectAnchorScrollFix(html: string): string {
   const script = buildAnchorScrollFixScript();
   return /<\/body>/i.test(html) ? html.replace(/<\/body>/i, `${script}</body>`) : `${html}${script}`;
 }
+
+/**
+ * Scrolls to a given element id as soon as the page loads — the server-side
+ * counterpart to the click-based fix above, for a nav link that points at a
+ * section on a *different* page (e.g. "About" in the header pointing back at
+ * a section on Home, reused verbatim on every other page). The target page
+ * is requested with a `?scrollTo=<id>` query param (see
+ * app/sites/[slug]/page.tsx and .../[pageSlug]/page.tsx, which resolve and
+ * sanitize it server-side before calling this), rather than a URL fragment,
+ * specifically because a fragment never reaches the server at all — and this
+ * script runs inside the iframe, whose own document URL is always
+ * `about:srcdoc`, so it has no way to read the *top-level* page's fragment
+ * itself. A query param is the only piece of the requested URL both the
+ * server and this injected script can actually see.
+ */
+function buildScrollToOnLoadScript(id: string): string {
+  return `<script>(function(){
+    var el = document.getElementById(${JSON.stringify(id)});
+    if (el) el.scrollIntoView({ block: 'start' });
+  })();</script>`;
+}
+
+/** Appends the load-time scroll-to fix before </body> — a no-op when id is null (no ?scrollTo= on this request). */
+export function injectScrollToOnLoad(html: string, id: string | null): string {
+  if (!id) return html;
+  const script = buildScrollToOnLoadScript(id);
+  return /<\/body>/i.test(html) ? html.replace(/<\/body>/i, `${script}</body>`) : `${html}${script}`;
+}

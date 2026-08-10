@@ -10,8 +10,13 @@ import { buildStyleCssVars, buildGoogleFontsUrl, getFontsForTokens, resolveStyle
 import type { StyleTokens } from "@/lib/styles";
 import { ORNAMENTS_BY_KEY, DEFAULT_ORNAMENT_KEY, buildOrnamentCssVars } from "@/lib/ornaments";
 import { injectFormCaptureScript } from "@/lib/utils/form-capture-script";
-import { injectAnchorScrollFix } from "@/lib/utils/anchor-scroll-fix-script";
+import { injectAnchorScrollFix, injectScrollToOnLoad } from "@/lib/utils/anchor-scroll-fix-script";
 import { injectTopNavigationFix } from "@/lib/utils/top-navigation-fix-script";
+
+// Only a plain id — this gets embedded into an injected <script> (see
+// injectScrollToOnLoad), so a query param that doesn't match this is
+// dropped rather than trusted as-is.
+const SCROLL_TO_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 export async function generateMetadata({
   params,
@@ -57,10 +62,14 @@ export async function generateMetadata({
 
 export default async function PublicSitePageRoute({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string; pageSlug: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const { slug, pageSlug } = await params;
+  const { scrollTo } = await searchParams;
+  const scrollToId = typeof scrollTo === "string" && SCROLL_TO_ID_PATTERN.test(scrollTo) ? scrollTo : null;
 
   const [site, page, allPages] = await Promise.all([
     getSiteBySlug(slug),
@@ -77,7 +86,7 @@ export default async function PublicSitePageRoute({
     const htmlContent = (page as unknown as { html_content?: string | null }).html_content ?? "";
     return (
       <iframe
-        srcDoc={injectTopNavigationFix(injectAnchorScrollFix(injectFormCaptureScript(htmlContent, slug)))}
+        srcDoc={injectTopNavigationFix(injectScrollToOnLoad(injectAnchorScrollFix(injectFormCaptureScript(htmlContent, slug)), scrollToId))}
         style={{ width: "100vw", height: "100vh", border: "none", display: "block" }}
         // No allow-same-origin — a visitor may be logged into Sage Studio in the
         // same browser (e.g. the artist previewing their own site); allow-scripts
