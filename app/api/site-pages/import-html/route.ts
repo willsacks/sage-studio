@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireSiteRole } from "@/lib/access/site-access";
+import { revalidateSiteCacheFromRoute } from "@/lib/queries/sites";
 import type { Json } from "@/lib/db";
 
 /**
@@ -59,5 +60,8 @@ export async function POST(request: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   revalidatePath(`/my-site/${siteId}`);
+  // Imported pages start as drafts (not publicly served), but revalidate
+  // anyway so this stays correct if that default ever changes.
+  await revalidateSiteCacheFromRoute(siteId);
   return NextResponse.json({ pageId: data.id });
 }

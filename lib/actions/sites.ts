@@ -7,6 +7,7 @@ import type { PageData, PageTheme } from "@/lib/types/builder";
 import type { Json } from "@/lib/db";
 import { addDomainToProject, removeDomainFromProject, getDomainStatus } from "@/lib/vercel-domains";
 import { requireSiteRole, requirePageRole } from "@/lib/access/site-access";
+import { revalidateSiteCache } from "@/lib/queries/sites";
 
 async function requireAuth() {
   const supabase = await createClient();
@@ -73,6 +74,7 @@ export async function setSiteStyle(siteId: string, styleKey: string) {
     .update({ style_key: styleKey, updated_at: new Date().toISOString() })
     .eq("id", siteId);
   revalidatePath(`/my-site/${siteId}/style`);
+  await revalidateSiteCache(siteId);
   return { success: true };
 }
 
@@ -85,6 +87,7 @@ export async function setSiteOrnamentation(siteId: string, ornamentKey: string) 
     .update({ ornamentation_key: ornamentKey, updated_at: new Date().toISOString() })
     .eq("id", siteId);
   revalidatePath(`/my-site/${siteId}/style`);
+  await revalidateSiteCache(siteId);
   return { success: true };
 }
 
@@ -96,6 +99,7 @@ export async function setSiteFontScale(siteId: string, fontScale: number) {
     .update({ font_scale: fontScale, updated_at: new Date().toISOString() })
     .eq("id", siteId);
   revalidatePath(`/my-site/${siteId}/style`);
+  await revalidateSiteCache(siteId);
   return { success: true };
 }
 
@@ -119,6 +123,7 @@ export async function updateSite(siteId: string, formData: FormData) {
 
   if (error) return { error: error.message };
   revalidatePath(`/my-site/${siteId}`);
+  await revalidateSiteCache(siteId);
   return { success: true };
 }
 
@@ -130,6 +135,7 @@ export async function toggleSitePublished(siteId: string, isPublished: boolean) 
     .update({ is_published: isPublished, updated_at: new Date().toISOString() })
     .eq("id", siteId);
   revalidatePath(`/my-site/${siteId}`);
+  await revalidateSiteCache(siteId);
   return { success: true };
 }
 
@@ -141,11 +147,13 @@ export async function setHomePage(siteId: string, pageId: string) {
     .update({ home_page_id: pageId } as never)
     .eq("id", siteId);
   revalidatePath(`/my-site/${siteId}`);
+  await revalidateSiteCache(siteId);
 }
 
 export async function deleteSite(siteId: string) {
   const { supabase, user } = await requireAuth();
   await requireSiteRole(supabase, siteId, user.id, "owner");
+  await revalidateSiteCache(siteId);
   await supabase.from("artist_sites").delete().eq("id", siteId);
   revalidatePath("/my-site");
 }
@@ -179,6 +187,7 @@ export async function createSitePage(siteId: string, formData: FormData) {
 
   if (error) return { error: error.message };
   revalidatePath(`/my-site/${siteId}`);
+  await revalidateSiteCache(siteId);
   redirect(`/my-site/${siteId}/pages/${data.id}/edit`);
 }
 
@@ -229,6 +238,7 @@ export async function addSitePage(
 
   if (error) return { error: error.message };
   revalidatePath(`/my-site/${siteId}`);
+  await revalidateSiteCache(siteId);
   return { pageId: data.id };
 }
 
@@ -310,7 +320,10 @@ export async function saveSitePage(
     }
   }
 
-  if (data.siteId) revalidatePath(`/my-site/${data.siteId}`);
+  if (data.siteId) {
+    revalidatePath(`/my-site/${data.siteId}`);
+    await revalidateSiteCache(data.siteId);
+  }
   return { success: true };
 }
 
@@ -369,6 +382,7 @@ export async function setCustomDomain(siteId: string, domain: string) {
     .eq("id", siteId);
 
   revalidatePath(`/my-site/${siteId}/settings`);
+  await revalidateSiteCache(siteId);
 
   if (!vercelResult.success) {
     return { success: true, warning: `Domain saved. Vercel registration: ${vercelResult.error}` };
@@ -399,6 +413,7 @@ export async function removeCustomDomain(siteId: string) {
     .eq("id", siteId);
 
   revalidatePath(`/my-site/${siteId}/settings`);
+  await revalidateSiteCache(siteId);
   return { success: true };
 }
 
@@ -421,6 +436,7 @@ export async function recheckDomainStatus(siteId: string) {
       .from("artist_sites")
       .update({ custom_domain_verified: true, updated_at: new Date().toISOString() })
       .eq("id", siteId);
+    await revalidateSiteCache(siteId);
   }
 
   revalidatePath(`/my-site/${siteId}/settings`);
@@ -435,6 +451,7 @@ export async function togglePagePublished(pageId: string, siteId: string, publis
     .update({ status: publish ? "published" : "draft", updated_at: new Date().toISOString() })
     .eq("id", pageId);
   revalidatePath(`/my-site/${siteId}`);
+  await revalidateSiteCache(siteId);
   return { success: true };
 }
 
@@ -451,6 +468,7 @@ export async function updatePageVisibility(
     .update({ ...patch, updated_at: new Date().toISOString() })
     .eq("id", pageId);
   revalidatePath(`/my-site/${siteId}`);
+  await revalidateSiteCache(siteId);
   return { success: true };
 }
 
@@ -459,6 +477,7 @@ export async function deleteSitePage(pageId: string, siteId: string) {
   await requirePageRole(supabase, pageId, user.id, "editor");
   await supabase.from("site_pages").delete().eq("id", pageId);
   revalidatePath(`/my-site/${siteId}`);
+  await revalidateSiteCache(siteId);
 }
 
 export async function reorderSitePages(
@@ -479,6 +498,7 @@ export async function reorderSitePages(
     )
   );
   revalidatePath(`/my-site/${siteId}`);
+  await revalidateSiteCache(siteId);
   return { success: true };
 }
 

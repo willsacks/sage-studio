@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import type { PricingCardBlockData, PricingTier } from "@/lib/types/builder";
 
 const CARD_WIDTHS = { sm: "max-w-sm", md: "max-w-md", lg: "max-w-lg" } as const;
@@ -117,14 +118,16 @@ function TierCard({ tier, isEditing, scale = 1, useSubgrid = false, hidePerTierC
       >
         {/* Row 1: image — always rendered so subgrid rows stay consistent */}
         <div
-          className="w-full flex-shrink-0"
+          className="w-full flex-shrink-0 relative"
           style={{ height: tier.imageUrl ? "180px" : 0, overflow: "hidden" }}
         >
           {tier.imageUrl && (
-            <img
+            <Image
               src={tier.imageUrl}
               alt={tier.heading ?? ""}
-              className="w-full h-full object-cover"
+              fill
+              sizes="(max-width: 640px) 100vw, 400px"
+              className="object-cover"
               style={{ objectPosition: `${tier.imageFocusX ?? 50}% ${tier.imageFocusY ?? 50}%` }}
             />
           )}

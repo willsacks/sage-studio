@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getSiteBySlug, getPublishedPagesForSite } from "@/lib/queries/sites";
+import { getCachedSiteBySlug, getCachedPublishedPagesForSite } from "@/lib/queries/sites";
 import { OfferPageBlocks } from "@/components/offer-builder/OfferPageBlocks";
 import { SiteNav } from "@/components/site/SiteNav";
 import { SiteFooter } from "@/components/site/SiteFooter";
@@ -20,7 +20,7 @@ const SCROLL_TO_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  const [site, pages] = await Promise.all([getSiteBySlug(slug), getPublishedPagesForSite(slug)]);
+  const [site, pages] = await Promise.all([getCachedSiteBySlug(slug), getCachedPublishedPagesForSite(slug)]);
   if (!site) return {};
   const homePage = (site.home_page_id ? pages.find((p) => p.id === site.home_page_id) : null)
     ?? pages.find((p) => p.page_type === "home") ?? pages[0];
@@ -70,8 +70,8 @@ export default async function SiteRootPage({
   const { scrollTo } = await searchParams;
   const scrollToId = typeof scrollTo === "string" && SCROLL_TO_ID_PATTERN.test(scrollTo) ? scrollTo : null;
   const [site, pages] = await Promise.all([
-    getSiteBySlug(slug),
-    getPublishedPagesForSite(slug),
+    getCachedSiteBySlug(slug),
+    getCachedPublishedPagesForSite(slug),
   ]);
 
   if (!site) notFound();
@@ -128,8 +128,15 @@ export default async function SiteRootPage({
 
   return (
     <div style={{ backgroundColor: tokens.colorBackground, minHeight: "100vh", color: tokens.colorText }}>
+      {/* Rendered directly in the tree (not a client-side injected tag) — React
+          hoists title/meta/link/style elements to <head> wherever they render,
+          so this still ends up in <head> while letting the browser discover
+          and fetch the font CSS in parallel with the rest of the document,
+          instead of behind it like the old @import inside <style> did. */}
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      <link rel="stylesheet" href={fontsUrl} />
       <style>{`
-        @import url('${fontsUrl}');
         html { font-size: calc(16px * ${fontScale}); }
         :root { ${cssVars} ${ornamentVars} }
         body { font-family: "${tokens.fontBody}", serif; color: ${tokens.colorText}; }

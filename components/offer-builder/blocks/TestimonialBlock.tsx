@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import type { TestimonialBlockData } from "@/lib/types/builder";
 
 export function TestimonialBlock({
@@ -81,9 +82,11 @@ export function TestimonialBlock({
                 style={{ borderTop: "1px solid var(--st-color-border, rgba(138,128,112,0.2))" }}
               >
                 {t.avatar ? (
-                  <img
+                  <Image
                     src={t.avatar}
                     alt={t.name}
+                    width={40}
+                    height={40}
                     className="w-10 h-10 rounded-full object-cover flex-shrink-0"
                     style={{
                       border: "1px solid var(--st-color-accent, rgba(201,168,76,0.3))",

@@ -1,6 +1,7 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { unstable_cache, revalidateTag, updateTag } from "next/cache";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { Tables } from "@/lib/db";
 import type { SiteRole } from "@/lib/access/site-access";
 
@@ -108,4 +109,106 @@ export async function getPublishedPageBySlug(siteSlug: string, pageSlug: string)
     .eq("status", "published")
     .single();
   return data as SitePage | null;
+}
+
+// ─── Cached reads for the public /sites/[slug] routes ───────────────────
+//
+// The functions above are used by the dashboard/editor and must always see
+// fresh data (they run behind the cookie-bound client and reflect the
+// user's own in-progress edits). The public-facing routes instead use
+// these, which run on the admin client (no cookies — safe inside
+// unstable_cache) and are cached per site slug so an anonymous visit
+// doesn't trigger a fresh Supabase round-trip every time. Every write path
+// that can affect what a visitor sees must call revalidateSiteCache(siteId)
+// (or revalidateSiteCacheBySlug) so a save is reflected promptly instead of
+// waiting out the time-based fallback.
+
+async function fetchSiteBySlugAdmin(slug: string): Promise<ArtistSite | null> {
+  const supabase = createAdminClient();
+  const { data } = await supabase.from("artist_sites").select("*").eq("slug", slug).single();
+  return data as ArtistSite | null;
+}
+
+async function fetchPublishedPagesForSiteAdmin(siteSlug: string): Promise<SitePage[]> {
+  const supabase = createAdminClient();
+  const site = await fetchSiteBySlugAdmin(siteSlug);
+  if (!site) return [];
+  const { data } = await supabase
+    .from("site_pages")
+    .select("*")
+    .eq("site_id", site.id)
+    .eq("status", "published")
+    .order("sort_order", { ascending: true });
+  return (data ?? []) as SitePage[];
+}
+
+async function fetchPublishedPageBySlugAdmin(siteSlug: string, pageSlug: string): Promise<SitePage | null> {
+  const supabase = createAdminClient();
+  const site = await fetchSiteBySlugAdmin(siteSlug);
+  if (!site) return null;
+  const { data } = await supabase
+    .from("site_pages")
+    .select("*")
+    .eq("site_id", site.id)
+    .eq("slug", pageSlug)
+    .eq("status", "published")
+    .single();
+  return data as SitePage | null;
+}
+
+// 60s fallback revalidate is a safety net only — the expected path is
+// on-demand invalidation via revalidateSiteCache from every write action.
+const PUBLIC_CACHE_REVALIDATE_SECONDS = 60;
+
+export async function getCachedSiteBySlug(slug: string): Promise<ArtistSite | null> {
+  return unstable_cache(
+    () => fetchSiteBySlugAdmin(slug),
+    ["site-by-slug", slug],
+    { tags: [`site:${slug}`], revalidate: PUBLIC_CACHE_REVALIDATE_SECONDS }
+  )();
+}
+
+export async function getCachedPublishedPagesForSite(siteSlug: string): Promise<SitePage[]> {
+  return unstable_cache(
+    () => fetchPublishedPagesForSiteAdmin(siteSlug),
+    ["published-pages-for-site", siteSlug],
+    { tags: [`site:${siteSlug}`], revalidate: PUBLIC_CACHE_REVALIDATE_SECONDS }
+  )();
+}
+
+export async function getCachedPublishedPageBySlug(siteSlug: string, pageSlug: string): Promise<SitePage | null> {
+  return unstable_cache(
+    () => fetchPublishedPageBySlugAdmin(siteSlug, pageSlug),
+    ["published-page-by-slug", siteSlug, pageSlug],
+    { tags: [`site:${siteSlug}`], revalidate: PUBLIC_CACHE_REVALIDATE_SECONDS }
+  )();
+}
+
+async function resolveSiteSlug(siteId: string): Promise<string | null> {
+  const supabase = createAdminClient();
+  const { data } = await supabase.from("artist_sites").select("slug").eq("id", siteId).single();
+  return data?.slug ?? null;
+}
+
+/** Invalidates the public-site cache for a site identified by id — the
+ * shape every mutation action already has on hand. Resolves slug via the
+ * admin client (uncached — a single indexed row lookup, negligible next to
+ * the write it's paired with).
+ *
+ * Server Actions only — `updateTag` requires the Server Action execution
+ * context and gives read-your-own-writes (next request blocks for fresh
+ * data instead of serving stale). Route Handlers must use
+ * `revalidateSiteCacheFromRoute` instead. */
+export async function revalidateSiteCache(siteId: string): Promise<void> {
+  const slug = await resolveSiteSlug(siteId);
+  if (slug) updateTag(`site:${slug}`);
+}
+
+/** Route Handler equivalent of revalidateSiteCache — `updateTag` can only
+ * run inside a Server Action, so routes use `revalidateTag` with an
+ * immediate-expiry profile to get the same "next visit sees fresh data"
+ * behavior instead of stale-while-revalidate. */
+export async function revalidateSiteCacheFromRoute(siteId: string): Promise<void> {
+  const slug = await resolveSiteSlug(siteId);
+  if (slug) revalidateTag(`site:${slug}`, { expire: 0 });
 }

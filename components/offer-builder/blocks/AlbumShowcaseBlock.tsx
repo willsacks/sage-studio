@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import type { AlbumShowcaseBlockData, MusicPlatform } from "@/lib/types/builder";
 
 const PLATFORM_LABELS: Record<MusicPlatform, string> = {
@@ -167,12 +168,14 @@ export function AlbumShowcaseBlock({
       <div className="max-w-5xl mx-auto">
         {isCenter ? (
           <div className="flex flex-col items-center gap-8">
-            <div className="w-72 h-72 flex-shrink-0">
+            <div className="w-72 h-72 flex-shrink-0 relative">
               {data.albumArt ? (
-                <img
+                <Image
                   src={data.albumArt}
                   alt={data.albumTitle}
-                  className="w-full h-full object-cover shadow-2xl"
+                  fill
+                  sizes="288px"
+                  className="object-cover shadow-2xl"
                   style={{
                     borderRadius: "var(--st-border-radius, 2px)",
                     objectPosition: `${data.albumArtFocusX ?? 50}% ${data.albumArtFocusY ?? 50}%`,
@@ -190,12 +193,14 @@ export function AlbumShowcaseBlock({
           </div>
         ) : (
           <div className="flex flex-col md:flex-row gap-10 items-start">
-            <div className="w-full md:w-72 flex-shrink-0">
+            <div className="w-full md:w-72 aspect-square flex-shrink-0 relative">
               {data.albumArt ? (
-                <img
+                <Image
                   src={data.albumArt}
                   alt={data.albumTitle}
-                  className="w-full aspect-square object-cover shadow-2xl"
+                  fill
+                  sizes="(max-width: 768px) 100vw, 288px"
+                  className="object-cover shadow-2xl"
                   style={{
                     borderRadius: "var(--st-border-radius, 2px)",
                     objectPosition: `${data.albumArtFocusX ?? 50}% ${data.albumArtFocusY ?? 50}%`,

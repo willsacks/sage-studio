@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requirePageRole } from "@/lib/access/site-access";
+import { revalidateSiteCacheFromRoute } from "@/lib/queries/sites";
 
 /**
  * Route handler, not a Server Action — see the comment in
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
     .update({ html_content: htmlContent, updated_at: nextUpdatedAt })
     .eq("id", pageId)
     .eq("updated_at", expectedUpdatedAt)
-    .select("id");
+    .select("id, site_id");
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -60,6 +61,9 @@ export async function POST(request: NextRequest) {
       { status: 409 }
     );
   }
+
+  const siteId = (data[0] as { site_id: string }).site_id;
+  await revalidateSiteCacheFromRoute(siteId);
 
   return NextResponse.json({ ok: true, updatedAt: nextUpdatedAt });
 }

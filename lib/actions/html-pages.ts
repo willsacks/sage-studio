@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { StyleTokens } from "@/lib/styles/types";
 import type { Json } from "@/lib/db";
 import { requireSiteRole } from "@/lib/access/site-access";
+import { revalidateSiteCache } from "@/lib/queries/sites";
 
 // createHtmlPage / updateHtmlPage used to live here as Server Actions, but a
 // large HTML string (real imported pages commonly run 500KB-1MB+) trips a
@@ -38,5 +39,6 @@ export async function applyCustomStyle(
   if (error) return { error: error.message };
   revalidatePath(`/my-site/${siteId}/style`);
   revalidatePath(`/my-site/${siteId}`);
+  await revalidateSiteCache(siteId);
   return {};
 }
