@@ -63,7 +63,7 @@ export function buildFormCaptureScript(siteSlug: string): string {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            formTitle: document.title || 'Imported Form',
+            formTitle: form.getAttribute('data-sage-form-title') || document.title || 'Imported Form',
             siteSlug: SITE_SLUG,
             answers: data.answers,
             questions: data.questions
