@@ -68,6 +68,11 @@ interface HtmlVisualEditorProps {
   // drives what gets sent to the AI assistant.
   selectedElementSelector?: string | null;
   onElementSelected?: (info: ElementSelectionInfo | null) => void;
+  // Reported fresh on every click (not sticky like the selectors above) —
+  // true whenever the click landed inside a <form>, so the sidebar's Forms
+  // panel can show only when a form is actually the current context, not
+  // just because the page happens to have one somewhere.
+  onFormAreaSelected?: (active: boolean) => void;
 }
 
 const EDIT_STYLE_ID = "__sage_edit_styles__";
@@ -324,7 +329,7 @@ function clearImageHandles(doc: Document) {
  * handle (applyLink/removeLink), driven by a control outside the iframe.
  */
 export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEditorProps>(
-  function HtmlVisualEditor({ html, onChange, onSelectionInfo, onFormsDetected, pickerMode = false, selectedSelector = null, onElementPicked, selectedImageSelector = null, onImageSelected, selectedElementSelector = null, onElementSelected }, ref) {
+  function HtmlVisualEditor({ html, onChange, onSelectionInfo, onFormsDetected, pickerMode = false, selectedSelector = null, onElementPicked, selectedImageSelector = null, onImageSelected, selectedElementSelector = null, onElementSelected, onFormAreaSelected }, ref) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const lastSyncedRef = useRef<string | null>(null);
   const dragSrcRef = useRef<HTMLElement | null>(null);
@@ -333,10 +338,12 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
   const onElementPickedRef = useRef(onElementPicked);
   const onImageSelectedRef = useRef(onImageSelected);
   const onElementSelectedRef = useRef(onElementSelected);
+  const onFormAreaSelectedRef = useRef(onFormAreaSelected);
   useEffect(() => { pickerModeRef.current = pickerMode; }, [pickerMode]);
   useEffect(() => { onElementPickedRef.current = onElementPicked; }, [onElementPicked]);
   useEffect(() => { onImageSelectedRef.current = onImageSelected; }, [onImageSelected]);
   useEffect(() => { onElementSelectedRef.current = onElementSelected; }, [onElementSelected]);
+  useEffect(() => { onFormAreaSelectedRef.current = onFormAreaSelected; }, [onFormAreaSelected]);
 
   const serialize = useCallback((): string | null => {
     const doc = iframeRef.current?.contentDocument;
@@ -595,6 +602,22 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
       // meaningful thing to select — its wrapper is.
       if (target?.tagName === "BR") target = target.parentElement;
 
+      // Resolved and reported independently of the image/element-delete
+      // branches below, so the sidebar's Forms panel shows whenever a form
+      // is the current click context — including while editing text inside
+      // one (e.g. a label), where both a text panel and the Forms panel are
+      // simultaneously relevant.
+      onFormAreaSelectedRef.current?.(!!target?.closest("form"));
+
+      // The sidebar's Link/Text Color/Font panels are keyed off the browser's
+      // own selection object (via reportSelection/onSelectionInfo, triggered
+      // separately on mouseup) rather than this click handler — but that
+      // object doesn't reliably clear itself here: clicking a non-text
+      // element like an image can leave the DOM selection "snapped" to
+      // nearby text instead of collapsing, which reportSelection would then
+      // misread as still being in a text-editing context. Any branch below
+      // that resolves to something other than real text editing clears it
+      // explicitly rather than trusting that native behavior.
       if (target?.tagName === "IMG") {
         e.preventDefault();
         const img = target as HTMLImageElement;
@@ -605,6 +628,7 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
           siblingCount: findSizeSiblings(img, doc).length,
         });
         onElementSelectedRef.current?.(null);
+        onSelectionInfo?.(null);
         return;
       }
       onImageSelectedRef.current?.(null);
@@ -615,17 +639,27 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
         target !== doc.body &&
         !target.closest(`[${HANDLE_ATTR}]`) &&
         !target.closest('[contenteditable="true"]') &&
+        !target.closest("form") && // forms get their own dedicated panel instead — see onFormAreaSelected above
         !!sectionAncestor &&
         target !== sectionAncestor;
 
       if (isSelectableForDeletion && target) {
         e.preventDefault(); // don't let a bare <a href> (e.g. the phantom link itself) navigate the iframe
+        onSelectionInfo?.(null);
         onElementSelectedRef.current?.({
           selector: getUniqueSelector(target, doc),
           label: getElementLabel(target),
         });
       } else {
         onElementSelectedRef.current?.(null);
+        // Only clear the text panels' state here if this genuinely isn't a
+        // text click (a form's background, a section's own bare area,
+        // doc.body) — a real click into contenteditable text still needs to
+        // fall through to the native mouseup/selectionchange-driven
+        // reportSelection() so hasSelection/href/currentFont stay accurate.
+        if (!target?.closest('[contenteditable="true"]')) {
+          onSelectionInfo?.(null);
+        }
       }
     }, true);
 
@@ -638,7 +672,7 @@ export const HtmlVisualEditor = forwardRef<HtmlVisualEditorHandle, HtmlVisualEdi
     }, true);
 
     scanForms(doc);
-  }, [emitChange, reportSelection, scanForms]);
+  }, [emitChange, reportSelection, scanForms, onSelectionInfo]);
 
   useImperativeHandle(ref, () => ({
     applyLink(url: string) {

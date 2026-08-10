@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Upload, Code2, Eye, MousePointerClick, ExternalLink, Wand2, Save, Loader2, Check, Globe, Settings, Link2, Unlink, ClipboardList, AlertCircle, Sparkles, Palette, X, Crosshair, Image as ImageIcon, Undo2, Redo2, Trash2, MousePointerSquareDashed, Type } from "lucide-react";
 import Link from "next/link";
@@ -56,6 +56,10 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
   // AI-picker's target state above) — an unrelated "click an element on the
   // canvas" mechanism that drives the Delete button instead of the AI panel.
   const [selectedForDeletion, setSelectedForDeletion] = useState<ElementSelectionInfo | null>(null);
+  // Whether the *last click* landed inside a <form> — not sticky like the
+  // selectors above (no selector to re-validate against), just re-resolved
+  // fresh on every click. Drives whether the Forms panel shows at all.
+  const [formAreaActive, setFormAreaActive] = useState(false);
   const [imageWidthInput, setImageWidthInput] = useState("");
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
@@ -180,7 +184,17 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
   // second ago) so a burst of rapid changes — several AI tool calls in one
   // turn, or the debounced-but-still-frequent updates while typing — collapse
   // into a single undo step instead of one step per intermediate change.
-  function handleChange(value: string) {
+  // Memoized: this is passed to HtmlVisualEditor as `onChange`, which feeds
+  // its own `emitChange` useCallback ([serialize, onChange]) — an unmemoized
+  // function here gets a new identity every render, which made emitChange's
+  // identity change every render too, and several self-revalidating effects
+  // in HtmlVisualEditor (the image-selection one in particular) depend on
+  // emitChange — so every render re-ran them, and the image effect calling
+  // setSelectedImage() to report itself caused another render, cascading
+  // into an infinite update loop the moment an image got selected. Only
+  // depends on `html` (read for the pre-change snapshot pushed onto the undo
+  // stack), so it stays stable across renders that don't change the content.
+  const handleChange = useCallback((value: string) => {
     const now = Date.now();
     if (now - lastHistoryPushRef.current > 1000) {
       setHistory((prev) => {
@@ -195,7 +209,7 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
     setSaved(false);
     setExtractedTokens(null);
     setStyleApplied(false);
-  }
+  }, [html]);
 
   function handleUndo() {
     if (history.length === 0) return;
@@ -208,6 +222,7 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
     setSelection(null);
     setSelectedImage(null);
     setSelectedForDeletion(null);
+    setFormAreaActive(false);
     lastHistoryPushRef.current = 0; // next edit always starts a fresh step, never coalesces into the undone one
   }
 
@@ -222,6 +237,7 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
     setSelection(null);
     setSelectedImage(null);
     setSelectedForDeletion(null);
+    setFormAreaActive(false);
     lastHistoryPushRef.current = 0;
   }
 
@@ -459,7 +475,7 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
                 <MousePointerClick size={12} /> Edit
               </button>
               <button
-                onClick={() => { setView("preview"); setSelection(null); setSelectedImage(null); setSelectedForDeletion(null); }}
+                onClick={() => { setView("preview"); setSelection(null); setSelectedImage(null); setSelectedForDeletion(null); setFormAreaActive(false); }}
                 className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs transition-colors ${
                   view === "preview"
                     ? "bg-[var(--background)] text-[var(--foreground)] shadow-sm font-medium"
@@ -469,7 +485,7 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
                 <Eye size={12} /> Preview
               </button>
               <button
-                onClick={() => { setView("html"); setSelection(null); setSelectedImage(null); setSelectedForDeletion(null); }}
+                onClick={() => { setView("html"); setSelection(null); setSelectedImage(null); setSelectedForDeletion(null); setFormAreaActive(false); }}
                 className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs transition-colors ${
                   view === "html"
                     ? "bg-[var(--background)] text-[var(--foreground)] shadow-sm font-medium"
@@ -515,6 +531,7 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
               onImageSelected={setSelectedImage}
               selectedElementSelector={selectedForDeletion?.selector ?? null}
               onElementSelected={setSelectedForDeletion}
+              onFormAreaSelected={setFormAreaActive}
             />
           ) : view === "preview" ? (
             <iframe
@@ -591,130 +608,111 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
             </button>
           </div>
 
-          {view === "edit" && (
+          {view === "edit" && selection && selection.hasSelection && (
             <div className="p-4 border-b border-[var(--border)] space-y-3">
               <div className="flex items-center gap-1.5">
                 <Link2 size={12} className="text-[var(--muted-foreground)]" />
                 <p className="text-xs font-semibold text-[var(--foreground)]">Link</p>
               </div>
 
-              {selection && selection.hasSelection ? (
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    value={linkUrl}
-                    onChange={(e) => setLinkUrl(e.target.value)}
-                    placeholder="https://example.com"
-                    className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/30"
-                    onKeyDown={(e) => { if (e.key === "Enter") handleApplyLink(); }}
-                  />
-                  <div className="flex items-center gap-2">
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  placeholder="https://example.com"
+                  className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/30"
+                  onKeyDown={(e) => { if (e.key === "Enter") handleApplyLink(); }}
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleApplyLink}
+                    disabled={!linkUrl.trim()}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] text-xs hover:opacity-90 transition-opacity disabled:opacity-40"
+                  >
+                    <Link2 size={12} /> {selection.href ? "Update" : "Add Link"}
+                  </button>
+                  {selection.href && (
                     <button
-                      onClick={handleApplyLink}
-                      disabled={!linkUrl.trim()}
-                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] text-xs hover:opacity-90 transition-opacity disabled:opacity-40"
+                      onClick={handleRemoveLink}
+                      title="Remove link"
+                      className="flex items-center justify-center w-8 h-8 rounded-lg border border-[var(--border)] text-[var(--muted-foreground)] hover:text-red-500 hover:bg-red-500/10 transition-colors"
                     >
-                      <Link2 size={12} /> {selection.href ? "Update" : "Add Link"}
+                      <Unlink size={12} />
                     </button>
-                    {selection.href && (
-                      <button
-                        onClick={handleRemoveLink}
-                        title="Remove link"
-                        className="flex items-center justify-center w-8 h-8 rounded-lg border border-[var(--border)] text-[var(--muted-foreground)] hover:text-red-500 hover:bg-red-500/10 transition-colors"
-                      >
-                        <Unlink size={12} />
-                      </button>
-                    )}
-                  </div>
+                  )}
                 </div>
-              ) : (
-                <p className="text-[11px] text-[var(--muted-foreground)] leading-snug">
-                  Select some text in the page to add a link.
-                </p>
-              )}
+              </div>
             </div>
           )}
 
-          {view === "edit" && (
+          {view === "edit" && selection && selection.hasSelection && (
             <div className="p-4 border-b border-[var(--border)] space-y-3">
               <div className="flex items-center gap-1.5">
                 <Palette size={12} className="text-[var(--muted-foreground)]" />
                 <p className="text-xs font-semibold text-[var(--foreground)]">Text Color</p>
               </div>
 
-              {selection && selection.hasSelection ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={textColor}
-                    onChange={(e) => handleApplyColor(e.target.value)}
-                    title="Pick a color"
-                    className="w-8 h-8 rounded-lg border border-[var(--border)] p-0.5 cursor-pointer bg-transparent"
-                  />
-                  <button
-                    onClick={handleClearColor}
-                    title="Clear color (reset to default)"
-                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
-                  >
-                    <X size={12} /> Clear
-                  </button>
-                </div>
-              ) : (
-                <p className="text-[11px] text-[var(--muted-foreground)] leading-snug">
-                  Select some text, then pick a color to apply it.
-                </p>
-              )}
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={textColor}
+                  onChange={(e) => handleApplyColor(e.target.value)}
+                  title="Pick a color"
+                  className="w-8 h-8 rounded-lg border border-[var(--border)] p-0.5 cursor-pointer bg-transparent"
+                />
+                <button
+                  onClick={handleClearColor}
+                  title="Clear color (reset to default)"
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
+                >
+                  <X size={12} /> Clear
+                </button>
+              </div>
             </div>
           )}
 
-          {view === "edit" && (
+          {view === "edit" && selection && (
             <div className="p-4 border-b border-[var(--border)] space-y-3">
               <div className="flex items-center gap-1.5">
                 <Type size={12} className="text-[var(--muted-foreground)]" />
                 <p className="text-xs font-semibold text-[var(--foreground)]">Font</p>
               </div>
 
-              {selection ? (
-                <div className="space-y-1.5">
-                  <select
-                    value={findFontOption(selection.currentFont)?.family ?? ""}
-                    onChange={(e) => handleApplyFont(e.target.value)}
-                    className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/30"
-                  >
-                    <option value="">Default</option>
-                    {FONT_CATEGORIES.map((category) => (
-                      <optgroup key={category} label={category}>
-                        {FONT_OPTIONS.filter((f) => f.category === category).map((f) => (
-                          <option key={f.family} value={f.family} style={{ fontFamily: `'${f.family}', ${f.fallback}` }}>
-                            {f.family}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                  {selection.currentFont && !findFontOption(selection.currentFont) && (
-                    <p className="text-[11px] text-[var(--muted-foreground)] truncate">
-                      Currently: <span style={{ fontFamily: `'${selection.currentFont}'` }}>{selection.currentFont}</span> (not in this list)
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <p className="text-[11px] text-[var(--muted-foreground)] leading-snug">
-                  Click into any text to change its font.
-                </p>
-              )}
+              <div className="space-y-1.5">
+                <select
+                  value={findFontOption(selection.currentFont)?.family ?? ""}
+                  onChange={(e) => handleApplyFont(e.target.value)}
+                  className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/30"
+                >
+                  <option value="">Default</option>
+                  {FONT_CATEGORIES.map((category) => (
+                    <optgroup key={category} label={category}>
+                      {FONT_OPTIONS.filter((f) => f.category === category).map((f) => (
+                        <option key={f.family} value={f.family} style={{ fontFamily: `'${f.family}', ${f.fallback}` }}>
+                          {f.family}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                {selection.currentFont && !findFontOption(selection.currentFont) && (
+                  <p className="text-[11px] text-[var(--muted-foreground)] truncate">
+                    Currently: <span style={{ fontFamily: `'${selection.currentFont}'` }}>{selection.currentFont}</span> (not in this list)
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
-          {view === "edit" && (
+          {view === "edit" && selectedImage && (
             <div className="p-4 border-b border-[var(--border)] space-y-3">
               <div className="flex items-center gap-1.5">
                 <ImageIcon size={12} className="text-[var(--muted-foreground)]" />
                 <p className="text-xs font-semibold text-[var(--foreground)]">Image</p>
               </div>
 
-              {selectedImage ? (
-                <div className="space-y-3">
+              <div className="space-y-3">
                   <div className="rounded-lg border border-[var(--border)] overflow-hidden bg-[var(--muted)]/30 aspect-video flex items-center justify-center">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={selectedImage.src} alt="" className="max-w-full max-h-full object-contain" />
@@ -775,42 +773,31 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
                   </label>
                   {imageUploadError && <p className="text-[11px] text-red-500">{imageUploadError}</p>}
                 </div>
-              ) : (
-                <p className="text-[11px] text-[var(--muted-foreground)] leading-snug">
-                  Click an image in the page to resize or replace it.
-                </p>
-              )}
             </div>
           )}
 
-          {view === "edit" && (
+          {view === "edit" && selectedForDeletion && (
             <div className="p-4 border-b border-[var(--border)] space-y-3">
               <div className="flex items-center gap-1.5">
                 <MousePointerSquareDashed size={12} className="text-[var(--muted-foreground)]" />
                 <p className="text-xs font-semibold text-[var(--foreground)]">Selected Element</p>
               </div>
 
-              {selectedForDeletion ? (
-                <div className="space-y-2">
-                  <p className="text-[11px] font-mono text-[var(--muted-foreground)] leading-snug break-all bg-[var(--muted)]/40 rounded-lg px-2.5 py-2">
-                    {selectedForDeletion.label}
-                  </p>
-                  <button
-                    onClick={handleDeleteSelectedElement}
-                    className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-500/40 text-red-500 text-xs hover:bg-red-500/10 transition-colors"
-                  >
-                    <Trash2 size={12} /> Delete
-                  </button>
-                </div>
-              ) : (
-                <p className="text-[11px] text-[var(--muted-foreground)] leading-snug">
-                  Click a stray or empty element (not text, not an image) to select and delete it.
+              <div className="space-y-2">
+                <p className="text-[11px] font-mono text-[var(--muted-foreground)] leading-snug break-all bg-[var(--muted)]/40 rounded-lg px-2.5 py-2">
+                  {selectedForDeletion.label}
                 </p>
-              )}
+                <button
+                  onClick={handleDeleteSelectedElement}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-500/40 text-red-500 text-xs hover:bg-red-500/10 transition-colors"
+                >
+                  <Trash2 size={12} /> Delete
+                </button>
+              </div>
             </div>
           )}
 
-          {view === "edit" && forms.length > 0 && (
+          {view === "edit" && formAreaActive && forms.length > 0 && (
             <div className="p-4 border-b border-[var(--border)] space-y-3">
               <div className="flex items-center gap-1.5">
                 <ClipboardList size={12} className="text-[var(--muted-foreground)]" />
@@ -841,6 +828,14 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {view === "edit" && !selection && !selectedImage && !selectedForDeletion && !(formAreaActive && forms.length > 0) && (
+            <div className="p-4 border-b border-[var(--border)]">
+              <p className="text-[11px] text-[var(--muted-foreground)] leading-snug">
+                Click text, an image, or an element in the page to edit it here.
+              </p>
             </div>
           )}
 
