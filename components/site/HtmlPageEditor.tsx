@@ -349,29 +349,33 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
             </button>
           </div>
 
-          <button
-            onClick={() => setAiPanelOpen((o) => !o)}
-            title="AI Assistant"
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border transition-colors ${
-              aiPanelOpen
-                ? "border-[var(--primary)]/50 bg-[var(--primary)]/10 text-[var(--primary)]"
-                : "border-[var(--border)] hover:bg-[var(--accent)] text-[var(--muted-foreground)]"
-            }`}
-          >
-            <Sparkles size={13} /> AI
-          </button>
+          {aiEnabled && (
+            <>
+              <button
+                onClick={() => setAiPanelOpen((o) => !o)}
+                title="AI Assistant"
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border transition-colors ${
+                  aiPanelOpen
+                    ? "border-[var(--primary)]/50 bg-[var(--primary)]/10 text-[var(--primary)]"
+                    : "border-[var(--border)] hover:bg-[var(--accent)] text-[var(--muted-foreground)]"
+                }`}
+              >
+                <Sparkles size={13} /> AI
+              </button>
 
-          <button
-            onClick={handleTogglePickerMode}
-            title="Click an element on the page to direct the AI to it"
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border transition-colors ${
-              pickerMode
-                ? "border-green-600/50 bg-green-600/10 text-green-600"
-                : "border-[var(--border)] hover:bg-[var(--accent)] text-[var(--muted-foreground)]"
-            }`}
-          >
-            <Crosshair size={13} /> {pickerMode ? "Click an element…" : "Select for AI"}
-          </button>
+              <button
+                onClick={handleTogglePickerMode}
+                title="Click an element on the page to direct the AI to it"
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border transition-colors ${
+                  pickerMode
+                    ? "border-green-600/50 bg-green-600/10 text-green-600"
+                    : "border-[var(--border)] hover:bg-[var(--accent)] text-[var(--muted-foreground)]"
+                }`}
+              >
+                <Crosshair size={13} /> {pickerMode ? "Click an element…" : "Select for AI"}
+              </button>
+            </>
+          )}
 
           <button
             onClick={handlePreview}
