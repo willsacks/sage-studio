@@ -14,6 +14,16 @@
  * (every external entity-card link on these pages) are unaffected since
  * popups already escape the iframe via the `allow-popups` sandbox flag —
  * only same-window link clicks need this fix.
+ *
+ * A `?scrollTo=<id>` link (see anchor-scroll-fix-script.ts's
+ * injectScrollToOnLoad) gets one extra check first: if an element with that
+ * id already exists on *this* page, it's scrolled to directly instead of
+ * falling through to a full top-level reload — these pages can be a couple
+ * MB of embedded images, so reloading one just to re-run a scroll it could
+ * have done immediately is a multi-second regression from an ordinary same-
+ * page anchor. The full reload is still correct (and still happens) when the
+ * id isn't on the current page — e.g. an "About" link in the shared header
+ * clicked from a different page than the one #about actually lives on.
  */
 function buildTopNavigationFixScript(): string {
   return `<script>(function(){
@@ -24,6 +34,17 @@ function buildTopNavigationFixScript(): string {
       if (!href || href.charAt(0) === '#') return; // handled by the anchor-scroll fix
       var target = link.getAttribute('target');
       if (target === '_blank' || target === '_top') return; // already escapes the iframe correctly
+
+      var scrollToMatch = href.match(/[?&]scrollTo=([^&]+)/);
+      if (scrollToMatch) {
+        var el = document.getElementById(decodeURIComponent(scrollToMatch[1]));
+        if (el) {
+          e.preventDefault();
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          return;
+        }
+      }
+
       e.preventDefault();
       window.top.location.href = link.href;
     });
