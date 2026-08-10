@@ -23,10 +23,11 @@ interface HtmlPageEditorProps {
   page: Page;
   siteId: string;
   siteSlug: string;
+  customDomain?: string | null;
   aiEnabled?: boolean;
 }
 
-export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: HtmlPageEditorProps) {
+export function HtmlPageEditor({ page, siteId, siteSlug, customDomain = null, aiEnabled = false }: HtmlPageEditorProps) {
   const router = useRouter();
   const [html, setHtml] = useState(page.html_content ?? "");
   const [isDirty, setIsDirty] = useState(false);
@@ -254,7 +255,32 @@ export function HtmlPageEditor({ page, siteId, siteSlug, aiEnabled = false }: Ht
   }
 
   function handlePreview() {
-    const blob = new Blob([html], { type: "text/html" });
+    // Root-relative internal links (e.g. "/our-way") are written assuming the
+    // page is nested in an iframe on its real custom domain (see
+    // top-navigation-fix-script.ts). This blob preview opens the raw HTML as
+    // its own top-level tab on the Studio app's own origin instead, so those
+    // links would otherwise navigate the tab to e.g. sagestudio.org/our-way,
+    // which doesn't exist. Rewrite clicks on such links to the correct target
+    // — the live custom domain if one's verified, else the staging preview
+    // route for this site — instead of letting the browser resolve them
+    // against the blob's origin.
+    const previewTarget = customDomain ? `https://${customDomain}` : `${window.location.origin}/sites/${siteSlug}`;
+    const linkFixScript = `<script>(function(){
+      var target = ${JSON.stringify(previewTarget)};
+      document.addEventListener('click', function(e){
+        var link = e.target.closest('a[href]');
+        if (!link) return;
+        var href = link.getAttribute('href');
+        if (!href || href.charAt(0) !== '/') return;
+        var t = link.getAttribute('target');
+        if (t === '_blank' || t === '_top') return;
+        e.preventDefault();
+        var resolved = href === '/' ? target + '/' : (href.charAt(1) === '?' ? target + '/' + href.slice(1) : target + href);
+        window.location.href = resolved;
+      });
+    })();</script>`;
+    const previewHtml = /<\/body>/i.test(html) ? html.replace(/<\/body>/i, `${linkFixScript}</body>`) : `${html}${linkFixScript}`;
+    const blob = new Blob([previewHtml], { type: "text/html" });
     const url = URL.createObjectURL(blob);
     window.open(url, "_blank");
     setTimeout(() => URL.revokeObjectURL(url), 10000);

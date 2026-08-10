@@ -42,7 +42,8 @@ export default async function SitePageEditPage({
   }
 
   if (page.page_type === "html") {
-    return <HtmlPageEditor page={page as Parameters<typeof HtmlPageEditor>[0]["page"]} siteId={siteId} siteSlug={site.slug} aiEnabled={aiEnabled} />;
+    const customDomain = site.custom_domain_verified ? site.custom_domain : null;
+    return <HtmlPageEditor page={page as Parameters<typeof HtmlPageEditor>[0]["page"]} siteId={siteId} siteSlug={site.slug} customDomain={customDomain} aiEnabled={aiEnabled} />;
   }
 
   return (
