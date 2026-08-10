@@ -72,7 +72,7 @@ export function buildFormCaptureScript(siteSlug: string): string {
           if (!res.ok) throw new Error('failed');
 
           var thanks = document.createElement('div');
-          thanks.textContent = 'Thanks! Your message has been sent.';
+          thanks.textContent = form.getAttribute('data-sage-form-thanks') || 'Thanks! Your message has been sent.';
           // Prefer whatever accent variable this page's own design already defines
           // (imported pages commonly name it --gold, --accent, or --primary),
           // falling back to a plain green for pages that define none of these.
