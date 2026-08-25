@@ -41,7 +41,7 @@ export function EmailGateBlock({
       const res = await fetch("/api/gate-unlock", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ siteSlug, blockId, filePath: data.filePath, email }),
+        body: JSON.stringify({ siteSlug, blockId, email }),
       });
       const result = await res.json() as { downloadUrl?: string; error?: string };
       if (!res.ok || result.error || !result.downloadUrl) {

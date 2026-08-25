@@ -28,15 +28,19 @@ export function ResendConnectForm({ siteId, isConnected }: Props) {
     setError(null);
     setSaved(false);
     startTransition(async () => {
-      const result = await setResendConnection(siteId, apiKey, audienceId);
-      if (result.error) {
-        setError(result.error);
-      } else {
-        setSaved(true);
-        setApiKey("");
-        setAudienceId("");
-        router.refresh();
-        setTimeout(() => setSaved(false), 3000);
+      try {
+        const result = await setResendConnection(siteId, apiKey, audienceId);
+        if (result.error) {
+          setError(result.error);
+        } else {
+          setSaved(true);
+          setApiKey("");
+          setAudienceId("");
+          router.refresh();
+          setTimeout(() => setSaved(false), 3000);
+        }
+      } catch {
+        setError("Something went wrong. Please try again.");
       }
     });
   }

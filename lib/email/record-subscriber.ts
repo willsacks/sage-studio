@@ -34,16 +34,18 @@ export async function recordSubscriberAndSync(params: {
     const didSync = await syncContactToResend(siteId, email);
     if (didSync) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
+      const { error: updateError } = await (supabase as any)
         .from("email_subscribers")
         .update({ resend_synced_at: new Date().toISOString(), resend_sync_error: null })
         .eq("site_id", siteId).eq("email", email).eq("source_type", sourceType).eq("source_id", sourceId);
+      if (updateError) console.error("record-subscriber: failed to mark resend_synced_at:", updateError.message);
     }
   } catch (err) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any)
+    const { error: updateError } = await (supabase as any)
       .from("email_subscribers")
       .update({ resend_sync_error: err instanceof Error ? err.message : String(err) })
       .eq("site_id", siteId).eq("email", email).eq("source_type", sourceType).eq("source_id", sourceId);
+    if (updateError) console.error("record-subscriber: failed to record resend_sync_error:", updateError.message);
   }
 }

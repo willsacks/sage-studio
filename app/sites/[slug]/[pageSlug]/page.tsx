@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { getCachedSiteBySlug, getCachedPublishedPageBySlug, getCachedPublishedPagesForSite } from "@/lib/queries/sites";
 import { OfferPageBlocks } from "@/components/offer-builder/OfferPageBlocks";
@@ -7,6 +6,7 @@ import { SiteNav } from "@/components/site/SiteNav";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { SiteUnpublishedMessage } from "@/components/site/SiteUnpublishedMessage";
 import { PageGateOverlay } from "@/components/site/PageGateOverlay";
+import { getPageGateFields, isPageUnlocked } from "@/lib/utils/page-gate";
 import type { PageData } from "@/lib/types/builder";
 import { buildStyleCssVars, buildGoogleFontsUrl, getFontsForTokens, resolveStyleTokens } from "@/lib/styles";
 import type { StyleTokens } from "@/lib/styles";
@@ -83,27 +83,22 @@ export default async function PublicSitePageRoute({
   if (!site.is_published) return <SiteUnpublishedMessage siteName={site.site_title ?? site.name} />;
   if (!page) notFound();
 
-  const gateFields = page as unknown as {
-    is_gated?: boolean;
-    gate_title?: string | null;
-    gate_description?: string | null;
-    gate_button_text?: string | null;
+  const gateFields = getPageGateFields(page);
+  const isUnlocked = await isPageUnlocked(page.id, gateFields.isGated);
+  const gateOverlayProps = {
+    siteSlug: slug,
+    pageId: page.id,
+    isUnlocked,
+    gateTitle: gateFields.gateTitle,
+    gateDescription: gateFields.gateDescription,
+    gateButtonText: gateFields.gateButtonText,
   };
-  const isGated = gateFields.is_gated ?? false;
-  const isUnlocked = !isGated || (await cookies()).get(`sage_pgate_${page.id}`)?.value === "1";
 
   // Standalone HTML page — render the uploaded HTML in a full-viewport iframe
   if (page.page_type === "html") {
     const htmlContent = (page as unknown as { html_content?: string | null }).html_content ?? "";
     return (
-      <PageGateOverlay
-        siteSlug={slug}
-        pageId={page.id}
-        isUnlocked={isUnlocked}
-        gateTitle={gateFields.gate_title ?? null}
-        gateDescription={gateFields.gate_description ?? null}
-        gateButtonText={gateFields.gate_button_text ?? null}
-      >
+      <PageGateOverlay {...gateOverlayProps}>
         <iframe
           srcDoc={injectTopNavigationFix(injectScrollToOnLoad(injectAnchorScrollFix(injectFormCaptureScript(htmlContent, slug)), scrollToId))}
           style={{ width: "100vw", height: "100vh", border: "none", display: "block" }}
@@ -134,14 +129,7 @@ export default async function PublicSitePageRoute({
     : `/sites/${slug}`;
 
   return (
-    <PageGateOverlay
-      siteSlug={slug}
-      pageId={page.id}
-      isUnlocked={isUnlocked}
-      gateTitle={gateFields.gate_title ?? null}
-      gateDescription={gateFields.gate_description ?? null}
-      gateButtonText={gateFields.gate_button_text ?? null}
-    >
+    <PageGateOverlay {...gateOverlayProps}>
       <div style={{ backgroundColor: tokens.colorBackground, minHeight: "100vh", color: tokens.colorText }}>
         {/* Rendered directly in the tree (not a client-side injected tag) — React
             hoists title/meta/link/style elements to <head> wherever they render,
