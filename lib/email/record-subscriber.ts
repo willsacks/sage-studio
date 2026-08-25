@@ -31,12 +31,14 @@ export async function recordSubscriberAndSync(params: {
   if (error) throw new Error(error.message);
 
   try {
-    await syncContactToResend(siteId, email);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any)
-      .from("email_subscribers")
-      .update({ resend_synced_at: new Date().toISOString(), resend_sync_error: null })
-      .eq("site_id", siteId).eq("email", email).eq("source_type", sourceType).eq("source_id", sourceId);
+    const didSync = await syncContactToResend(siteId, email);
+    if (didSync) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from("email_subscribers")
+        .update({ resend_synced_at: new Date().toISOString(), resend_sync_error: null })
+        .eq("site_id", siteId).eq("email", email).eq("source_type", sourceType).eq("source_id", sourceId);
+    }
   } catch (err) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase as any)

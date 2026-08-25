@@ -7,8 +7,13 @@ import { decryptSecret } from "@/lib/crypto";
  * the platform's Resend account (that one only sends transactional
  * notification emails, see app/api/form-submit/route.ts). No-ops silently
  * if the owner hasn't connected Resend, since that's the common case.
+ *
+ * Returns whether a sync was actually attempted+succeeded (true) vs skipped
+ * because Resend isn't connected (false) — record-subscriber.ts uses this
+ * to avoid recording `resend_synced_at` for a no-op, which would otherwise
+ * misreport "synced" for sites that never connected Resend at all.
  */
-export async function syncContactToResend(siteId: string, email: string): Promise<void> {
+export async function syncContactToResend(siteId: string, email: string): Promise<boolean> {
   const supabase = createAdminClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: site } = await (supabase as any)
@@ -19,7 +24,7 @@ export async function syncContactToResend(siteId: string, email: string): Promis
 
   const encryptedKey = site?.resend_api_key_encrypted as string | null | undefined;
   const audienceId = site?.resend_audience_id as string | null | undefined;
-  if (!encryptedKey || !audienceId) return;
+  if (!encryptedKey || !audienceId) return false;
 
   const apiKey = decryptSecret(encryptedKey);
   const resend = new Resend(apiKey);
@@ -31,4 +36,5 @@ export async function syncContactToResend(siteId: string, email: string): Promis
   // node_modules/resend/dist/index.d.mts rather than assumed.
   const { error } = await resend.contacts.create({ email, unsubscribed: false, segments: [{ id: audienceId }] });
   if (error) throw new Error(error.message);
+  return true;
 }
