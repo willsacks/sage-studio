@@ -45,6 +45,16 @@ export function HtmlPageEditor({ page, siteId, siteSlug, customDomain = null, ai
   const [pageSlug, setPageSlug] = useState(page.slug);
   const [isSavingSettings, startSaveSettings] = useTransition();
   const [settingsSaved, setSettingsSaved] = useState(false);
+  const gateFields = page as unknown as {
+    is_gated?: boolean | null;
+    gate_title?: string | null;
+    gate_description?: string | null;
+    gate_button_text?: string | null;
+  };
+  const [isGated, setIsGated] = useState(gateFields.is_gated ?? false);
+  const [gateTitle, setGateTitle] = useState(gateFields.gate_title ?? "");
+  const [gateDescription, setGateDescription] = useState(gateFields.gate_description ?? "");
+  const [gateButtonText, setGateButtonText] = useState(gateFields.gate_button_text ?? "");
   const [extractedTokens, setExtractedTokens] = useState<Partial<StyleTokens> | null>(null);
   const [isApplying, startApply] = useTransition();
   const [styleApplied, setStyleApplied] = useState(false);
@@ -347,6 +357,10 @@ export function HtmlPageEditor({ page, siteId, siteSlug, customDomain = null, ai
         title: pageTitle.trim() || page.title,
         slug: slug || page.slug,
         siteId,
+        is_gated: isGated,
+        gate_title: gateTitle.trim() || null,
+        gate_description: gateDescription.trim() || null,
+        gate_button_text: gateButtonText.trim() || null,
       });
       setPageSlug(slug || page.slug);
       setSettingsSaved(true);
@@ -633,6 +647,43 @@ export function HtmlPageEditor({ page, siteId, siteSlug, customDomain = null, ai
               <p className="text-[10px] text-[var(--muted-foreground)] truncate">
                 sagestudio.org/sites/{siteSlug}/{pageSlug.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "..."}
               </p>
+            </div>
+
+            <div className="pt-2 border-t border-[var(--border)] space-y-2">
+              <label className="flex items-center gap-2 text-[11px] font-medium text-[var(--foreground)] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isGated}
+                  onChange={(e) => setIsGated(e.target.checked)}
+                  className="rounded"
+                />
+                Require email to view this page
+              </label>
+              {isGated && (
+                <div className="space-y-2 pl-0.5">
+                  <input
+                    type="text"
+                    value={gateTitle}
+                    onChange={(e) => setGateTitle(e.target.value)}
+                    placeholder="Enter your email to continue"
+                    className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/30"
+                  />
+                  <textarea
+                    value={gateDescription}
+                    onChange={(e) => setGateDescription(e.target.value)}
+                    placeholder="Optional description shown under the title"
+                    rows={2}
+                    className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/30 resize-none"
+                  />
+                  <input
+                    type="text"
+                    value={gateButtonText}
+                    onChange={(e) => setGateButtonText(e.target.value)}
+                    placeholder="Unlock"
+                    className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/30"
+                  />
+                </div>
+              )}
             </div>
 
             <button

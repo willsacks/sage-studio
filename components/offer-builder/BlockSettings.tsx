@@ -8,7 +8,7 @@ import type {
   CTABannerBlockData, VideoEmbedBlockData, SpacerBlockData, DividerBlockData,
   CornerNavBlockData, SocialPlatform, ApplicationFormBlockData, FormField, FormFieldType,
   MusicEmbedBlockData, AlbumShowcaseBlockData, DiscographyBlockData, MusicPlatform,
-  SimpleFormBlockData,
+  SimpleFormBlockData, EmailGateBlockData,
 } from "@/lib/types/builder";
 import { useState } from "react";
 import { X, Plus, Trash2 } from "lucide-react";
@@ -17,6 +17,7 @@ import { ImageUploader } from "@/components/ui/image-uploader";
 import { VideoUploader } from "@/components/ui/video-uploader";
 import { FocusPointPicker } from "@/components/ui/focus-point-picker";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { PdfUploader } from "@/components/ui/pdf-uploader";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -893,6 +894,51 @@ function SimpleFormSettings({ data, update }: { data: SimpleFormBlockData; updat
   );
 }
 
+function EmailGateSettings({ data, update }: { data: EmailGateBlockData; update: (d: Partial<EmailGateBlockData>) => void }) {
+  const siteContext = useBuilderStore((s) => s.siteContext);
+  const folder = siteContext?.siteSlug ? `${siteContext.siteSlug}/gates` : "gates";
+
+  return (
+    <div className="space-y-4">
+      <Field label="File to give away">
+        <PdfUploader
+          path={data.filePath ?? null}
+          fileName={data.fileName ?? null}
+          onChange={(path, fileName) => update({ filePath: path ?? undefined, fileName: fileName ?? undefined })}
+          folder={folder}
+        />
+      </Field>
+      <Field label="Title">
+        <Input value={data.title ?? ""} onChange={(v) => update({ title: v || undefined })} placeholder="Get the free download" />
+      </Field>
+      <Field label="Description">
+        <Textarea value={data.description ?? ""} onChange={(v) => update({ description: v || undefined })} placeholder="Optional" rows={2} />
+      </Field>
+      <Field label="Button Text">
+        <Input value={data.buttonText ?? ""} onChange={(v) => update({ buttonText: v || undefined })} placeholder="Send Me The Download" />
+      </Field>
+      <Field label="Success Heading">
+        <Input value={data.successHeading ?? ""} onChange={(v) => update({ successHeading: v || undefined })} placeholder="You're in!" />
+      </Field>
+      <Field label="Success Message">
+        <Input value={data.successMessage ?? ""} onChange={(v) => update({ successMessage: v || undefined })} placeholder="Thanks — here's your download." />
+      </Field>
+      <Field label="Download Button Text">
+        <Input value={data.downloadButtonText ?? ""} onChange={(v) => update({ downloadButtonText: v || undefined })} placeholder="Download Now" />
+      </Field>
+      <label className="flex items-center gap-2 text-xs cursor-pointer">
+        <input
+          type="checkbox"
+          checked={data.rememberUnlock ?? true}
+          onChange={(e) => update({ rememberUnlock: e.target.checked })}
+          className="accent-[var(--primary)]"
+        />
+        Remember unlock on this device (skip re-gating)
+      </label>
+    </div>
+  );
+}
+
 const MUSIC_PLATFORMS: MusicPlatform[] =["spotify", "apple_music", "soundcloud", "bandcamp", "youtube", "website"];
 const MUSIC_LABELS: Record<MusicPlatform, string> = {
   spotify: "Spotify",
@@ -1332,6 +1378,7 @@ export function BlockSettings() {
         {block.type === "album_showcase" && <AlbumShowcaseSettings data={block.data as AlbumShowcaseBlockData} update={update} />}
         {block.type === "discography" && <DiscographySettings data={block.data as DiscographyBlockData} update={update} />}
         {block.type === "simple_form" && <SimpleFormSettings data={block.data as SimpleFormBlockData} update={update} />}
+        {block.type === "email_gate" && <EmailGateSettings data={block.data as EmailGateBlockData} update={update} />}
       </div>
     </div>
   );

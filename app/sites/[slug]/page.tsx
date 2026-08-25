@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { getCachedSiteBySlug, getCachedPublishedPagesForSite } from "@/lib/queries/sites";
 import { OfferPageBlocks } from "@/components/offer-builder/OfferPageBlocks";
 import { SiteNav } from "@/components/site/SiteNav";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { SiteUnpublishedMessage } from "@/components/site/SiteUnpublishedMessage";
+import { PageGateOverlay } from "@/components/site/PageGateOverlay";
 import type { PageData } from "@/lib/types/builder";
 import { buildStyleCssVars, buildGoogleFontsUrl, getFontsForTokens, resolveStyleTokens } from "@/lib/styles";
 import type { StyleTokens } from "@/lib/styles";
@@ -95,20 +97,38 @@ export default async function SiteRootPage({
     );
   }
 
+  const gateFields = homePage as unknown as {
+    is_gated?: boolean;
+    gate_title?: string | null;
+    gate_description?: string | null;
+    gate_button_text?: string | null;
+  };
+  const isGated = gateFields.is_gated ?? false;
+  const isUnlocked = !isGated || (await cookies()).get(`sage_pgate_${homePage.id}`)?.value === "1";
+
   // Standalone HTML page set as home — render the uploaded HTML in a full-viewport iframe
   if (homePage.page_type === "html") {
     const htmlContent = (homePage as unknown as { html_content?: string | null }).html_content ?? "";
     return (
-      <iframe
-        srcDoc={injectTopNavigationFix(injectScrollToOnLoad(injectAnchorScrollFix(injectFormCaptureScript(htmlContent, slug)), scrollToId))}
-        style={{ width: "100vw", height: "100vh", border: "none", display: "block" }}
-        // No allow-same-origin — a visitor may be logged into Sage Studio in the
-        // same browser (e.g. the artist previewing their own site); allow-scripts
-        // + allow-same-origin together would let injected page HTML reach that
-        // session via window.top as same-origin.
-        sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-top-navigation-by-user-activation"
-        title={homePage.title}
-      />
+      <PageGateOverlay
+        siteSlug={slug}
+        pageId={homePage.id}
+        isUnlocked={isUnlocked}
+        gateTitle={gateFields.gate_title ?? null}
+        gateDescription={gateFields.gate_description ?? null}
+        gateButtonText={gateFields.gate_button_text ?? null}
+      >
+        <iframe
+          srcDoc={injectTopNavigationFix(injectScrollToOnLoad(injectAnchorScrollFix(injectFormCaptureScript(htmlContent, slug)), scrollToId))}
+          style={{ width: "100vw", height: "100vh", border: "none", display: "block" }}
+          // No allow-same-origin — a visitor may be logged into Sage Studio in the
+          // same browser (e.g. the artist previewing their own site); allow-scripts
+          // + allow-same-origin together would let injected page HTML reach that
+          // session via window.top as same-origin.
+          sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-top-navigation-by-user-activation"
+          title={homePage.title}
+        />
+      </PageGateOverlay>
     );
   }
 
@@ -127,37 +147,46 @@ export default async function SiteRootPage({
     : `/sites/${slug}`;
 
   return (
-    <div style={{ backgroundColor: tokens.colorBackground, minHeight: "100vh", color: tokens.colorText }}>
-      {/* Rendered directly in the tree (not a client-side injected tag) — React
-          hoists title/meta/link/style elements to <head> wherever they render,
-          so this still ends up in <head> while letting the browser discover
-          and fetch the font CSS in parallel with the rest of the document,
-          instead of behind it like the old @import inside <style> did. */}
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-      <link rel="stylesheet" href={fontsUrl} />
-      <style>{`
-        html { font-size: calc(16px * ${fontScale}); }
-        :root { ${cssVars} ${ornamentVars} }
-        body { font-family: "${tokens.fontBody}", serif; color: ${tokens.colorText}; }
-      `}</style>
+    <PageGateOverlay
+      siteSlug={slug}
+      pageId={homePage.id}
+      isUnlocked={isUnlocked}
+      gateTitle={gateFields.gate_title ?? null}
+      gateDescription={gateFields.gate_description ?? null}
+      gateButtonText={gateFields.gate_button_text ?? null}
+    >
+      <div style={{ backgroundColor: tokens.colorBackground, minHeight: "100vh", color: tokens.colorText }}>
+        {/* Rendered directly in the tree (not a client-side injected tag) — React
+            hoists title/meta/link/style elements to <head> wherever they render,
+            so this still ends up in <head> while letting the browser discover
+            and fetch the font CSS in parallel with the rest of the document,
+            instead of behind it like the old @import inside <style> did. */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="stylesheet" href={fontsUrl} />
+        <style>{`
+          html { font-size: calc(16px * ${fontScale}); }
+          :root { ${cssVars} ${ornamentVars} }
+          body { font-family: "${tokens.fontBody}", serif; color: ${tokens.colorText}; }
+        `}</style>
 
-      {showHeader && (
-        <SiteNav
-          siteSlug={slug}
-          pages={pages}
-          currentSlug={homePage.slug}
-          site={site}
-          tokens={tokens as StyleTokens}
-          basePath={basePath}
-        />
-      )}
+        {showHeader && (
+          <SiteNav
+            siteSlug={slug}
+            pages={pages}
+            currentSlug={homePage.slug}
+            site={site}
+            tokens={tokens as StyleTokens}
+            basePath={basePath}
+          />
+        )}
 
-      <main>
-        <OfferPageBlocks blocks={blocks} basePath={basePath} siteSlug={slug} />
-      </main>
+        <main>
+          <OfferPageBlocks blocks={blocks} basePath={basePath} siteSlug={slug} />
+        </main>
 
-      <SiteFooter footerText={site.footer_text} tokens={tokens as StyleTokens} />
-    </div>
+        <SiteFooter footerText={site.footer_text} tokens={tokens as StyleTokens} />
+      </div>
+    </PageGateOverlay>
   );
 }

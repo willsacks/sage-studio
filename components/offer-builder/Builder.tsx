@@ -30,7 +30,7 @@ interface BuilderProps {
   // Optional overrides for site page builder
   saveAction?: (id: string, data: { title: string; page_data: PageData; theme?: PageTheme }) => Promise<{ error?: string } | undefined>;
   publishAction?: (id: string, published: boolean) => Promise<void>;
-  saveSettingsAction?: (id: string, data: { slug: string; publish_mode: string; custom_domain?: string; og_image?: string | null; og_title?: string | null; og_description?: string | null }) => Promise<void>;
+  saveSettingsAction?: (id: string, data: { slug: string; publish_mode: string; custom_domain?: string; og_image?: string | null; og_title?: string | null; og_description?: string | null; is_gated?: boolean; gate_title?: string | null; gate_description?: string | null; gate_button_text?: string | null }) => Promise<void>;
   siteContext?: { siteSlug: string; pages: SitePageRef[] };
   siteStyleVars?: string;
   ornamentStyleVars?: string;
@@ -299,6 +299,7 @@ export function Builder({ page, artistUsername, isAdmin, aiEnabled = false, temp
           onClose={() => setModal(null)}
           onSlugChange={setSlug}
           saveSettingsAction={saveSettingsAction}
+          showGateSettings={!!siteContext}
         />
       )}
       {modal === "save-template" && (

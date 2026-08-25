@@ -21,6 +21,7 @@ export { MusicEmbedBlock } from "./MusicEmbedBlock";
 export { AlbumShowcaseBlock } from "./AlbumShowcaseBlock";
 export { DiscographyBlock } from "./DiscographyBlock";
 export { SimpleFormBlock } from "./SimpleFormBlock";
+export { EmailGateBlock } from "./EmailGateBlock";
 
 import { HeroBlock } from "./HeroBlock";
 import { TextBlock } from "./TextBlock";
@@ -40,6 +41,7 @@ import { MusicEmbedBlock } from "./MusicEmbedBlock";
 import { AlbumShowcaseBlock } from "./AlbumShowcaseBlock";
 import { DiscographyBlock } from "./DiscographyBlock";
 import { SimpleFormBlock } from "./SimpleFormBlock";
+import { EmailGateBlock } from "./EmailGateBlock";
 
 import type {
   HeroBlockData,
@@ -60,6 +62,7 @@ import type {
   AlbumShowcaseBlockData,
   DiscographyBlockData,
   SimpleFormBlockData,
+  EmailGateBlockData,
 } from "@/lib/types/builder";
 
 /**
@@ -199,6 +202,15 @@ export function renderBlock(
         key: block.id,
         data: block.data as SimpleFormBlockData,
         isEditing,
+      });
+
+    case "email_gate":
+      return React.createElement(EmailGateBlock, {
+        key: block.id,
+        data: block.data as EmailGateBlockData,
+        isEditing,
+        siteSlug,
+        blockId: block.id,
       });
 
     default:

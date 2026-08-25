@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils/cn";
 import {
   Image, Type, LayoutGrid, MessageSquare, CreditCard,
   ImagePlay, Shield, Megaphone, Video, Minus, ArrowUpDown, Compass, ClipboardList,
-  Music2, Disc3, ListMusic, Send,
+  Music2, Disc3, ListMusic, Send, Lock,
 } from "lucide-react";
 
 const BLOCK_ICONS: Record<BlockType, React.ReactNode> = {
@@ -28,12 +28,13 @@ const BLOCK_ICONS: Record<BlockType, React.ReactNode> = {
   album_showcase: <Disc3 size={16} />,
   discography: <ListMusic size={16} />,
   simple_form: <Send size={16} />,
+  email_gate: <Lock size={16} />,
 };
 
 const BLOCK_GROUPS: { label: string; blocks: BlockType[] }[] = [
   { label: "Content", blocks: ["hero", "text", "image", "image_text", "video_embed"] },
   { label: "Social Proof", blocks: ["testimonial", "feature_grid"] },
-  { label: "Conversion", blocks: ["pricing_card", "cta_banner", "guarantee", "application_form", "simple_form"] },
+  { label: "Conversion", blocks: ["pricing_card", "cta_banner", "guarantee", "application_form", "simple_form", "email_gate"] },
   { label: "Music", blocks: ["music_embed", "album_showcase", "discography"] },
   { label: "Layout", blocks: ["spacer", "divider"] },
   { label: "Homepage", blocks: ["corner_nav"] },

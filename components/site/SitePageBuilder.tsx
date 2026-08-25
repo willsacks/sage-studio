@@ -33,6 +33,10 @@ export function SitePageBuilder({ page, site, allPages, username, isAdmin, aiEna
     og_image: page.og_image ?? null,
     og_title: page.og_title ?? null,
     og_description: page.og_description ?? null,
+    is_gated: (page as unknown as { is_gated?: boolean }).is_gated ?? false,
+    gate_title: (page as unknown as { gate_title?: string | null }).gate_title ?? null,
+    gate_description: (page as unknown as { gate_description?: string | null }).gate_description ?? null,
+    gate_button_text: (page as unknown as { gate_button_text?: string | null }).gate_button_text ?? null,
   } as unknown as OfferPage;
 
   async function handleSave(id: string, data: { title: string; page_data: PageData; theme?: PageTheme }) {
@@ -43,8 +47,18 @@ export function SitePageBuilder({ page, site, allPages, username, isAdmin, aiEna
     await saveSitePage(id, { status: published ? "published" : "draft", siteId: site.id });
   }
 
-  async function handleSaveSettings(id: string, data: { slug: string; publish_mode: string; custom_domain?: string; og_image?: string | null; og_title?: string | null; og_description?: string | null }) {
-    await saveSitePage(id, { slug: data.slug, og_image: data.og_image, og_title: data.og_title, og_description: data.og_description, siteId: site.id });
+  async function handleSaveSettings(id: string, data: { slug: string; publish_mode: string; custom_domain?: string; og_image?: string | null; og_title?: string | null; og_description?: string | null; is_gated?: boolean; gate_title?: string | null; gate_description?: string | null; gate_button_text?: string | null }) {
+    await saveSitePage(id, {
+      slug: data.slug,
+      og_image: data.og_image,
+      og_title: data.og_title,
+      og_description: data.og_description,
+      is_gated: data.is_gated,
+      gate_title: data.gate_title,
+      gate_description: data.gate_description,
+      gate_button_text: data.gate_button_text,
+      siteId: site.id,
+    });
   }
 
   const styleKey = site.style_key ?? DEFAULT_STYLE_KEY;

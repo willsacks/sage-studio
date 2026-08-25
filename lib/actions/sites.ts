@@ -256,6 +256,10 @@ export async function saveSitePage(
     og_description?: string | null;
     slug?: string;
     siteId?: string;
+    is_gated?: boolean;
+    gate_title?: string | null;
+    gate_description?: string | null;
+    gate_button_text?: string | null;
   }
 ) {
   const { supabase, user } = await requireAuth();
@@ -273,6 +277,10 @@ export async function saveSitePage(
       ...(data.meta_description !== undefined ? { meta_description: data.meta_description } : {}),
       ...(data.og_image !== undefined ? { og_image: data.og_image } : {}),
       ...(data.og_title !== undefined ? { og_title: data.og_title } : {}),
+      ...(data.is_gated !== undefined ? { is_gated: data.is_gated } : {}),
+      ...(data.gate_title !== undefined ? { gate_title: data.gate_title } : {}),
+      ...(data.gate_description !== undefined ? { gate_description: data.gate_description } : {}),
+      ...(data.gate_button_text !== undefined ? { gate_button_text: data.gate_button_text } : {}),
       ...(data.og_description !== undefined ? { og_description: data.og_description } : {}),
       ...(data.slug !== undefined ? { slug: data.slug } : {}),
       updated_at: new Date().toISOString(),
@@ -515,6 +523,59 @@ export async function setNotificationEmail(siteId: string, email: string) {
   const { error } = await (supabase as any)
     .from("artist_sites")
     .update({ notification_email: trimmed || null })
+    .eq("id", siteId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/my-site/${siteId}`);
+  return { success: true };
+}
+
+export async function setResendConnection(siteId: string, apiKey: string, audienceId: string) {
+  const { supabase, user } = await requireAuth();
+  await requireSiteRole(supabase, siteId, user.id, "manager");
+
+  const trimmedKey = apiKey.trim();
+  const trimmedAudienceId = audienceId.trim();
+  if (!trimmedKey || !trimmedAudienceId) {
+    return { error: "Both an API key and an Audience ID are required" };
+  }
+
+  // Validate against the live Resend API before persisting, so a typo'd key
+  // or audience id is caught here rather than silently failing every future
+  // gate-unlock sync. `resend.audiences.get` is Resend's own kept-for-compat
+  // name for what their API now calls a Segment internally.
+  const { Resend } = await import("resend");
+  const testClient = new Resend(trimmedKey);
+  const { error: resendError } = await testClient.audiences.get(trimmedAudienceId);
+  if (resendError) {
+    return { error: `Couldn't verify that with Resend: ${resendError.message}` };
+  }
+
+  const { encryptSecret } = await import("@/lib/crypto");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
+    .from("artist_sites")
+    .update({
+      resend_api_key_encrypted: encryptSecret(trimmedKey),
+      resend_audience_id: trimmedAudienceId,
+    })
+    .eq("id", siteId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/my-site/${siteId}`);
+  return { success: true };
+}
+
+export async function disconnectResend(siteId: string) {
+  const { supabase, user } = await requireAuth();
+  await requireSiteRole(supabase, siteId, user.id, "manager");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
+    .from("artist_sites")
+    .update({ resend_api_key_encrypted: null, resend_audience_id: null })
     .eq("id", siteId);
 
   if (error) return { error: error.message };

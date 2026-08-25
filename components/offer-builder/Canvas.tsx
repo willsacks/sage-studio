@@ -60,6 +60,7 @@ function SortableBlock({ block }: { block: Block }) {
         divider: m.DividerBlock as never,
         corner_nav: m.CornerNavBlock as never,
         application_form: m.ApplicationFormBlock as never,
+        email_gate: m.EmailGateBlock as never,
       };
       setBlockComponent(() => map[block.type] ?? null);
     });

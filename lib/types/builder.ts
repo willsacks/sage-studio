@@ -16,7 +16,8 @@ export type BlockType =
   | "music_embed"
   | "album_showcase"
   | "discography"
-  | "simple_form";
+  | "simple_form"
+  | "email_gate";
 
 export type SocialPlatform =
   | "instagram"
@@ -287,6 +288,18 @@ export interface ApplicationFormBlockData {
   notificationEmail?: string;
 }
 
+export interface EmailGateBlockData {
+  title?: string;
+  description?: string;
+  buttonText?: string;
+  filePath?: string;     // storage path in the private "gated-files" bucket
+  fileName?: string;     // original filename, used for display + download attribute
+  successHeading?: string;
+  successMessage?: string;
+  downloadButtonText?: string;
+  rememberUnlock?: boolean; // default true — skip re-gating via localStorage
+}
+
 export type BlockData =
   | HeroBlockData
   | TextBlockData
@@ -305,7 +318,8 @@ export type BlockData =
   | MusicEmbedBlockData
   | AlbumShowcaseBlockData
   | DiscographyBlockData
-  | SimpleFormBlockData;
+  | SimpleFormBlockData
+  | EmailGateBlockData;
 
 export interface Block {
   id: string;
@@ -353,6 +367,7 @@ export const BLOCK_FIELD_KEYS: Record<BlockType, string[]> = {
   album_showcase: ["albumArt", "albumArtFocusX", "albumArtFocusY", "albumTitle", "artistName", "releaseYear", "releaseType", "description", "tracklist", "streamingLinks", "layout"],
   discography: ["heading", "subheading", "columns", "releases"],
   simple_form: ["heading", "subheading", "fields", "submitText", "successMessage", "notificationEmail"],
+  email_gate: ["title", "description", "buttonText", "filePath", "fileName", "successHeading", "successMessage", "downloadButtonText", "rememberUnlock"],
 };
 
 export const BLOCK_LABELS: Record<BlockType, string> = {
@@ -374,6 +389,7 @@ export const BLOCK_LABELS: Record<BlockType, string> = {
   album_showcase: "Album Showcase",
   discography: "Discography",
   simple_form: "Simple Form",
+  email_gate: "Email Gate",
 };
 
 /** A readable name for a block in the AI-assistant selection chip — the type
@@ -539,6 +555,15 @@ export function createBlock(type: BlockType): Block {
       thankYouMessage: "Thank you for applying. We review applications personally and will be in touch within a few days.",
       submitButtonText: "Submit Application",
     } as ApplicationFormBlockData,
+    email_gate: {
+      title: "Get the free download",
+      description: "Enter your email and we'll send you the link right away.",
+      buttonText: "Send Me The Download",
+      successHeading: "You're in!",
+      successMessage: "Thanks — here's your download.",
+      downloadButtonText: "Download Now",
+      rememberUnlock: true,
+    } as EmailGateBlockData,
   };
   return { id, type, data: defaults[type] };
 }

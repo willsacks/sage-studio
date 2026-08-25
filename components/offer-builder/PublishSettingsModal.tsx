@@ -16,14 +16,26 @@ export function PublishSettingsModal({
   onClose,
   onSlugChange,
   saveSettingsAction,
+  showGateSettings = false,
 }: {
   page: OfferPage;
   artistUsername: string | null;
   onClose: () => void;
   onSlugChange?: (slug: string) => void;
-  saveSettingsAction?: (id: string, data: { slug: string; publish_mode: string; custom_domain?: string; og_image?: string | null; og_title?: string | null; og_description?: string | null }) => Promise<void>;
+  saveSettingsAction?: (id: string, data: { slug: string; publish_mode: string; custom_domain?: string; og_image?: string | null; og_title?: string | null; og_description?: string | null; is_gated?: boolean; gate_title?: string | null; gate_description?: string | null; gate_button_text?: string | null }) => Promise<void>;
+  // Only true for site_pages (via SitePageBuilder) — offer_pages has no
+  // is_gated/gate_* columns, so this section must stay hidden there.
+  showGateSettings?: boolean;
 }) {
-  const pageAny = page as OfferPage & { og_image?: string | null; og_title?: string | null; og_description?: string | null };
+  const pageAny = page as OfferPage & {
+    og_image?: string | null;
+    og_title?: string | null;
+    og_description?: string | null;
+    is_gated?: boolean | null;
+    gate_title?: string | null;
+    gate_description?: string | null;
+    gate_button_text?: string | null;
+  };
   const [tab, setTab] = useState<Tab>((page.publish_mode as Tab) ?? "subdirectory");
   const [slug, setSlug] = useState(page.slug);
   const [customDomain, setCustomDomain] = useState<string>(page.custom_domain ?? "");
@@ -33,6 +45,10 @@ export function PublishSettingsModal({
   const [ogImage, setOgImage] = useState<string | null>(pageAny.og_image ?? null);
   const [ogTitle, setOgTitle] = useState<string>(pageAny.og_title ?? "");
   const [ogDescription, setOgDescription] = useState<string>(pageAny.og_description ?? "");
+  const [isGated, setIsGated] = useState(pageAny.is_gated ?? false);
+  const [gateTitle, setGateTitle] = useState(pageAny.gate_title ?? "");
+  const [gateDescription, setGateDescription] = useState(pageAny.gate_description ?? "");
+  const [gateButtonText, setGateButtonText] = useState(pageAny.gate_button_text ?? "");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const theme = useBuilderStore((s) => s.theme);
@@ -50,8 +66,11 @@ export function PublishSettingsModal({
     setSaveError(null);
     try {
       const ogData = { og_image: ogImage, og_title: ogTitle || null, og_description: ogDescription || null };
+      const gateData = showGateSettings
+        ? { is_gated: isGated, gate_title: gateTitle.trim() || null, gate_description: gateDescription.trim() || null, gate_button_text: gateButtonText.trim() || null }
+        : {};
       if (saveSettingsAction) {
-        await saveSettingsAction(page.id, { slug, publish_mode: tab, custom_domain: customDomain || undefined, ...ogData });
+        await saveSettingsAction(page.id, { slug, publish_mode: tab, custom_domain: customDomain || undefined, ...ogData, ...gateData });
       } else {
         const result = await saveOfferPage(page.id, { slug, publish_mode: tab, custom_domain: customDomain || undefined });
         if (result && "error" in result) { setSaveError(result.error); setSaving(false); return; }
@@ -219,6 +238,44 @@ export function PublishSettingsModal({
               />
             </div>
           </div>
+
+          {/* Email gate */}
+          {showGateSettings && (
+            <div className="border-t border-[var(--border)] pt-4 space-y-3">
+              <label className="flex items-center gap-2 text-xs font-medium text-[var(--foreground)] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isGated}
+                  onChange={(e) => setIsGated(e.target.checked)}
+                  className="rounded"
+                />
+                Require email to view this page
+              </label>
+              {isGated && (
+                <div className="space-y-2 pl-0.5">
+                  <input
+                    value={gateTitle}
+                    onChange={(e) => setGateTitle(e.target.value)}
+                    placeholder="Enter your email to continue"
+                    className="w-full px-3 py-2 text-sm rounded-md border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
+                  />
+                  <textarea
+                    value={gateDescription}
+                    onChange={(e) => setGateDescription(e.target.value)}
+                    placeholder="Optional description shown under the title"
+                    rows={2}
+                    className="w-full px-3 py-2 text-sm rounded-md border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] resize-none"
+                  />
+                  <input
+                    value={gateButtonText}
+                    onChange={(e) => setGateButtonText(e.target.value)}
+                    placeholder="Unlock"
+                    className="w-full px-3 py-2 text-sm rounded-md border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Theme accent */}
           <div className="border-t border-[var(--border)] pt-4 space-y-2">
