@@ -1,5 +1,6 @@
 import { Settings } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { NavVisibilityForm } from "@/components/settings/NavVisibilityForm";
 
 export const metadata = { title: "Settings" };
 
@@ -7,9 +8,10 @@ export default async function SettingsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  const { data: profile } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: profile } = await (supabase as any)
     .from("profiles")
-    .select("display_name, username")
+    .select("display_name, username, hidden_nav_items")
     .eq("id", user!.id)
     .single();
 
@@ -46,6 +48,14 @@ export default async function SettingsPage() {
             </div>
           </dl>
         </div>
+      </div>
+
+      <div className="rounded-lg border border-[var(--border)] px-5 py-4">
+        <p className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wide mb-1">Sidebar Menu</p>
+        <p className="text-sm text-[var(--muted-foreground)] mb-3">
+          Choose which sections show up in your menu.
+        </p>
+        <NavVisibilityForm initialHidden={(profile?.hidden_nav_items as string[] | null) ?? []} />
       </div>
     </div>
   );

@@ -531,63 +531,22 @@ export async function setNotificationEmail(siteId: string, email: string) {
   return { success: true };
 }
 
-export async function setResendConnection(siteId: string, apiKey: string, audienceId: string) {
-  const { supabase, user } = await requireAuth();
-  await requireSiteRole(supabase, siteId, user.id, "manager");
+// Resend connection + list/contact/broadcast management moved to
+// lib/actions/newsletter.ts — it's account-level (one Resend connection
+// per user, shared across all their sites), not per-site.
 
-  const trimmedKey = apiKey.trim();
-  const trimmedAudienceId = audienceId.trim();
-  if (!trimmedKey || !trimmedAudienceId) {
-    return { error: "Both an API key and an Audience ID are required" };
-  }
-
-  // Validate against the live Resend API before persisting, so a typo'd key
-  // or audience id is caught here rather than silently failing every future
-  // gate-unlock sync. `resend.audiences.get` is Resend's own kept-for-compat
-  // name for what their API now calls a Segment internally. Wrapped in
-  // try/catch — the SDK can throw (network error, malformed key) rather
-  // than resolving with {error}, and an uncaught throw here would surface
-  // as an unhandled rejection in the client's startTransition instead of
-  // the inline error message the UI expects.
-  try {
-    const { Resend } = await import("resend");
-    const testClient = new Resend(trimmedKey);
-    const { error: resendError } = await testClient.audiences.get(trimmedAudienceId);
-    if (resendError) {
-      return { error: `Couldn't verify that with Resend: ${resendError.message}` };
-    }
-
-    const { encryptSecret } = await import("@/lib/crypto");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any)
-      .from("artist_sites")
-      .update({
-        resend_api_key_encrypted: encryptSecret(trimmedKey),
-        resend_audience_id: trimmedAudienceId,
-      })
-      .eq("id", siteId);
-
-    if (error) return { error: error.message };
-
-    revalidatePath(`/my-site/${siteId}`);
-    return { success: true };
-  } catch (err) {
-    return { error: err instanceof Error ? err.message : "Couldn't connect to Resend. Please try again." };
-  }
-}
-
-export async function disconnectResend(siteId: string) {
+export async function setSiteResendLists(siteId: string, listIds: string[]) {
   const { supabase, user } = await requireAuth();
   await requireSiteRole(supabase, siteId, user.id, "manager");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
     .from("artist_sites")
-    .update({ resend_api_key_encrypted: null, resend_audience_id: null })
+    .update({ resend_list_ids: listIds })
     .eq("id", siteId);
 
   if (error) return { error: error.message };
 
-  revalidatePath(`/my-site/${siteId}`);
+  revalidatePath(`/my-site/${siteId}/settings`);
   return { success: true };
 }

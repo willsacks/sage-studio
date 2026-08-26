@@ -9,8 +9,10 @@ import { SiteSettingsForm } from "@/components/site/SiteSettingsForm";
 import { CustomDomainForm } from "@/components/site/CustomDomainForm";
 import { DeleteSiteButton } from "@/components/site/DeleteSiteButton";
 import { CollaboratorsPanel } from "@/components/site/CollaboratorsPanel";
+import { SiteNewsletterListsForm } from "@/components/site/SiteNewsletterListsForm";
 import { isProPlan } from "@/lib/plan-gates";
 import { getSiteRole, hasAtLeast } from "@/lib/access/site-access";
+import { getResendClientForUser } from "@/lib/email/resend-client";
 
 export const metadata: Metadata = { title: "Site Settings" };
 
@@ -28,6 +30,13 @@ export default async function SiteSettingsPage({ params }: { params: Promise<{ s
   const { data: profile } = await supabase.from("profiles").select("tier_key, role").eq("id", site.user_id).single();
   const isPro = isProPlan(profile?.tier_key ?? "", profile?.role);
   const collaborators = await getCollaboratorsForSite(siteId);
+
+  // Newsletter lists belong to the site OWNER's Resend connection, not the
+  // acting (possibly collaborator) user's — same as plan-gate checks
+  // elsewhere in this codebase, which key off the owner too.
+  const ownerResend = await getResendClientForUser(site.user_id);
+  const newsletterLists = ownerResend ? (await ownerResend.audiences.list()).data?.data ?? [] : [];
+  const currentListIds = (site as unknown as { resend_list_ids?: string[] }).resend_list_ids ?? [];
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -67,6 +76,14 @@ export default async function SiteSettingsPage({ params }: { params: Promise<{ s
             </a>
           </div>
         )}
+      </div>
+
+      <div className="border-t border-[var(--border)] pt-6 space-y-2">
+        <h2 className="text-lg font-semibold">Newsletter</h2>
+        <p className="text-sm text-[var(--muted-foreground)]">
+          New subscribers from this site (Email Gate blocks, page gates) join:
+        </p>
+        <SiteNewsletterListsForm siteId={siteId} lists={newsletterLists} currentListIds={currentListIds} />
       </div>
 
       <div className="border-t border-[var(--border)] pt-6">

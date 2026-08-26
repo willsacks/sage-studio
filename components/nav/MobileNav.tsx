@@ -12,9 +12,10 @@ interface MobileNavProps {
   displayName: string | null;
   plan: "free" | "pro";
   isAdmin?: boolean;
+  hiddenNavItems?: string[];
 }
 
-export function MobileNav({ displayName, plan, isAdmin }: MobileNavProps) {
+export function MobileNav({ displayName, plan, isAdmin, hiddenNavItems }: MobileNavProps) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -66,7 +67,7 @@ export function MobileNav({ displayName, plan, isAdmin }: MobileNavProps) {
           </div>
 
           <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-            <NavLinks isAdmin={isAdmin} />
+            <NavLinks isAdmin={isAdmin} hiddenNavItems={hiddenNavItems} />
           </nav>
 
           <div className="p-3 border-t border-[var(--sidebar-border)] space-y-1">

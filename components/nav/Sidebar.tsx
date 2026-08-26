@@ -2,17 +2,19 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Globe, Timer, CreditCard, Settings, Leaf, LogOut, LayoutDashboard, GitBranch, CheckSquare, Gamepad2, BookOpen } from "lucide-react";
+import { Globe, Timer, CreditCard, Settings, Leaf, LogOut, LayoutDashboard, GitBranch, CheckSquare, Gamepad2, BookOpen, Mail } from "lucide-react";
 import { signOut } from "@/lib/actions/auth";
 
 interface SidebarProps {
   displayName: string | null;
   plan: "free" | "pro";
   isAdmin?: boolean;
+  hiddenNavItems?: string[];
 }
 
 export const NAV = [
   { href: "/my-site", label: "Sites", icon: Globe },
+  { href: "/newsletter", label: "Newsletter", icon: Mail },
   { href: "/todos", label: "To Do's", icon: CheckSquare },
   { href: "/tasks", label: "Time Tracker", icon: Timer },
   { href: "/pipeline", label: "Pipeline", icon: GitBranch },
@@ -54,10 +56,19 @@ export function NavItem({
   );
 }
 
-export function NavLinks({ isAdmin, onNavigate }: { isAdmin?: boolean; onNavigate?: () => void }) {
+export function NavLinks({
+  isAdmin,
+  onNavigate,
+  hiddenNavItems,
+}: {
+  isAdmin?: boolean;
+  onNavigate?: () => void;
+  hiddenNavItems?: string[];
+}) {
+  const visibleNav = NAV.filter((item) => !hiddenNavItems?.includes(item.href));
   return (
     <>
-      {NAV.map((item) => (
+      {visibleNav.map((item) => (
         <NavItem key={item.href} {...item} onNavigate={onNavigate} />
       ))}
 
@@ -84,7 +95,7 @@ export function NavLinks({ isAdmin, onNavigate }: { isAdmin?: boolean; onNavigat
   );
 }
 
-export function Sidebar({ displayName, plan, isAdmin }: SidebarProps) {
+export function Sidebar({ displayName, plan, isAdmin, hiddenNavItems }: SidebarProps) {
   return (
     <aside className="hidden lg:flex flex-col w-56 flex-shrink-0 bg-[var(--sidebar-background)] border-r border-[var(--sidebar-border)] h-screen sticky top-0">
       {/* Logo */}
@@ -99,7 +110,7 @@ export function Sidebar({ displayName, plan, isAdmin }: SidebarProps) {
 
       {/* Main nav */}
       <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-        <NavLinks isAdmin={isAdmin} />
+        <NavLinks isAdmin={isAdmin} hiddenNavItems={hiddenNavItems} />
       </nav>
 
       {/* User footer */}

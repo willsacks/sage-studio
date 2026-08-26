@@ -5,22 +5,23 @@ import { useRouter } from "next/navigation";
 import { Loader2, CheckCircle2, Mail, Unlink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { setResendConnection, disconnectResend } from "@/lib/actions/sites";
+import { setResendConnection, disconnectResend } from "@/lib/actions/newsletter";
 
 type Props = {
-  siteId: string;
   isConnected: boolean;
 };
 
-/** Lets a site owner connect their OWN Resend account so captured emails
- * (from EmailGateBlock downloads and page gates) sync into an Audience they
- * control — Sage Studio never sends on their behalf. Mirrors
+/** Lets a user connect their OWN Resend account (once, for their whole
+ * account — not per-site) so the Newsletter page can manage lists/contacts
+ * and send broadcasts through it, and so captured emails (from
+ * EmailGateBlock downloads and page gates, on whichever sites they choose
+ * to feed a list) sync there too. Sage Studio never sends on their behalf
+ * — this is their own account, their own sending domain. Mirrors
  * NotificationEmailForm's inline save/error/success pattern. */
-export function ResendConnectForm({ siteId, isConnected }: Props) {
+export function ResendConnectForm({ isConnected }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [apiKey, setApiKey] = useState("");
-  const [audienceId, setAudienceId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -29,13 +30,12 @@ export function ResendConnectForm({ siteId, isConnected }: Props) {
     setSaved(false);
     startTransition(async () => {
       try {
-        const result = await setResendConnection(siteId, apiKey, audienceId);
+        const result = await setResendConnection(apiKey);
         if (result.error) {
           setError(result.error);
         } else {
           setSaved(true);
           setApiKey("");
-          setAudienceId("");
           router.refresh();
           setTimeout(() => setSaved(false), 3000);
         }
@@ -48,7 +48,7 @@ export function ResendConnectForm({ siteId, isConnected }: Props) {
   function handleDisconnect() {
     setError(null);
     startTransition(async () => {
-      const result = await disconnectResend(siteId);
+      const result = await disconnectResend();
       if (result.error) setError(result.error);
       else router.refresh();
     });
@@ -56,12 +56,12 @@ export function ResendConnectForm({ siteId, isConnected }: Props) {
 
   if (isConnected) {
     return (
-      <div className="flex items-start gap-2 mb-4 p-3 rounded-xl border border-[var(--border)] bg-[var(--card)]">
+      <div className="flex items-start gap-2 p-3 rounded-xl border border-[var(--border)] bg-[var(--card)]">
         <Mail size={15} className="text-[var(--muted-foreground)] flex-shrink-0 mt-2" />
         <div className="flex-1 min-w-0">
           <p className="text-xs font-medium text-[var(--foreground)] mb-1.5 flex items-center gap-1.5">
             <CheckCircle2 size={13} className="text-green-500" />
-            Resend connected — captured emails sync to your Audience
+            Resend connected
           </p>
           <Button size="sm" variant="outline" onClick={handleDisconnect} disabled={isPending} className="h-8">
             {isPending ? <Loader2 size={13} className="animate-spin" /> : <Unlink size={13} />}
@@ -74,33 +74,28 @@ export function ResendConnectForm({ siteId, isConnected }: Props) {
   }
 
   return (
-    <div className="flex items-start gap-2 mb-4 p-3 rounded-xl border border-[var(--border)] bg-[var(--card)]">
-      <Mail size={15} className="text-[var(--muted-foreground)] flex-shrink-0 mt-2" />
+    <div className="flex items-start gap-2 p-4 rounded-xl border border-[var(--border)] bg-[var(--card)]">
+      <Mail size={16} className="text-[var(--muted-foreground)] flex-shrink-0 mt-2" />
       <div className="flex-1 min-w-0 space-y-2">
-        <p className="text-xs font-medium text-[var(--foreground)]">
-          Connect Resend to grow your own email list
+        <p className="text-sm font-medium text-[var(--foreground)]">
+          Connect Resend to send updates and grow your list
         </p>
-        <p className="text-[11px] text-[var(--muted-foreground)]">
-          Emails captured by Email Gate blocks and page gates sync into an Audience in your own Resend account — you run your own campaigns there.
+        <p className="text-xs text-[var(--muted-foreground)]">
+          Manage your contacts and lists here, and send broadcasts straight
+          from Sage Studio — through your own Resend account, so you own the
+          list and the sending domain.
         </p>
         <Input
           type="password"
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
           placeholder="Resend API key"
-          className="h-8 text-sm"
-        />
-        <Input
-          type="text"
-          value={audienceId}
-          onChange={(e) => setAudienceId(e.target.value)}
-          placeholder="Audience ID"
-          className="h-8 text-sm"
+          className="h-8 text-sm max-w-sm"
         />
         <Button
           size="sm"
           onClick={handleConnect}
-          disabled={isPending || !apiKey.trim() || !audienceId.trim()}
+          disabled={isPending || !apiKey.trim()}
           className="h-8"
         >
           {isPending ? <Loader2 size={13} className="animate-spin" /> : saved ? <CheckCircle2 size={13} /> : null}

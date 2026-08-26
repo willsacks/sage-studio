@@ -7,7 +7,6 @@ import { getFormSubmissionsForSite } from "@/lib/queries/form-submissions";
 import { toggleSitePublished } from "@/lib/actions/sites";
 import { MarkSubmissionsReadOnMount } from "@/components/site/MarkSubmissionsReadOnMount";
 import { NotificationEmailForm } from "@/components/site/NotificationEmailForm";
-import { ResendConnectForm } from "@/components/site/ResendConnectForm";
 import { ArrowLeft, Globe, ExternalLink, Settings, Eye, EyeOff, Palette } from "lucide-react";
 import { format } from "date-fns";
 import { PageTypePicker } from "@/components/site/PageTypePicker";
@@ -187,16 +186,10 @@ export default async function SitePageManagerPage({ params }: { params: Promise<
         </div>
 
         {canManage && (
-          <>
-            <NotificationEmailForm
-              siteId={siteId}
-              currentEmail={(site as { notification_email?: string | null }).notification_email ?? null}
-            />
-            <ResendConnectForm
-              siteId={siteId}
-              isConnected={!!(site as { resend_audience_id?: string | null }).resend_audience_id}
-            />
-          </>
+          <NotificationEmailForm
+            siteId={siteId}
+            currentEmail={(site as { notification_email?: string | null }).notification_email ?? null}
+          />
         )}
 
         {submissions.length === 0 ? (
