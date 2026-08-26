@@ -1,19 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Users, PenSquare, Send } from "lucide-react";
+import { Users, PenSquare, Send, Globe } from "lucide-react";
 import { listNewsletterLists } from "@/lib/actions/newsletter";
 import { ContactsTab } from "./ContactsTab";
 import { ComposeTab } from "./ComposeTab";
 import { SentTab } from "./SentTab";
+import { DomainsTab } from "./DomainsTab";
 
-type Tab = "contacts" | "compose" | "sent";
+type Tab = "contacts" | "compose" | "sent" | "domains";
 export type NewsletterList = { id: string; name: string };
 
 const TABS: { id: Tab; label: string; icon: typeof Users }[] = [
   { id: "contacts", label: "Contacts", icon: Users },
   { id: "compose", label: "Compose", icon: PenSquare },
   { id: "sent", label: "Sent", icon: Send },
+  { id: "domains", label: "Domains", icon: Globe },
 ];
 
 export function NewsletterApp() {
@@ -54,6 +56,7 @@ export function NewsletterApp() {
       )}
       {tab === "compose" && <ComposeTab lists={lists} />}
       {tab === "sent" && <SentTab />}
+      {tab === "domains" && <DomainsTab />}
     </div>
   );
 }

@@ -180,6 +180,81 @@ export async function listNewsletterDomains() {
   return { domains: (data?.data ?? []).filter((d) => d.status === "verified") };
 }
 
+/** All domains regardless of verification status — for the Domains
+ * management tab. listNewsletterDomains (above) stays verified-only,
+ * since that one feeds the Compose tab's From-address picker. */
+export async function listAllNewsletterDomains() {
+  const { user } = await requireAuth();
+  const resend = await getResendClientForUser(user.id);
+  if (!resend) return { error: "Connect Resend first", domains: [] };
+
+  const { data, error } = await resend.domains.list();
+  if (error) return { error: error.message, domains: [] };
+  return { domains: data?.data ?? [] };
+}
+
+/** resend.domains.list() doesn't include DNS records (only create/get do)
+ * — this fetches full details for one domain, used when a row is expanded
+ * in the Domains tab. */
+export async function getNewsletterDomain(domainId: string) {
+  const { user } = await requireAuth();
+  const resend = await getResendClientForUser(user.id);
+  if (!resend) return { error: "Connect Resend first" };
+
+  const { data, error } = await resend.domains.get(domainId);
+  if (error) return { error: error.message };
+  return { domain: data };
+}
+
+export async function addNewsletterDomain(name: string) {
+  const { user } = await requireAuth();
+  const trimmed = name.trim().toLowerCase();
+  if (!trimmed) return { error: "A domain name is required" };
+
+  try {
+    const resend = await requireResendClient(user.id);
+    const { data, error } = await resend.domains.create({ name: trimmed });
+    if (error) return { error: error.message };
+    revalidatePath("/newsletter");
+    return { domain: data };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to add domain" };
+  }
+}
+
+/** Triggers a re-check with Resend, then returns the domain's current
+ * status + DNS records — `resend.domains.verify` itself only returns the
+ * id, not the updated status, so a follow-up get() is needed to reflect
+ * whether it actually passed. */
+export async function verifyNewsletterDomain(domainId: string) {
+  const { user } = await requireAuth();
+  try {
+    const resend = await requireResendClient(user.id);
+    const { error: verifyError } = await resend.domains.verify(domainId);
+    if (verifyError) return { error: verifyError.message };
+
+    const { data, error } = await resend.domains.get(domainId);
+    if (error) return { error: error.message };
+    revalidatePath("/newsletter");
+    return { domain: data };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to verify domain" };
+  }
+}
+
+export async function removeNewsletterDomain(domainId: string) {
+  const { user } = await requireAuth();
+  try {
+    const resend = await requireResendClient(user.id);
+    const { error } = await resend.domains.remove(domainId);
+    if (error) return { error: error.message };
+    revalidatePath("/newsletter");
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to remove domain" };
+  }
+}
+
 export async function sendNewsletterBroadcast(params: {
   listId: string;
   subject: string;

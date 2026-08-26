@@ -62,7 +62,7 @@ export function ComposeTab({ lists }: { lists: NewsletterList[] }) {
   if (!loadingDomains && domains.length === 0) {
     return (
       <p className="text-sm text-[var(--muted-foreground)]">
-        You need a verified sending domain in Resend before you can send. Verify one in your Resend dashboard, then come back here.
+        You need a verified sending domain before you can send. Add and verify one in the Domains tab, then come back here.
       </p>
     );
   }
