@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { listChartOfAccounts } from "@/lib/actions/finance-accounts";
 import { listFinanceProjects } from "@/lib/actions/finance-projects";
-import { createManualTransaction, deleteManualTransaction, listTransactions, type SplitInput } from "@/lib/actions/finance-transactions";
+import { createManualTransaction, deleteManualTransaction, listTransactions, categorizeTransaction, type SplitInput } from "@/lib/actions/finance-transactions";
 import type { FinanceEntity } from "./FinancesApp";
 
 type Account = { id: string; name: string; account_type: string; account_subtype: string; is_active: boolean };
@@ -61,6 +61,7 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
     refresh();
   }, [refresh]);
 
+  const uncategorized = transactions.filter((t) => t.status === "uncategorized");
   const moneyAccounts = accounts.filter((a) => MONEY_SUBTYPES.includes(a.account_subtype) && a.is_active);
   const categoryAccounts = accounts.filter(
     (a) => (direction === "in" ? a.account_type === "income" : a.account_type === "expense") && a.is_active
@@ -217,11 +218,22 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
         </div>
       )}
 
+      {uncategorized.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-amber-600 uppercase tracking-wide mb-1.5">Needs categorizing ({uncategorized.length})</p>
+          <div className="rounded-xl border border-amber-500/30 divide-y divide-[var(--border)]">
+            {uncategorized.map((t) => (
+              <UncategorizeRow key={t.id} transaction={t} accounts={accounts} projects={projects} entityId={entity.id} onDone={refresh} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {transactions.length === 0 ? (
         <p className="text-sm text-[var(--muted-foreground)] py-8 text-center">No transactions yet.</p>
       ) : (
         <div className="rounded-xl border border-[var(--border)] divide-y divide-[var(--border)]">
-          {transactions.map((t) => (
+          {transactions.filter((t) => t.status !== "uncategorized").map((t) => (
             <div key={t.id} className="flex items-center justify-between px-4 py-2.5">
               <div>
                 <p className="text-sm font-medium">{t.payee_name}</p>
@@ -239,6 +251,73 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function UncategorizeRow({
+  transaction,
+  accounts,
+  projects,
+  entityId,
+  onDone,
+}: {
+  transaction: Transaction;
+  accounts: Account[];
+  projects: Project[];
+  entityId: string;
+  onDone: () => void;
+}) {
+  const [accountId, setAccountId] = useState("");
+  const [projectId, setProjectId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const categoryAccounts = accounts.filter((a) => (transaction.amount >= 0 ? a.account_type === "income" : a.account_type === "expense") && a.is_active);
+
+  async function handleSave() {
+    if (!accountId) {
+      setError("Choose a category");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    const result = await categorizeTransaction(transaction.id, entityId, [
+      { accountId, amount: Math.abs(transaction.amount), projectId: projectId || undefined },
+    ]);
+    setSaving(false);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    onDone();
+  }
+
+  return (
+    <div className="flex items-center justify-between px-4 py-2.5 gap-2 flex-wrap">
+      <div>
+        <p className="text-sm font-medium">{transaction.payee_name}</p>
+        <p className="text-xs text-[var(--muted-foreground)]">{transaction.date}</p>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className={`text-sm font-medium ${transaction.amount >= 0 ? "text-green-600" : "text-red-500"}`}>{money(transaction.amount)}</span>
+        <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs">
+          <option value="">Category...</option>
+          {categoryAccounts.map((a) => (
+            <option key={a.id} value={a.id}>{a.name}</option>
+          ))}
+        </select>
+        <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs">
+          <option value="">No project</option>
+          {projects.map((p) => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </select>
+        <Button size="sm" className="h-8 text-xs" onClick={handleSave} disabled={saving}>
+          {saving ? <Loader2 size={12} className="animate-spin" /> : "Save"}
+        </Button>
+      </div>
+      {error && <p className="text-xs text-red-500 w-full">{error}</p>}
     </div>
   );
 }

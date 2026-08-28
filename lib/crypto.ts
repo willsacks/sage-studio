@@ -64,3 +64,37 @@ export function verifyGateToken(pageId: string, token: string): boolean {
   const b = Buffer.from(token);
   return a.length === b.length && timingSafeEqual(a, b);
 }
+
+// Plaid access tokens get a dedicated root secret rather than reusing
+// RESEND_KEY_ENCRYPTION_SECRET — a bank access token is higher-stakes than
+// a Resend API key, so a compromise of one secret shouldn't reach the other.
+function getPlaidRootSecret(): Buffer {
+  const secret = process.env.PLAID_TOKEN_ENCRYPTION_SECRET;
+  if (!secret || secret.length !== 64) {
+    throw new Error("PLAID_TOKEN_ENCRYPTION_SECRET must be set to a 64-char hex string (32 bytes).");
+  }
+  return Buffer.from(secret, "hex");
+}
+
+function getPlaidKey(): Buffer {
+  return createHmac("sha256", getPlaidRootSecret()).update("plaid-token-v1").digest();
+}
+
+export function encryptPlaidToken(plaintext: string): string {
+  const iv = randomBytes(IV_LENGTH);
+  const cipher = createCipheriv(ALGORITHM, getPlaidKey(), iv);
+  const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  return [iv.toString("base64"), authTag.toString("base64"), ciphertext.toString("base64")].join(":");
+}
+
+export function decryptPlaidToken(encrypted: string): string {
+  const [ivB64, authTagB64, ciphertextB64] = encrypted.split(":");
+  if (!ivB64 || !authTagB64 || !ciphertextB64) {
+    throw new Error("Malformed encrypted Plaid token.");
+  }
+  const decipher = createDecipheriv(ALGORITHM, getPlaidKey(), Buffer.from(ivB64, "base64"));
+  decipher.setAuthTag(Buffer.from(authTagB64, "base64"));
+  const plaintext = Buffer.concat([decipher.update(Buffer.from(ciphertextB64, "base64")), decipher.final()]);
+  return plaintext.toString("utf8");
+}
