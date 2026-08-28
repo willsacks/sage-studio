@@ -453,6 +453,615 @@ export type Database = {
         };
         Relationships: [];
       };
+      finance_entities: {
+        Row: {
+          id: string;
+          owner_id: string;
+          name: string;
+          entity_type: "personal" | "business";
+          currency: string;
+          fiscal_year_start_month: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          owner_id: string;
+          name: string;
+          entity_type: "personal" | "business";
+          currency?: string;
+          fiscal_year_start_month?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          owner_id?: string;
+          name?: string;
+          entity_type?: "personal" | "business";
+          currency?: string;
+          fiscal_year_start_month?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      finance_entity_members: {
+        Row: {
+          id: string;
+          entity_id: string;
+          user_id: string;
+          role: "viewer" | "editor" | "manager" | "owner";
+          status: "pending" | "accepted";
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          entity_id: string;
+          user_id: string;
+          role: "viewer" | "editor" | "manager" | "owner";
+          status?: "pending" | "accepted";
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          entity_id?: string;
+          user_id?: string;
+          role?: "viewer" | "editor" | "manager" | "owner";
+          status?: "pending" | "accepted";
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      chart_of_accounts: {
+        Row: {
+          id: string;
+          entity_id: string;
+          name: string;
+          account_type: "asset" | "liability" | "equity" | "income" | "expense";
+          account_subtype: string;
+          normal_balance: "debit" | "credit";
+          is_default: boolean;
+          is_active: boolean;
+          parent_account_id: string | null;
+          display_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          entity_id: string;
+          name: string;
+          account_type: "asset" | "liability" | "equity" | "income" | "expense";
+          account_subtype: string;
+          normal_balance: "debit" | "credit";
+          is_default?: boolean;
+          is_active?: boolean;
+          parent_account_id?: string | null;
+          display_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          entity_id?: string;
+          name?: string;
+          account_type?: "asset" | "liability" | "equity" | "income" | "expense";
+          account_subtype?: string;
+          normal_balance?: "debit" | "credit";
+          is_default?: boolean;
+          is_active?: boolean;
+          parent_account_id?: string | null;
+          display_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      journal_entries: {
+        Row: {
+          id: string;
+          entity_id: string;
+          entry_date: string;
+          description: string | null;
+          source_type: "manual" | "bank_transaction" | "opening_balance" | "invoice_payment" | "reconciliation_adjustment";
+          source_transaction_id: string | null;
+          created_by: string;
+          is_locked: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          entity_id: string;
+          entry_date: string;
+          description?: string | null;
+          source_type: "manual" | "bank_transaction" | "opening_balance" | "invoice_payment" | "reconciliation_adjustment";
+          source_transaction_id?: string | null;
+          created_by: string;
+          is_locked?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          entity_id?: string;
+          entry_date?: string;
+          description?: string | null;
+          source_type?: "manual" | "bank_transaction" | "opening_balance" | "invoice_payment" | "reconciliation_adjustment";
+          source_transaction_id?: string | null;
+          created_by?: string;
+          is_locked?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      journal_entry_lines: {
+        Row: {
+          id: string;
+          journal_entry_id: string;
+          account_id: string;
+          debit: number;
+          credit: number;
+          memo: string | null;
+        };
+        Insert: {
+          id?: string;
+          journal_entry_id: string;
+          account_id: string;
+          debit?: number;
+          credit?: number;
+          memo?: string | null;
+        };
+        Update: {
+          id?: string;
+          journal_entry_id?: string;
+          account_id?: string;
+          debit?: number;
+          credit?: number;
+          memo?: string | null;
+        };
+        Relationships: [];
+      };
+      finance_projects: {
+        Row: {
+          id: string;
+          entity_id: string;
+          name: string;
+          project_type: string | null;
+          status: "active" | "completed" | "archived";
+          start_date: string | null;
+          end_date: string | null;
+          budget: number | null;
+          description: string | null;
+          client_name: string | null;
+          display_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          entity_id: string;
+          name: string;
+          project_type?: string | null;
+          status?: "active" | "completed" | "archived";
+          start_date?: string | null;
+          end_date?: string | null;
+          budget?: number | null;
+          description?: string | null;
+          client_name?: string | null;
+          display_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          entity_id?: string;
+          name?: string;
+          project_type?: string | null;
+          status?: "active" | "completed" | "archived";
+          start_date?: string | null;
+          end_date?: string | null;
+          budget?: number | null;
+          description?: string | null;
+          client_name?: string | null;
+          display_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      bank_connections: {
+        Row: {
+          id: string;
+          owner_id: string;
+          plaid_item_id: string;
+          plaid_access_token_encrypted: string;
+          institution_name: string | null;
+          institution_logo_url: string | null;
+          plaid_cursor: string | null;
+          status: "active" | "error" | "revoked";
+          last_synced_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          owner_id: string;
+          plaid_item_id: string;
+          plaid_access_token_encrypted: string;
+          institution_name?: string | null;
+          institution_logo_url?: string | null;
+          plaid_cursor?: string | null;
+          status?: "active" | "error" | "revoked";
+          last_synced_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          owner_id?: string;
+          plaid_item_id?: string;
+          plaid_access_token_encrypted?: string;
+          institution_name?: string | null;
+          institution_logo_url?: string | null;
+          plaid_cursor?: string | null;
+          status?: "active" | "error" | "revoked";
+          last_synced_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      bank_accounts: {
+        Row: {
+          id: string;
+          bank_connection_id: string;
+          entity_id: string;
+          chart_account_id: string | null;
+          plaid_account_id: string;
+          name: string;
+          mask: string | null;
+          account_type: string | null;
+          current_balance: number | null;
+          available_balance: number | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          bank_connection_id: string;
+          entity_id: string;
+          chart_account_id?: string | null;
+          plaid_account_id: string;
+          name: string;
+          mask?: string | null;
+          account_type?: string | null;
+          current_balance?: number | null;
+          available_balance?: number | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          bank_connection_id?: string;
+          entity_id?: string;
+          chart_account_id?: string | null;
+          plaid_account_id?: string;
+          name?: string;
+          mask?: string | null;
+          account_type?: string | null;
+          current_balance?: number | null;
+          available_balance?: number | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      transactions: {
+        Row: {
+          id: string;
+          entity_id: string;
+          bank_account_id: string | null;
+          plaid_transaction_id: string | null;
+          date: string;
+          payee_name: string;
+          amount: number;
+          status: "uncategorized" | "categorized" | "excluded";
+          journal_entry_id: string | null;
+          is_split: boolean;
+          reconciliation_id: string | null;
+          cleared_at: string | null;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          entity_id: string;
+          bank_account_id?: string | null;
+          plaid_transaction_id?: string | null;
+          date: string;
+          payee_name: string;
+          amount: number;
+          status?: "uncategorized" | "categorized" | "excluded";
+          journal_entry_id?: string | null;
+          is_split?: boolean;
+          reconciliation_id?: string | null;
+          cleared_at?: string | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          entity_id?: string;
+          bank_account_id?: string | null;
+          plaid_transaction_id?: string | null;
+          date?: string;
+          payee_name?: string;
+          amount?: number;
+          status?: "uncategorized" | "categorized" | "excluded";
+          journal_entry_id?: string | null;
+          is_split?: boolean;
+          reconciliation_id?: string | null;
+          cleared_at?: string | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      transaction_splits: {
+        Row: {
+          id: string;
+          transaction_id: string;
+          chart_account_id: string;
+          project_id: string | null;
+          amount: number;
+          memo: string | null;
+        };
+        Insert: {
+          id?: string;
+          transaction_id: string;
+          chart_account_id: string;
+          project_id?: string | null;
+          amount: number;
+          memo?: string | null;
+        };
+        Update: {
+          id?: string;
+          transaction_id?: string;
+          chart_account_id?: string;
+          project_id?: string | null;
+          amount?: number;
+          memo?: string | null;
+        };
+        Relationships: [];
+      };
+      categorization_rules: {
+        Row: {
+          id: string;
+          entity_id: string;
+          match_type: "contains" | "exact" | "starts_with";
+          match_value: string;
+          chart_account_id: string;
+          default_project_id: string | null;
+          priority: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          entity_id: string;
+          match_type: "contains" | "exact" | "starts_with";
+          match_value: string;
+          chart_account_id: string;
+          default_project_id?: string | null;
+          priority?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          entity_id?: string;
+          match_type?: "contains" | "exact" | "starts_with";
+          match_value?: string;
+          chart_account_id?: string;
+          default_project_id?: string | null;
+          priority?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      reconciliations: {
+        Row: {
+          id: string;
+          bank_account_id: string;
+          statement_start_date: string;
+          statement_end_date: string;
+          statement_ending_balance: number;
+          beginning_balance: number;
+          status: "in_progress" | "completed";
+          completed_at: string | null;
+          completed_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          bank_account_id: string;
+          statement_start_date: string;
+          statement_end_date: string;
+          statement_ending_balance: number;
+          beginning_balance?: number;
+          status?: "in_progress" | "completed";
+          completed_at?: string | null;
+          completed_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          bank_account_id?: string;
+          statement_start_date?: string;
+          statement_end_date?: string;
+          statement_ending_balance?: number;
+          beginning_balance?: number;
+          status?: "in_progress" | "completed";
+          completed_at?: string | null;
+          completed_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      invoices: {
+        Row: {
+          id: string;
+          entity_id: string;
+          project_id: string | null;
+          client_name: string;
+          client_email: string | null;
+          invoice_number: string;
+          issue_date: string;
+          due_date: string | null;
+          status: "draft" | "sent" | "partial" | "paid" | "overdue" | "void";
+          subtotal: number;
+          tax_amount: number;
+          total: number;
+          notes: string | null;
+          pdf_storage_path: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          entity_id: string;
+          project_id?: string | null;
+          client_name: string;
+          client_email?: string | null;
+          invoice_number: string;
+          issue_date: string;
+          due_date?: string | null;
+          status?: "draft" | "sent" | "partial" | "paid" | "overdue" | "void";
+          subtotal?: number;
+          tax_amount?: number;
+          total?: number;
+          notes?: string | null;
+          pdf_storage_path?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          entity_id?: string;
+          project_id?: string | null;
+          client_name?: string;
+          client_email?: string | null;
+          invoice_number?: string;
+          issue_date?: string;
+          due_date?: string | null;
+          status?: "draft" | "sent" | "partial" | "paid" | "overdue" | "void";
+          subtotal?: number;
+          tax_amount?: number;
+          total?: number;
+          notes?: string | null;
+          pdf_storage_path?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      invoice_line_items: {
+        Row: {
+          id: string;
+          invoice_id: string;
+          description: string;
+          quantity: number;
+          unit_price: number;
+          amount: number;
+          display_order: number;
+        };
+        Insert: {
+          id?: string;
+          invoice_id: string;
+          description: string;
+          quantity?: number;
+          unit_price?: number;
+          amount?: number;
+          display_order?: number;
+        };
+        Update: {
+          id?: string;
+          invoice_id?: string;
+          description?: string;
+          quantity?: number;
+          unit_price?: number;
+          amount?: number;
+          display_order?: number;
+        };
+        Relationships: [];
+      };
+      invoice_payments: {
+        Row: {
+          id: string;
+          invoice_id: string;
+          amount: number;
+          paid_date: string;
+          method: string | null;
+          matched_transaction_id: string | null;
+          journal_entry_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          invoice_id: string;
+          amount: number;
+          paid_date: string;
+          method?: string | null;
+          matched_transaction_id?: string | null;
+          journal_entry_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          invoice_id?: string;
+          amount?: number;
+          paid_date?: string;
+          method?: string | null;
+          matched_transaction_id?: string | null;
+          journal_entry_id?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      finance_tax_settings: {
+        Row: {
+          entity_id: string;
+          reserve_percentage: number;
+          tax_year_start_month: number;
+          updated_at: string;
+        };
+        Insert: {
+          entity_id: string;
+          reserve_percentage?: number;
+          tax_year_start_month?: number;
+          updated_at?: string;
+        };
+        Update: {
+          entity_id?: string;
+          reserve_percentage?: number;
+          tax_year_start_month?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {};
     Functions: {};
