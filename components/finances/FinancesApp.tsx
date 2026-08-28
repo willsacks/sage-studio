@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { LayoutGrid, FolderKanban, ArrowLeftRight, BarChart3, BookOpen, Landmark } from "lucide-react";
+import { LayoutGrid, FolderKanban, ArrowLeftRight, BarChart3, BookOpen, Landmark, FileText } from "lucide-react";
 import { EntitySwitcher } from "./EntitySwitcher";
 import { CreateEntityForm } from "./CreateEntityForm";
 import { OverviewTab } from "./OverviewTab";
@@ -10,6 +10,7 @@ import { TransactionsTab } from "./TransactionsTab";
 import { ReportsTab } from "./ReportsTab";
 import { ChartOfAccountsTab } from "./ChartOfAccountsTab";
 import { BankTab } from "./BankTab";
+import { InvoicesTab } from "./InvoicesTab";
 
 export type FinanceEntity = {
   id: string;
@@ -19,12 +20,13 @@ export type FinanceEntity = {
   fiscal_year_start_month: number;
 };
 
-type Tab = "overview" | "projects" | "transactions" | "bank" | "reports" | "accounts";
+type Tab = "overview" | "projects" | "transactions" | "invoices" | "bank" | "reports" | "accounts";
 
 const TABS: { id: Tab; label: string; icon: typeof LayoutGrid }[] = [
   { id: "overview", label: "Overview", icon: LayoutGrid },
   { id: "projects", label: "Projects", icon: FolderKanban },
   { id: "transactions", label: "Transactions", icon: ArrowLeftRight },
+  { id: "invoices", label: "Invoices", icon: FileText },
   { id: "bank", label: "Bank Accounts", icon: Landmark },
   { id: "reports", label: "Reports", icon: BarChart3 },
   { id: "accounts", label: "Chart of Accounts", icon: BookOpen },
@@ -76,6 +78,7 @@ export function FinancesApp({ initialEntities }: { initialEntities: FinanceEntit
       {tab === "overview" && <OverviewTab entity={currentEntity} />}
       {tab === "projects" && <ProjectsTab entity={currentEntity} />}
       {tab === "transactions" && <TransactionsTab entity={currentEntity} />}
+      {tab === "invoices" && <InvoicesTab entity={currentEntity} />}
       {tab === "bank" && <BankTab entity={currentEntity} />}
       {tab === "reports" && <ReportsTab entity={currentEntity} />}
       {tab === "accounts" && <ChartOfAccountsTab entity={currentEntity} />}
