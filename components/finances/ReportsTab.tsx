@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from "recharts";
-import { fetchBalanceSheet, fetchIncomeStatement, fetchProjectProfitability } from "@/lib/actions/finance-reports";
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, Cell } from "recharts";
+import { fetchBalanceSheet, fetchIncomeStatement, fetchProjectProfitability, fetchMonthlyIncomeExpense, fetchCashBalanceOverTime } from "@/lib/actions/finance-reports";
+import { ExportCpaPackageButton } from "./ExportCpaPackageButton";
 import type { FinanceEntity } from "./FinancesApp";
 
-type Report = "pl" | "balance" | "projects";
+type Report = "pl" | "balance" | "projects" | "trends";
 
 function money(n: number) {
   return n.toLocaleString(undefined, { style: "currency", currency: "USD" });
@@ -24,25 +25,82 @@ export function ReportsTab({ entity }: { entity: FinanceEntity }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-1">
-        {([
-          ["pl", "Income Statement"],
-          ["balance", "Balance Sheet"],
-          ["projects", "Project Comparison"],
-        ] as [Report, string][]).map(([id, label]) => (
-          <button
-            key={id}
-            onClick={() => setReport(id)}
-            className={`text-xs px-3 py-1.5 rounded-full border ${report === id ? "border-[var(--primary)] bg-[var(--accent)]" : "border-[var(--border)] text-[var(--muted-foreground)]"}`}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="flex justify-between items-center">
+        <div className="flex gap-1">
+          {([
+            ["pl", "Income Statement"],
+            ["balance", "Balance Sheet"],
+            ["projects", "Project Comparison"],
+            ["trends", "Trends"],
+          ] as [Report, string][]).map(([id, label]) => (
+            <button
+              key={id}
+              onClick={() => setReport(id)}
+              className={`text-xs px-3 py-1.5 rounded-full border ${report === id ? "border-[var(--primary)] bg-[var(--accent)]" : "border-[var(--border)] text-[var(--muted-foreground)]"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <ExportCpaPackageButton entityId={entity.id} />
       </div>
 
       {report === "pl" && <IncomeStatementReport entity={entity} />}
       {report === "balance" && <BalanceSheetReport entity={entity} />}
       {report === "projects" && <ProjectComparisonReport entity={entity} />}
+      {report === "trends" && <TrendsReport entity={entity} />}
+    </div>
+  );
+}
+
+function TrendsReport({ entity }: { entity: FinanceEntity }) {
+  const [incomeExpense, setIncomeExpense] = useState<{ month: string; income: number; expenses: number }[]>([]);
+  const [cashBalance, setCashBalance] = useState<{ month: string; balance: number }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([fetchMonthlyIncomeExpense(entity.id, 6), fetchCashBalanceOverTime(entity.id, 6)]).then(([ie, cb]) => {
+      setIncomeExpense(ie.data ?? []);
+      setCashBalance(cb.data ?? []);
+      setLoading(false);
+    });
+  }, [entity.id]);
+
+  if (loading) return <div className="flex justify-center py-10"><Loader2 size={18} className="animate-spin text-[var(--muted-foreground)]" /></div>;
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wide mb-1.5">Income vs. Expenses</p>
+        <div className="h-64 rounded-xl border border-[var(--border)] p-4">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={incomeExpense}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => money(Number(v))} width={80} />
+              <Tooltip formatter={(v) => money(Number(v))} />
+              <Legend />
+              <Bar dataKey="income" name="Income" fill="#16a34a" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="expenses" name="Expenses" fill="#ef4444" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div>
+        <p className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wide mb-1.5">Cash Balance</p>
+        <div className="h-64 rounded-xl border border-[var(--border)] p-4">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={cashBalance}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => money(Number(v))} width={80} />
+              <Tooltip formatter={(v) => money(Number(v))} />
+              <Line type="monotone" dataKey="balance" name="Cash" stroke="var(--primary)" strokeWidth={2} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
     </div>
   );
 }

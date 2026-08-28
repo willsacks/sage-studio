@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { fetchBalanceSheet, fetchIncomeStatement, fetchProjectProfitability } from "@/lib/actions/finance-reports";
+import { TaxSetAsideCard } from "./TaxSetAsideCard";
 import type { FinanceEntity } from "./FinancesApp";
 
 function money(n: number) {
@@ -61,6 +62,7 @@ export function OverviewTab({ entity }: { entity: FinanceEntity }) {
           <p className="text-lg font-semibold mt-1">{topProject.name} — {money(topProject.netProfit)}</p>
         </div>
       )}
+      {entity.entity_type === "business" && <TaxSetAsideCard entityId={entity.id} />}
     </div>
   );
 }

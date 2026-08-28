@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { requireFinanceEntityRole } from "@/lib/access/finance-access";
-import { getBalanceSheet, getIncomeStatement, getProjectProfitability } from "@/lib/finance/reports";
+import { getBalanceSheet, getIncomeStatement, getProjectProfitability, getMonthlyIncomeExpense, getCashBalanceOverTime } from "@/lib/finance/reports";
 
 async function requireAuth() {
   const supabase = await createClient();
@@ -38,5 +38,25 @@ export async function fetchProjectProfitability(entityId: string, startDate?: st
     return { projects: await getProjectProfitability(supabase, entityId, startDate, endDate) };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Failed to load project profitability", projects: [] };
+  }
+}
+
+export async function fetchMonthlyIncomeExpense(entityId: string, months = 6) {
+  const { supabase, user } = await requireAuth();
+  await requireFinanceEntityRole(supabase, entityId, user.id, "viewer");
+  try {
+    return { data: await getMonthlyIncomeExpense(supabase, entityId, months) };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to load monthly trend", data: [] };
+  }
+}
+
+export async function fetchCashBalanceOverTime(entityId: string, months = 6) {
+  const { supabase, user } = await requireAuth();
+  await requireFinanceEntityRole(supabase, entityId, user.id, "viewer");
+  try {
+    return { data: await getCashBalanceOverTime(supabase, entityId, months) };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to load cash balance trend", data: [] };
   }
 }

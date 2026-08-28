@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, RefreshCw, Unlink, Plus, Trash2 } from "lucide-react";
+import { Loader2, RefreshCw, Unlink, Plus, Trash2, ListChecks } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConnectBankButton } from "./ConnectBankButton";
+import { ReconciliationView } from "./ReconciliationView";
 import { listBankConnections, mapBankAccountToChartAccount, unlinkBankAccount } from "@/lib/actions/finance-bank";
 import { listChartOfAccounts } from "@/lib/actions/finance-accounts";
 import { listFinanceProjects } from "@/lib/actions/finance-projects";
@@ -33,6 +34,7 @@ export function BankTab({ entity }: { entity: FinanceEntity }) {
   const [loading, setLoading] = useState(true);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reconcilingAccount, setReconcilingAccount] = useState<BankAccount | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -117,6 +119,11 @@ export function BankTab({ entity }: { entity: FinanceEntity }) {
                   <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => handleSync(ba.bank_connection_id)} disabled={syncingId === ba.bank_connection_id}>
                     {syncingId === ba.bank_connection_id ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
                   </Button>
+                  {ba.chart_account_id && (
+                    <button onClick={() => setReconcilingAccount(ba)} className="p-1.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" title="Reconcile">
+                      <ListChecks size={14} />
+                    </button>
+                  )}
                   <button onClick={() => handleUnlink(ba.id)} className="p-1.5 text-[var(--muted-foreground)] hover:text-red-500">
                     <Unlink size={14} />
                   </button>
@@ -128,6 +135,15 @@ export function BankTab({ entity }: { entity: FinanceEntity }) {
       )}
 
       <RulesManager entityId={entity.id} accounts={accounts} projects={projects} rules={rules} onChanged={refresh} />
+
+      {reconcilingAccount && (
+        <ReconciliationView
+          entityId={entity.id}
+          bankAccountId={reconcilingAccount.id}
+          accountName={reconcilingAccount.name}
+          onClose={() => setReconcilingAccount(null)}
+        />
+      )}
     </div>
   );
 }

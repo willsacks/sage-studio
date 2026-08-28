@@ -212,3 +212,52 @@ export async function getProjectProfitability(
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
+
+/** Income vs. expense per calendar month over a date range — feeds the
+ * Reports tab's trend chart. Computed by re-running the income-statement
+ * aggregation once per month bucket; fine at this data volume (a handful
+ * of months of a single creator's books), not worth a SQL date_trunc
+ * query until it becomes a real perf problem. */
+export async function getMonthlyIncomeExpense(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: SupabaseClient<Database> | any,
+  entityId: string,
+  months: number
+) {
+  const now = new Date();
+  const results: { month: string; income: number; expenses: number }[] = [];
+
+  for (let i = months - 1; i >= 0; i--) {
+    const bucket = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    const start = bucket.toISOString().slice(0, 10);
+    const end = new Date(Date.UTC(bucket.getUTCFullYear(), bucket.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
+    const statement = await getIncomeStatement(supabase, entityId, start, end);
+    results.push({
+      month: bucket.toLocaleString(undefined, { month: "short", year: "2-digit" }),
+      income: statement.totalIncome,
+      expenses: statement.totalExpenses,
+    });
+  }
+  return results;
+}
+
+/** Cash balance (all "Cash and Bank" subtype accounts, summed) at the end
+ * of each of the last N months — for the cash-over-time chart. */
+export async function getCashBalanceOverTime(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: SupabaseClient<Database> | any,
+  entityId: string,
+  months: number
+) {
+  const now = new Date();
+  const results: { month: string; balance: number }[] = [];
+
+  for (let i = months - 1; i >= 0; i--) {
+    const bucket = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i + 1, 0));
+    const asOf = bucket.toISOString().slice(0, 10);
+    const balanceSheet = await getBalanceSheet(supabase, entityId, asOf);
+    const cash = balanceSheet.assets.filter((s) => s.subtype === "Cash and Bank").reduce((sum, s) => sum + s.total, 0);
+    results.push({ month: bucket.toLocaleString(undefined, { month: "short", year: "2-digit" }), balance: round2(cash) });
+  }
+  return results;
+}
