@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { LayoutGrid, FolderKanban, ArrowLeftRight, BarChart3, BookOpen, Landmark, FileText } from "lucide-react";
+import { LayoutGrid, FolderKanban, ArrowLeftRight, BarChart3, BookOpen, Landmark, FileText, Users } from "lucide-react";
 import { EntitySwitcher } from "./EntitySwitcher";
 import { CreateEntityForm } from "./CreateEntityForm";
 import { OverviewTab } from "./OverviewTab";
@@ -11,6 +11,7 @@ import { ReportsTab } from "./ReportsTab";
 import { ChartOfAccountsTab } from "./ChartOfAccountsTab";
 import { BankTab } from "./BankTab";
 import { InvoicesTab } from "./InvoicesTab";
+import { CollaboratorsDialog } from "./CollaboratorsDialog";
 
 export type FinanceEntity = {
   id: string;
@@ -36,6 +37,7 @@ export function FinancesApp({ initialEntities }: { initialEntities: FinanceEntit
   const [entities, setEntities] = useState(initialEntities);
   const [currentEntityId, setCurrentEntityId] = useState<string | null>(initialEntities[0]?.id ?? null);
   const [tab, setTab] = useState<Tab>("overview");
+  const [sharing, setSharing] = useState(false);
 
   function handleEntityCreated(entity: FinanceEntity) {
     setEntities((prev) => [...prev, entity]);
@@ -57,6 +59,12 @@ export function FinancesApp({ initialEntities }: { initialEntities: FinanceEntit
           onChange={setCurrentEntityId}
           onCreated={handleEntityCreated}
         />
+        <button
+          onClick={() => setSharing(true)}
+          className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] px-2 py-1.5"
+        >
+          <Users size={14} /> Share access
+        </button>
       </div>
 
       <div className="flex gap-1 border-b border-[var(--border)] overflow-x-auto">
@@ -82,6 +90,10 @@ export function FinancesApp({ initialEntities }: { initialEntities: FinanceEntit
       {tab === "bank" && <BankTab entity={currentEntity} />}
       {tab === "reports" && <ReportsTab entity={currentEntity} />}
       {tab === "accounts" && <ChartOfAccountsTab entity={currentEntity} />}
+
+      {sharing && (
+        <CollaboratorsDialog entityId={currentEntity.id} entityName={currentEntity.name} onClose={() => setSharing(false)} />
+      )}
     </div>
   );
 }

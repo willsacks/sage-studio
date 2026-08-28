@@ -82,15 +82,19 @@ export async function createManualTransaction(params: {
   return { transactionId: txn.id as string };
 }
 
-/** Categorizes an already-existing uncategorized transaction (bank-fed).
- * Resolves the money account from the transaction's own bank_accounts row. */
+/** Categorizes an already-existing uncategorized transaction (bank-fed or
+ * CSV-imported). Resolves the money account from the transaction's own
+ * bank_accounts row when it's Plaid-linked, falling back to
+ * money_account_id for CSV-imported transactions that aren't tied to any
+ * bank_accounts row. Also clears any "needs review" flag a collaborator
+ * (e.g. a bookkeeper) set — categorizing an item is how it gets resolved. */
 export async function categorizeTransaction(transactionId: string, entityId: string, splits: SplitInput[]) {
   const { supabase, user } = await requireAuth();
   await requireFinanceEntityRole(supabase, entityId, user.id, "editor");
 
   const { data: txn, error: txnError } = await supabase
     .from("transactions")
-    .select("id, amount, date, payee_name, bank_account_id, journal_entry_id, bank_accounts(chart_account_id)")
+    .select("id, amount, date, payee_name, bank_account_id, money_account_id, journal_entry_id, bank_accounts(chart_account_id)")
     .eq("id", transactionId)
     .eq("entity_id", entityId)
     .single();
@@ -98,7 +102,7 @@ export async function categorizeTransaction(transactionId: string, entityId: str
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const bankAccount = Array.isArray((txn as any).bank_accounts) ? (txn as any).bank_accounts[0] : (txn as any).bank_accounts;
-  const moneyAccountId = bankAccount?.chart_account_id;
+  const moneyAccountId = bankAccount?.chart_account_id ?? txn.money_account_id;
   if (!moneyAccountId) return { error: "This account hasn't been mapped to a chart of accounts entry yet" };
 
   const splitError = validateSplits(splits, txn.amount);
@@ -134,10 +138,53 @@ export async function categorizeTransaction(transactionId: string, entityId: str
 
   const { error: updateError } = await supabase
     .from("transactions")
-    .update({ status: "categorized", is_split: splits.length > 1, journal_entry_id: posted.journalEntryId })
+    .update({
+      status: "categorized",
+      is_split: splits.length > 1,
+      journal_entry_id: posted.journalEntryId,
+      needs_review: false,
+      review_note: null,
+      flagged_by: null,
+      flagged_at: null,
+    })
     .eq("id", transactionId);
   if (updateError) return { error: updateError.message };
 
+  revalidatePath("/finances");
+  return { success: true };
+}
+
+/** A collaborator (e.g. a bookkeeper) flags a transaction — categorized or
+ * not — for the owner to look at, with an optional note explaining why
+ * they couldn't decide themselves. Requires the same "editor" role as
+ * categorizing, since RLS's WITH CHECK on transactions already requires
+ * that minimum for any update. */
+export async function flagTransactionForReview(transactionId: string, entityId: string, note?: string) {
+  const { supabase, user } = await requireAuth();
+  await requireFinanceEntityRole(supabase, entityId, user.id, "editor");
+
+  const { error } = await supabase
+    .from("transactions")
+    .update({ needs_review: true, review_note: note?.trim() || null, flagged_by: user.id, flagged_at: new Date().toISOString() })
+    .eq("id", transactionId)
+    .eq("entity_id", entityId);
+  if (error) return { error: error.message };
+  revalidatePath("/finances");
+  return { success: true };
+}
+
+/** Clears a review flag without changing the transaction's category —
+ * for when the owner looks at a flagged item and decides it's fine as-is. */
+export async function resolveReviewFlag(transactionId: string, entityId: string) {
+  const { supabase, user } = await requireAuth();
+  await requireFinanceEntityRole(supabase, entityId, user.id, "editor");
+
+  const { error } = await supabase
+    .from("transactions")
+    .update({ needs_review: false, review_note: null, flagged_by: null, flagged_at: null })
+    .eq("id", transactionId)
+    .eq("entity_id", entityId);
+  if (error) return { error: error.message };
   revalidatePath("/finances");
   return { success: true };
 }

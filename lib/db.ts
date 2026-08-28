@@ -490,26 +490,38 @@ export type Database = {
         Row: {
           id: string;
           entity_id: string;
-          user_id: string;
+          user_id: string | null;
+          email: string | null;
+          invite_token: string | null;
+          invited_by: string | null;
           role: "viewer" | "editor" | "manager" | "owner";
           status: "pending" | "accepted";
           created_at: string;
+          updated_at: string;
         };
         Insert: {
           id?: string;
           entity_id: string;
-          user_id: string;
+          user_id?: string | null;
+          email?: string | null;
+          invite_token?: string;
+          invited_by?: string | null;
           role: "viewer" | "editor" | "manager" | "owner";
           status?: "pending" | "accepted";
           created_at?: string;
+          updated_at?: string;
         };
         Update: {
           id?: string;
           entity_id?: string;
-          user_id?: string;
+          user_id?: string | null;
+          email?: string | null;
+          invite_token?: string;
+          invited_by?: string | null;
           role?: "viewer" | "editor" | "manager" | "owner";
           status?: "pending" | "accepted";
           created_at?: string;
+          updated_at?: string;
         };
         Relationships: [];
       };
@@ -777,6 +789,11 @@ export type Database = {
           reconciliation_id: string | null;
           cleared_at: string | null;
           notes: string | null;
+          needs_review: boolean;
+          review_note: string | null;
+          flagged_by: string | null;
+          flagged_at: string | null;
+          money_account_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -794,6 +811,11 @@ export type Database = {
           reconciliation_id?: string | null;
           cleared_at?: string | null;
           notes?: string | null;
+          needs_review?: boolean;
+          review_note?: string | null;
+          flagged_by?: string | null;
+          flagged_at?: string | null;
+          money_account_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -811,6 +833,11 @@ export type Database = {
           reconciliation_id?: string | null;
           cleared_at?: string | null;
           notes?: string | null;
+          needs_review?: boolean;
+          review_note?: string | null;
+          flagged_by?: string | null;
+          flagged_at?: string | null;
+          money_account_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
