@@ -1,4 +1,4 @@
-import type { StagedAccount, StagedCustomer } from "@/lib/finance/import-commit";
+import type { StagedAccount, StagedCustomer, StagedInvoice, StagedPayment } from "@/lib/finance/import-commit";
 
 type QboAccount = {
   Id: string;
@@ -46,6 +46,67 @@ export function mapQboAccount(account: QboAccount): StagedAccount {
     externalId: account.Id,
     parentExternalId: account.ParentRef?.value,
   };
+}
+
+type QboInvoice = {
+  Id: string;
+  DocNumber?: string;
+  TxnDate: string;
+  DueDate?: string;
+  CustomerRef?: { value: string };
+  Line: { DetailType: string; Amount: number; Description?: string; SalesItemLineDetail?: { Qty?: number; UnitPrice?: number } }[];
+  TotalAmt: number;
+  TxnTaxDetail?: { TotalTax?: number };
+};
+
+/** Maps a QuickBooks Invoice to the staged shape commitInvoiceBatch expects.
+ * Only SalesItemLineDetail lines become line items — QBO invoices also
+ * include SubTotalLineDetail/DiscountLineDetail summary lines that aren't
+ * real billable items. */
+export function mapQboInvoice(invoice: QboInvoice): StagedInvoice {
+  const lineItems = invoice.Line.filter((l) => l.DetailType === "SalesItemLineDetail").map((l) => ({
+    description: l.Description ?? "Item",
+    quantity: l.SalesItemLineDetail?.Qty ?? 1,
+    unitPrice: l.SalesItemLineDetail?.UnitPrice ?? l.Amount,
+  }));
+
+  return {
+    externalId: invoice.Id,
+    invoiceNumber: invoice.DocNumber,
+    customerExternalId: invoice.CustomerRef?.value,
+    issueDate: invoice.TxnDate,
+    dueDate: invoice.DueDate,
+    lineItems,
+    taxAmount: invoice.TxnTaxDetail?.TotalTax,
+    totalOverride: invoice.TotalAmt,
+  };
+}
+
+type QboPayment = {
+  Id: string;
+  TotalAmt: number;
+  TxnDate: string;
+  DepositToAccountRef?: { value: string };
+  Line?: { Amount: number; LinkedTxn?: { TxnId: string; TxnType: string }[] }[];
+};
+
+/** A single QuickBooks Payment can apply to multiple invoices (split across
+ * several LinkedTxn entries) — mapped to one StagedPayment per linked
+ * invoice, each for that line's own amount rather than the payment's full
+ * total, so a split payment doesn't get double-counted against either
+ * invoice. */
+export function mapQboPayment(payment: QboPayment): StagedPayment[] {
+  const invoiceLinks = (payment.Line ?? [])
+    .flatMap((l) => (l.LinkedTxn ?? []).filter((t) => t.TxnType === "Invoice").map((t) => ({ invoiceId: t.TxnId, amount: l.Amount })));
+
+  if (invoiceLinks.length === 0) return [];
+
+  return invoiceLinks.map((link) => ({
+    invoiceExternalId: link.invoiceId,
+    amount: link.amount,
+    paidDate: payment.TxnDate,
+    moneyAccountExternalId: payment.DepositToAccountRef?.value,
+  }));
 }
 
 export function mapQboContact(contact: QboContact): StagedCustomer {

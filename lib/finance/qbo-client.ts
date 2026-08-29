@@ -73,3 +73,43 @@ export async function queryQbo<T>(params: {
   const results = (body?.QueryResponse?.[entity] ?? []) as T[];
   return { results, startPosition, maxResults };
 }
+
+/**
+ * Pages through an entire QuickBooks object type, calling onPage for each
+ * page as it arrives (so callers can commit incrementally rather than
+ * buffering a whole company file in memory). Stops early and reports
+ * `done: false` if `deadline` is reached mid-pagination, so the chunked
+ * import route can persist exactly which page to resume from rather than
+ * re-fetching pages already committed.
+ */
+export async function queryQboAllPages<T>(params: {
+  accessToken: string;
+  realmId: string;
+  environment: "sandbox" | "production";
+  entity: string;
+  whereClause?: string;
+  startPosition: number;
+  deadline: number;
+  onPage: (rows: T[]) => Promise<void>;
+}): Promise<{ done: boolean; nextStartPosition: number }> {
+  const PAGE_SIZE = 100;
+  let startPosition = params.startPosition;
+
+  while (true) {
+    if (Date.now() > params.deadline) return { done: false, nextStartPosition: startPosition };
+
+    const { results } = await queryQbo<T>({
+      accessToken: params.accessToken,
+      realmId: params.realmId,
+      environment: params.environment,
+      entity: params.entity,
+      whereClause: params.whereClause,
+      startPosition,
+      maxResults: PAGE_SIZE,
+    });
+
+    if (results.length > 0) await params.onPage(results);
+    if (results.length < PAGE_SIZE) return { done: true, nextStartPosition: startPosition + results.length };
+    startPosition += PAGE_SIZE;
+  }
+}

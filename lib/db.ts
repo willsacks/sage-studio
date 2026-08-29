@@ -537,6 +537,7 @@ export type Database = {
           is_active: boolean;
           parent_account_id: string | null;
           display_order: number;
+          external_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -551,6 +552,7 @@ export type Database = {
           is_active?: boolean;
           parent_account_id?: string | null;
           display_order?: number;
+          external_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -565,6 +567,7 @@ export type Database = {
           is_active?: boolean;
           parent_account_id?: string | null;
           display_order?: number;
+          external_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -957,6 +960,7 @@ export type Database = {
           entity_id: string;
           project_id: string | null;
           customer_id: string | null;
+          external_id: string | null;
           client_name: string;
           client_email: string | null;
           invoice_number: string;
@@ -976,6 +980,7 @@ export type Database = {
           entity_id: string;
           project_id?: string | null;
           customer_id?: string | null;
+          external_id?: string | null;
           client_name: string;
           client_email?: string | null;
           invoice_number: string;
@@ -995,6 +1000,7 @@ export type Database = {
           entity_id?: string;
           project_id?: string | null;
           customer_id?: string | null;
+          external_id?: string | null;
           client_name?: string;
           client_email?: string | null;
           invoice_number?: string;

@@ -1,32 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
-import { queryQbo, QboApiError } from "@/lib/finance/qbo-client";
+import { queryQboAllPages, QboApiError } from "@/lib/finance/qbo-client";
 import { getValidQboAccessToken } from "@/lib/finance/qbo-token";
-import { commitAccounts, commitCustomers } from "@/lib/finance/import-commit";
-import { mapQboAccount, mapQboContact } from "@/lib/finance/qbo-mapping";
+import { commitAccounts, commitCustomers, commitInvoiceBatch, commitPayment } from "@/lib/finance/import-commit";
+import { mapQboAccount, mapQboContact, mapQboInvoice, mapQboPayment } from "@/lib/finance/qbo-mapping";
 
 // Chunked/resumable historical pull — a company file with thousands of
 // records across many object types can exceed one request's time budget.
-// This route processes one phase at a time and, before its own budget runs
-// out, re-invokes itself so the whole pull can span many requests without
-// any new job-queue infrastructure. maxDuration=300 matches the one other
+// This route processes one phase at a time, paginating within each phase
+// via queryQboAllPages, and — before its own budget runs out — re-invokes
+// itself so the whole pull can span many requests without any new
+// job-queue infrastructure. maxDuration=300 matches the one other
 // long-running route in this repo (app/api/cron/backup/route.ts).
 export const maxDuration = 300;
 
-// Phase 1 scope: chart of accounts + customers/vendors only. Transaction
-// object types (Invoice, Payment, Deposit, Purchase, JournalEntry,
-// Transfer, Bill, BillPayment, CreditCardPayment) are added in later
-// phases, each as an additional case in this same switch.
-const PHASE_ORDER = ["accounts", "customers", "done"] as const;
+// Phase 2 scope: chart of accounts, customers/vendors, and the
+// Invoice+Payment pairing (the highest-value, best-understood transaction
+// types, and where this chunked execution model gets proven at real
+// scale). Remaining object types (Deposit, Purchase, JournalEntry,
+// Transfer, Bill, BillPayment, CreditCardPayment) are added in Phase 3,
+// each as an additional case in this same switch.
+const PHASE_ORDER = ["accounts", "customers", "invoices", "payments", "done"] as const;
 type Phase = (typeof PHASE_ORDER)[number];
+
+type CursorState = { startPosition?: number; subEntity?: "Customer" | "Vendor" };
 
 function nextPhase(phase: Phase): Phase {
   const idx = PHASE_ORDER.indexOf(phase);
   return PHASE_ORDER[idx + 1] ?? "done";
 }
 
+type QboAccountRow = { Id: string; Name: string; AccountType: string; ParentRef?: { value: string } };
+type QboContactRow = { Id: string; DisplayName: string; PrimaryEmailAddr?: { Address: string }; PrimaryPhone?: { FreeFormNumber: string }; BillAddr?: { Line1?: string; City?: string; CountrySubDivisionCode?: string; PostalCode?: string } };
+type QboInvoiceRow = Parameters<typeof mapQboInvoice>[0];
+type QboPaymentRow = Parameters<typeof mapQboPayment>[0];
+
 export async function POST(request: NextRequest) {
   const startedAt = Date.now();
+  const deadline = startedAt + 270_000;
   const { jobId } = await request.json();
   if (!jobId) return NextResponse.json({ error: "jobId is required" }, { status: 400 });
 
@@ -57,49 +68,104 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: tokenResult.error }, { status: 400 });
   }
   const { accessToken, realmId, environment } = tokenResult;
+  const entityId = job.entity_id;
 
   let phase: Phase = PHASE_ORDER.includes(job.phase as Phase) ? (job.phase as Phase) : "accounts";
+  let cursor: CursorState = (job.cursor_state as CursorState) ?? {};
+
+  async function persistProgress(nextCursor: CursorState) {
+    cursor = nextCursor;
+    await supabase.from("import_jobs").update({ cursor_state: cursor, updated_at: new Date().toISOString() }).eq("id", jobId);
+  }
+
+  async function continueLater() {
+    fetch(request.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobId }) }).catch(() => {});
+  }
 
   try {
     while (phase !== "done") {
-      if (Date.now() - startedAt > 270_000) {
-        // Out of time for this invocation — persist where we are and
-        // re-invoke ourselves to continue, rather than leaving the job
-        // stuck. Fire-and-forget: this response returns before the
-        // continuation call resolves.
-        fetch(request.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobId }) }).catch(() => {});
-        return NextResponse.json({ status: "continuing", phase });
-      }
-
       if (phase === "accounts") {
-        const { results } = await queryQbo<{ Id: string; Name: string; AccountType: string; ParentRef?: { value: string } }>({
-          accessToken,
-          realmId,
-          environment,
-          entity: "Account",
+        const { done, nextStartPosition } = await queryQboAllPages<QboAccountRow>({
+          accessToken, realmId, environment, entity: "Account",
+          startPosition: cursor.startPosition ?? 1,
+          deadline,
+          onPage: async (rows) => {
+            const result = await commitAccounts(supabase, entityId, rows.map(mapQboAccount));
+            if ("error" in result) throw new Error(result.error);
+          },
         });
-        const result = await commitAccounts(supabase, job.entity_id, results.map(mapQboAccount));
-        if ("error" in result) throw new Error(result.error);
+        if (!done) {
+          await persistProgress({ startPosition: nextStartPosition });
+          await continueLater();
+          return NextResponse.json({ status: "continuing", phase });
+        }
       }
 
       if (phase === "customers") {
-        const [{ results: customers }, { results: vendors }] = await Promise.all([
-          queryQbo<{ Id: string; DisplayName: string; PrimaryEmailAddr?: { Address: string }; PrimaryPhone?: { FreeFormNumber: string }; BillAddr?: { Line1?: string; City?: string; CountrySubDivisionCode?: string; PostalCode?: string } }>({
-            accessToken, realmId, environment, entity: "Customer",
-          }),
-          queryQbo<{ Id: string; DisplayName: string; PrimaryEmailAddr?: { Address: string }; PrimaryPhone?: { FreeFormNumber: string }; BillAddr?: { Line1?: string; City?: string; CountrySubDivisionCode?: string; PostalCode?: string } }>({
-            accessToken, realmId, environment, entity: "Vendor",
-          }),
-        ]);
-        // Vendors are merged into the same finance_customers table as
-        // Customers — Sage Studio has no separate vendor-reporting concept
-        // that would justify a second table.
-        const result = await commitCustomers(supabase, job.entity_id, [...customers, ...vendors].map(mapQboContact), "quickbooks");
-        if ("error" in result) throw new Error(result.error);
+        const subEntities: ("Customer" | "Vendor")[] = ["Customer", "Vendor"];
+        const startFrom = subEntities.indexOf(cursor.subEntity ?? "Customer");
+        for (const subEntity of subEntities.slice(Math.max(startFrom, 0))) {
+          const { done, nextStartPosition } = await queryQboAllPages<QboContactRow>({
+            accessToken, realmId, environment, entity: subEntity,
+            startPosition: subEntity === cursor.subEntity ? (cursor.startPosition ?? 1) : 1,
+            deadline,
+            onPage: async (rows) => {
+              const result = await commitCustomers(supabase, entityId, rows.map(mapQboContact), "quickbooks");
+              if ("error" in result) throw new Error(result.error);
+            },
+          });
+          if (!done) {
+            await persistProgress({ subEntity, startPosition: nextStartPosition });
+            await continueLater();
+            return NextResponse.json({ status: "continuing", phase });
+          }
+        }
+      }
+
+      if (phase === "invoices") {
+        const { done, nextStartPosition } = await queryQboAllPages<QboInvoiceRow>({
+          accessToken, realmId, environment, entity: "Invoice",
+          startPosition: cursor.startPosition ?? 1,
+          deadline,
+          onPage: async (rows) => {
+            const result = await commitInvoiceBatch(supabase, entityId, rows.map(mapQboInvoice));
+            if ("error" in result) throw new Error(result.error);
+          },
+        });
+        if (!done) {
+          await persistProgress({ startPosition: nextStartPosition });
+          await continueLater();
+          return NextResponse.json({ status: "continuing", phase });
+        }
+      }
+
+      if (phase === "payments") {
+        const { done, nextStartPosition } = await queryQboAllPages<QboPaymentRow>({
+          accessToken, realmId, environment, entity: "Payment",
+          startPosition: cursor.startPosition ?? 1,
+          deadline,
+          onPage: async (rows) => {
+            for (const payment of rows.flatMap(mapQboPayment)) {
+              const result = await commitPayment(supabase, entityId, job.owner_id, payment);
+              // A single unresolvable payment (e.g. references an invoice
+              // that was excluded/voided in QuickBooks) shouldn't abort the
+              // whole import — log it as a job-level note and keep going.
+              if ("error" in result) {
+                await supabase.from("import_jobs").update({ error_message: result.error }).eq("id", jobId);
+              }
+            }
+          },
+        });
+        if (!done) {
+          await persistProgress({ startPosition: nextStartPosition });
+          await continueLater();
+          return NextResponse.json({ status: "continuing", phase });
+        }
       }
 
       phase = nextPhase(phase);
-      await supabase.from("import_jobs").update({ phase, updated_at: new Date().toISOString() }).eq("id", jobId);
+      cursor = {};
+      await supabase.from("import_jobs").update({ phase, cursor_state: {}, updated_at: new Date().toISOString() }).eq("id", jobId);
     }
 
     await supabase.from("import_jobs").update({ status: "completed", phase: "done" }).eq("id", jobId);

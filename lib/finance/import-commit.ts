@@ -6,6 +6,11 @@ import {
   normalBalanceForType,
   type DefaultAccount,
 } from "@/lib/finance/default-accounts";
+import { postImportedTransaction } from "@/lib/finance/ledger";
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
 
 /** Common intermediate shape both the QuickBooks connector and the Wave CSV
  * wizard produce, so the "write into Sage Studio" logic exists exactly
@@ -77,14 +82,17 @@ export async function commitCreateEntity(
   return { entityId: entity.id as string };
 }
 
-/** Bulk-inserts an imported chart of accounts, returning a map from each
- * account's externalId to its new chart_of_accounts.id (used by later
- * phases to resolve transaction/invoice line references). Two-pass:
- * accounts are inserted first with no parent, then parent_account_id is
- * backfilled once every row exists, so the source system's ordering of
- * parent/child accounts doesn't matter. Uses upsert on (entity_id, name) —
- * a plain unique constraint on name isn't declared today, so this relies on
- * an application-level check-then-insert instead; see inline comment. */
+/** Bulk-upserts an imported chart of accounts, returning a map from each
+ * account's externalId to its new chart_of_accounts.id (used immediately
+ * for parent-account resolution below, and by later phases — e.g. Payment/
+ * Deposit — that re-query chart_of_accounts.external_id fresh from the DB,
+ * since a resumed/self-re-invoked import can't rely on this map surviving
+ * across requests). Two-pass: accounts are upserted first with no parent,
+ * then parent_account_id is backfilled once every row exists, so the
+ * source system's ordering of parent/child accounts doesn't matter. Upsert
+ * on (entity_id, external_id) — the unique constraint added in
+ * scripts/add-import-phase2-schema.ts — makes a retried/resumed import
+ * idempotent instead of creating duplicate accounts. */
 export async function commitAccounts(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: SupabaseClient<Database> | any,
@@ -94,44 +102,29 @@ export async function commitAccounts(
   const externalIdToAccountId = new Map<string, string>();
   if (accounts.length === 0) return { externalIdToAccountId };
 
-  // Retries (a resumed/re-run import) shouldn't create duplicate rows for
-  // accounts already committed in a prior attempt — check existing
-  // external_id-tagged accounts for this entity first via a lookup on name,
-  // since chart_of_accounts has no external_id column of its own (unlike
-  // finance_customers) and existing schema shouldn't be widened just for
-  // this. Sage Studio account names are unique per entity in practice
-  // (the manual-entry UI never creates duplicates), so name is a safe key.
-  const { data: existing } = await supabase.from("chart_of_accounts").select("id, name").eq("entity_id", entityId);
-  const existingByName = new Map<string, string>((existing ?? []).map((a: { id: string; name: string }) => [a.name, a.id]));
+  const { data: inserted, error } = await supabase
+    .from("chart_of_accounts")
+    .upsert(
+      accounts.map((a) => ({
+        entity_id: entityId,
+        name: a.name,
+        account_type: a.accountType,
+        account_subtype: a.accountSubtype,
+        normal_balance: normalBalanceForType(a.accountType),
+        is_default: false,
+        external_id: a.externalId ?? null,
+      })),
+      { onConflict: "entity_id,external_id" }
+    )
+    .select("id, external_id");
+  if (error) return { error: error.message };
 
-  const toInsert = accounts.filter((a) => !existingByName.has(a.name));
-  for (const a of accounts) {
-    if (existingByName.has(a.name) && a.externalId) externalIdToAccountId.set(a.externalId, existingByName.get(a.name)!);
+  for (const row of inserted as { id: string; external_id: string | null }[]) {
+    if (row.external_id) externalIdToAccountId.set(row.external_id, row.id);
   }
 
-  if (toInsert.length > 0) {
-    const { data: inserted, error } = await supabase
-      .from("chart_of_accounts")
-      .insert(
-        toInsert.map((a) => ({
-          entity_id: entityId,
-          name: a.name,
-          account_type: a.accountType,
-          account_subtype: a.accountSubtype,
-          normal_balance: normalBalanceForType(a.accountType),
-          is_default: false,
-        }))
-      )
-      .select("id, name");
-    if (error) return { error: error.message };
-    for (const row of inserted as { id: string; name: string }[]) {
-      const source = toInsert.find((a) => a.name === row.name);
-      if (source?.externalId) externalIdToAccountId.set(source.externalId, row.id);
-    }
-  }
-
-  // Second pass: resolve parent_account_id now that every account (old and
-  // newly-inserted) has a known id.
+  // Second pass: resolve parent_account_id now that every account has a
+  // known id.
   const parentUpdates = accounts.filter((a) => a.externalId && a.parentExternalId);
   for (const a of parentUpdates) {
     const accountId = externalIdToAccountId.get(a.externalId!);
@@ -142,6 +135,46 @@ export async function commitAccounts(
   }
 
   return { externalIdToAccountId };
+}
+
+/** Looks up a chart_of_accounts id by its source-system external_id,
+ * re-querying the DB rather than relying on an in-memory map — used by the
+ * invoice/payment phases, which may run in a later self-re-invocation of
+ * the chunked import than the one that committed the accounts. */
+export async function findAccountIdByExternalId(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: SupabaseClient<Database> | any,
+  entityId: string,
+  externalId: string
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("chart_of_accounts")
+    .select("id")
+    .eq("entity_id", entityId)
+    .eq("external_id", externalId)
+    .maybeSingle();
+  return data?.id ?? null;
+}
+
+/** Looks up the entity's default fallback account for a given account_type
+ * (e.g. the "Accounts Receivable" or "Uncategorized Expense" rows seeded by
+ * commitCreateEntity) — used when an imported transaction's own account
+ * can't be resolved, or (for Payment) as the intentional AR-crediting
+ * target regardless of which bank account QuickBooks itself deposited to. */
+export async function findDefaultAccountId(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: SupabaseClient<Database> | any,
+  entityId: string,
+  accountSubtype: string
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("chart_of_accounts")
+    .select("id")
+    .eq("entity_id", entityId)
+    .eq("is_default", true)
+    .eq("account_subtype", accountSubtype)
+    .maybeSingle();
+  return data?.id ?? null;
 }
 
 /** Bulk-inserts imported customers/vendors into the unified finance_customers
@@ -179,4 +212,184 @@ export async function commitCustomers(
     if (row.external_id) externalIdToCustomerId.set(row.external_id, row.id);
   }
   return { externalIdToCustomerId };
+}
+
+/** Looks up a finance_customers id by its source-system external_id,
+ * re-querying the DB rather than relying on an in-memory map — same
+ * cross-phase-survival reasoning as findAccountIdByExternalId. */
+export async function findCustomerIdByExternalId(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: SupabaseClient<Database> | any,
+  entityId: string,
+  externalId: string
+): Promise<{ id: string; name: string } | null> {
+  const { data } = await supabase
+    .from("finance_customers")
+    .select("id, name")
+    .eq("entity_id", entityId)
+    .eq("external_id", externalId)
+    .maybeSingle();
+  return data ?? null;
+}
+
+export type StagedInvoiceLineItem = { description: string; quantity: number; unitPrice: number };
+
+export type StagedInvoice = {
+  externalId: string;
+  invoiceNumber?: string;
+  customerExternalId?: string;
+  issueDate: string;
+  dueDate?: string;
+  lineItems: StagedInvoiceLineItem[];
+  taxAmount?: number;
+  totalOverride?: number;
+};
+
+/** Bulk-upserts imported invoices + their line items. No ledger entry is
+ * created here — matches how manually-created invoices already behave
+ * (createInvoice never touches journal_entries); the ledger only gets
+ * touched when a Payment is recorded against the invoice, in
+ * commitPayment below. Upserts on (entity_id, external_id), so re-running
+ * a resumed import updates rather than duplicates. */
+export async function commitInvoiceBatch(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: SupabaseClient<Database> | any,
+  entityId: string,
+  invoices: StagedInvoice[]
+): Promise<{ externalIdToInvoiceId: Map<string, string> } | { error: string }> {
+  const externalIdToInvoiceId = new Map<string, string>();
+  if (invoices.length === 0) return { externalIdToInvoiceId };
+
+  for (const inv of invoices) {
+    const customer = inv.customerExternalId ? await findCustomerIdByExternalId(supabase, entityId, inv.customerExternalId) : null;
+    const subtotal = round2(inv.lineItems.reduce((sum, li) => sum + li.quantity * li.unitPrice, 0));
+    const taxAmount = round2(inv.taxAmount ?? 0);
+    const total = inv.totalOverride ?? round2(subtotal + taxAmount);
+
+    const { data: invoiceRow, error: invoiceError } = await supabase
+      .from("invoices")
+      .upsert(
+        {
+          entity_id: entityId,
+          external_id: inv.externalId,
+          customer_id: customer?.id ?? null,
+          client_name: customer?.name ?? "Imported customer",
+          invoice_number: inv.invoiceNumber ?? `IMP-${inv.externalId}`,
+          issue_date: inv.issueDate,
+          due_date: inv.dueDate ?? null,
+          status: "sent",
+          subtotal,
+          tax_amount: taxAmount,
+          total,
+        },
+        { onConflict: "entity_id,external_id" }
+      )
+      .select("id")
+      .single();
+    if (invoiceError || !invoiceRow) return { error: invoiceError?.message ?? "Failed to import invoice" };
+
+    externalIdToInvoiceId.set(inv.externalId, invoiceRow.id);
+
+    // Line items are replaced wholesale on a re-run rather than merged —
+    // simplest way to stay correct on a retry without diffing line items.
+    await supabase.from("invoice_line_items").delete().eq("invoice_id", invoiceRow.id);
+    if (inv.lineItems.length > 0) {
+      const { error: lineItemsError } = await supabase.from("invoice_line_items").insert(
+        inv.lineItems.map((li, i) => ({
+          invoice_id: invoiceRow.id,
+          description: li.description,
+          quantity: li.quantity,
+          unit_price: li.unitPrice,
+          amount: round2(li.quantity * li.unitPrice),
+          display_order: i,
+        }))
+      );
+      if (lineItemsError) return { error: lineItemsError.message };
+    }
+  }
+
+  return { externalIdToInvoiceId };
+}
+
+export type StagedPayment = {
+  invoiceExternalId: string;
+  amount: number;
+  paidDate: string;
+  moneyAccountExternalId?: string;
+};
+
+/** Posts an imported payment against an already-imported invoice: credits
+ * the entity's default Accounts Receivable account (a deliberate,
+ * documented divergence from the manual recordInvoicePayment flow, which
+ * credits an income account directly — an imported Payment is reconciling
+ * an already-invoiced AR balance, not recognizing new income at the point
+ * of cash receipt) via postImportedTransaction, then inserts
+ * invoice_payments and recomputes the invoice's status exactly like
+ * recordInvoicePayment does. Falls back to Accounts Receivable itself as
+ * the money-side account if the payment's deposit-to account can't be
+ * resolved, since AR is guaranteed to exist (seeded by commitCreateEntity)
+ * on every business entity. */
+export async function commitPayment(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: SupabaseClient<Database> | any,
+  entityId: string,
+  createdBy: string,
+  payment: StagedPayment
+): Promise<{ success: true } | { error: string }> {
+  const { data: invoice, error: invoiceError } = await supabase
+    .from("invoices")
+    .select("id, total, client_name, invoice_number")
+    .eq("entity_id", entityId)
+    .eq("external_id", payment.invoiceExternalId)
+    .maybeSingle();
+  if (invoiceError) return { error: invoiceError.message };
+  if (!invoice) return { error: `Payment references an invoice (${payment.invoiceExternalId}) that wasn't imported` };
+
+  const arAccountId = await findDefaultAccountId(supabase, entityId, "Accounts Receivable");
+  if (!arAccountId) return { error: "No Accounts Receivable account found on this entity" };
+
+  let moneyAccountId = payment.moneyAccountExternalId ? await findAccountIdByExternalId(supabase, entityId, payment.moneyAccountExternalId) : null;
+  if (!moneyAccountId) {
+    // DepositToAccountRef wasn't resolvable — fall back to any imported
+    // Cash and Bank account rather than AR itself. Using AR on both sides
+    // of the entry would net to zero (a no-op that doesn't actually record
+    // the cash received), which is worse than a best-guess bank account.
+    const { data: fallbackAccount } = await supabase
+      .from("chart_of_accounts")
+      .select("id")
+      .eq("entity_id", entityId)
+      .eq("account_subtype", "Cash and Bank")
+      .limit(1)
+      .maybeSingle();
+    moneyAccountId = fallbackAccount?.id ?? null;
+  }
+  if (!moneyAccountId) return { error: "No cash/bank account found to record this payment against" };
+
+  const posted = await postImportedTransaction(supabase, {
+    entityId,
+    moneyAccountId,
+    date: payment.paidDate,
+    payeeName: `${invoice.invoice_number} — ${invoice.client_name}`,
+    amount: payment.amount,
+    splits: [{ accountId: arAccountId, amount: payment.amount }],
+    createdBy,
+    sourceType: "import",
+  });
+  if ("error" in posted) return { error: posted.error };
+
+  const { error: paymentError } = await supabase.from("invoice_payments").insert({
+    invoice_id: invoice.id,
+    amount: payment.amount,
+    paid_date: payment.paidDate,
+    matched_transaction_id: posted.transactionId,
+    journal_entry_id: posted.journalEntryId,
+  });
+  if (paymentError) return { error: paymentError.message };
+
+  const { data: payments } = await supabase.from("invoice_payments").select("amount").eq("invoice_id", invoice.id);
+  const totalPaid = round2((payments ?? []).reduce((sum: number, p: { amount: number }) => sum + p.amount, 0));
+  const newStatus = totalPaid >= invoice.total ? "paid" : "partial";
+  await supabase.from("invoices").update({ status: newStatus }).eq("id", invoice.id);
+
+  return { success: true };
 }
