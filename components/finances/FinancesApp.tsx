@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { LayoutGrid, FolderKanban, ArrowLeftRight, BarChart3, BookOpen, Landmark, FileText, Users } from "lucide-react";
+import { LayoutGrid, FolderKanban, ArrowLeftRight, BarChart3, BookOpen, Landmark, FileText, Users, Settings } from "lucide-react";
 import { EntitySwitcher } from "./EntitySwitcher";
 import { CreateEntityForm } from "./CreateEntityForm";
+import { EntitySettingsDialog } from "./EntitySettingsDialog";
 import { OverviewTab } from "./OverviewTab";
 import { ProjectsTab } from "./ProjectsTab";
 import { TransactionsTab } from "./TransactionsTab";
@@ -19,6 +20,7 @@ export type FinanceEntity = {
   entity_type: "personal" | "business";
   currency: string;
   fiscal_year_start_month: number;
+  is_owner?: boolean;
 };
 
 type Tab = "overview" | "projects" | "transactions" | "invoices" | "bank" | "reports" | "accounts";
@@ -38,10 +40,20 @@ export function FinancesApp({ initialEntities }: { initialEntities: FinanceEntit
   const [currentEntityId, setCurrentEntityId] = useState<string | null>(initialEntities[0]?.id ?? null);
   const [tab, setTab] = useState<Tab>("overview");
   const [sharing, setSharing] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   function handleEntityCreated(entity: FinanceEntity) {
     setEntities((prev) => [...prev, entity]);
     setCurrentEntityId(entity.id);
+  }
+
+  function handleEntityDeleted(entityId: string) {
+    setEntities((prev) => {
+      const next = prev.filter((e) => e.id !== entityId);
+      setCurrentEntityId(next[0]?.id ?? null);
+      return next;
+    });
+    setSettingsOpen(false);
   }
 
   if (entities.length === 0) {
@@ -59,12 +71,22 @@ export function FinancesApp({ initialEntities }: { initialEntities: FinanceEntit
           onChange={setCurrentEntityId}
           onCreated={handleEntityCreated}
         />
-        <button
-          onClick={() => setSharing(true)}
-          className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] px-2 py-1.5"
-        >
-          <Users size={14} /> Share access
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setSharing(true)}
+            className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] px-2 py-1.5"
+          >
+            <Users size={14} /> Share access
+          </button>
+          {currentEntity.is_owner && (
+            <button
+              onClick={() => setSettingsOpen(true)}
+              className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] px-2 py-1.5"
+            >
+              <Settings size={14} /> Settings
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex gap-1 border-b border-[var(--border)] overflow-x-auto">
@@ -93,6 +115,18 @@ export function FinancesApp({ initialEntities }: { initialEntities: FinanceEntit
 
       {sharing && (
         <CollaboratorsDialog entityId={currentEntity.id} entityName={currentEntity.name} onClose={() => setSharing(false)} />
+      )}
+
+      {settingsOpen && (
+        <EntitySettingsDialog
+          entity={currentEntity}
+          onClose={() => setSettingsOpen(false)}
+          onRenamed={(name) => {
+            setEntities((prev) => prev.map((e) => (e.id === currentEntity.id ? { ...e, name } : e)));
+            setSettingsOpen(false);
+          }}
+          onDeleted={() => handleEntityDeleted(currentEntity.id)}
+        />
       )}
     </div>
   );

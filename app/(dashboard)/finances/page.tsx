@@ -21,9 +21,9 @@ export default async function FinancesPage() {
   const { data: memberEntities } = memberEntityIds.length
     ? await supabase.from("finance_entities").select("*").in("id", memberEntityIds)
     : { data: [] };
-  const entities = [...(ownedEntities ?? []), ...(memberEntities ?? [])].sort(
-    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-  );
+  const entities = [...(ownedEntities ?? []), ...(memberEntities ?? [])]
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    .map((e) => ({ ...e, is_owner: e.owner_id === user.id }));
 
   return (
     <div className="max-w-5xl space-y-6">
