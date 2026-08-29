@@ -98,3 +98,51 @@ export function decryptPlaidToken(encrypted: string): string {
   const plaintext = Buffer.concat([decipher.update(Buffer.from(ciphertextB64, "base64")), decipher.final()]);
   return plaintext.toString("utf8");
 }
+
+// QuickBooks access/refresh tokens get their own dedicated root secret, same
+// rationale as Plaid — a compromise of one integration's secret shouldn't
+// expose another's tokens.
+function getQboRootSecret(): Buffer {
+  const secret = process.env.QBO_TOKEN_ENCRYPTION_SECRET;
+  if (!secret || secret.length !== 64) {
+    throw new Error("QBO_TOKEN_ENCRYPTION_SECRET must be set to a 64-char hex string (32 bytes).");
+  }
+  return Buffer.from(secret, "hex");
+}
+
+function getQboKey(): Buffer {
+  return createHmac("sha256", getQboRootSecret()).update("qbo-token-v1").digest();
+}
+
+export function encryptQboToken(plaintext: string): string {
+  const iv = randomBytes(IV_LENGTH);
+  const cipher = createCipheriv(ALGORITHM, getQboKey(), iv);
+  const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  return [iv.toString("base64"), authTag.toString("base64"), ciphertext.toString("base64")].join(":");
+}
+
+export function decryptQboToken(encrypted: string): string {
+  const [ivB64, authTagB64, ciphertextB64] = encrypted.split(":");
+  if (!ivB64 || !authTagB64 || !ciphertextB64) {
+    throw new Error("Malformed encrypted QuickBooks token.");
+  }
+  const decipher = createDecipheriv(ALGORITHM, getQboKey(), Buffer.from(ivB64, "base64"));
+  decipher.setAuthTag(Buffer.from(authTagB64, "base64"));
+  const plaintext = Buffer.concat([decipher.update(Buffer.from(ciphertextB64, "base64")), decipher.final()]);
+  return plaintext.toString("utf8");
+}
+
+/** Signs the OAuth `state` param sent to Intuit so the callback route can
+ * trust the userId/intendedEntityName/entityType it carries — otherwise a
+ * forged callback request could claim another user's OAuth grant. */
+export function signQboState(payload: string): string {
+  return createHmac("sha256", deriveKey("qbo-state-v1")).update(payload).digest("base64url");
+}
+
+export function verifyQboState(payload: string, signature: string): boolean {
+  const expected = signQboState(payload);
+  const a = Buffer.from(expected);
+  const b = Buffer.from(signature);
+  return a.length === b.length && timingSafeEqual(a, b);
+}

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/db";
+import { buildJournalLines, type SplitInput } from "@/lib/finance/categorize";
 
 export type JournalLineInput = {
   accountId: string;
@@ -12,7 +13,7 @@ export type PostJournalEntryInput = {
   entityId: string;
   entryDate: string;
   description?: string;
-  sourceType: "manual" | "bank_transaction" | "opening_balance" | "invoice_payment" | "reconciliation_adjustment";
+  sourceType: "manual" | "bank_transaction" | "opening_balance" | "invoice_payment" | "reconciliation_adjustment" | "import";
   sourceTransactionId?: string;
   createdBy: string;
   lines: JournalLineInput[];
@@ -79,6 +80,75 @@ export async function postJournalEntry(
   }
 
   return { journalEntryId: entry.id as string };
+}
+
+/**
+ * Posts a fully-categorized transaction in one call: inserts the
+ * `transactions` row, posts the balanced journal entry, inserts the
+ * `transaction_splits`, and backfills `transactions.journal_entry_id`. This
+ * is the same sequence `recordInvoicePayment` (lib/actions/finance-invoices.ts)
+ * and `syncBankConnection` (lib/finance/plaid-sync.ts) each duplicate
+ * inline — extracted here because the QuickBooks/Wave importer is a third
+ * caller, at which point copy-pasting a third time stops being the
+ * simpler option.
+ */
+export async function postImportedTransaction(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: SupabaseClient<Database> | any,
+  input: {
+    entityId: string;
+    moneyAccountId: string;
+    date: string;
+    payeeName: string;
+    amount: number;
+    splits: SplitInput[];
+    createdBy: string;
+    sourceType?: "manual" | "bank_transaction" | "import";
+  }
+): Promise<{ transactionId: string; journalEntryId: string } | { error: string }> {
+  const { data: txn, error: txnError } = await supabase
+    .from("transactions")
+    .insert({
+      entity_id: input.entityId,
+      money_account_id: input.moneyAccountId,
+      date: input.date,
+      payee_name: input.payeeName,
+      amount: input.amount,
+      status: "categorized",
+      is_split: input.splits.length > 1,
+    })
+    .select("id")
+    .single();
+  if (txnError || !txn) return { error: txnError?.message ?? "Failed to create transaction" };
+
+  const posted = await postJournalEntry(supabase, {
+    entityId: input.entityId,
+    entryDate: input.date,
+    description: input.payeeName,
+    sourceType: input.sourceType ?? "import",
+    sourceTransactionId: txn.id,
+    createdBy: input.createdBy,
+    lines: buildJournalLines(input.moneyAccountId, input.amount, input.splits),
+  });
+  if ("error" in posted) {
+    await supabase.from("transactions").delete().eq("id", txn.id);
+    return { error: posted.error };
+  }
+
+  const { error: splitsError } = await supabase.from("transaction_splits").insert(
+    input.splits.map((s) => ({
+      transaction_id: txn.id,
+      chart_account_id: s.accountId,
+      project_id: s.projectId ?? null,
+      amount: s.amount,
+      memo: s.memo ?? null,
+    }))
+  );
+  if (splitsError) return { error: splitsError.message };
+
+  await supabase.from("transactions").update({ journal_entry_id: posted.journalEntryId }).eq("id", txn.id);
+
+  return { transactionId: txn.id as string, journalEntryId: posted.journalEntryId };
 }
 
 /** Reverses a journal entry by posting an equal-and-opposite entry, rather

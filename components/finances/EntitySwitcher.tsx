@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, X } from "lucide-react";
-import { CreateEntityForm } from "./CreateEntityForm";
+import { Plus } from "lucide-react";
+import { AddEntityChooser } from "./AddEntityChooser";
 import type { FinanceEntity } from "./FinancesApp";
 
 export function EntitySwitcher({
@@ -20,17 +20,13 @@ export function EntitySwitcher({
 
   if (adding) {
     return (
-      <div className="relative">
-        <button onClick={() => setAdding(false)} className="absolute -top-2 -right-2 p-1 rounded-full bg-[var(--background)] border border-[var(--border)]">
-          <X size={12} />
-        </button>
-        <CreateEntityForm
-          onCreated={(e) => {
-            onCreated(e);
-            setAdding(false);
-          }}
-        />
-      </div>
+      <AddEntityChooser
+        onClose={() => setAdding(false)}
+        onCreated={(e) => {
+          onCreated(e);
+          setAdding(false);
+        }}
+      />
     );
   }
 

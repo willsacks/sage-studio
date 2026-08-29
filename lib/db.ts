@@ -576,7 +576,7 @@ export type Database = {
           entity_id: string;
           entry_date: string;
           description: string | null;
-          source_type: "manual" | "bank_transaction" | "opening_balance" | "invoice_payment" | "reconciliation_adjustment";
+          source_type: "manual" | "bank_transaction" | "opening_balance" | "invoice_payment" | "reconciliation_adjustment" | "import";
           source_transaction_id: string | null;
           created_by: string;
           is_locked: boolean;
@@ -588,7 +588,7 @@ export type Database = {
           entity_id: string;
           entry_date: string;
           description?: string | null;
-          source_type: "manual" | "bank_transaction" | "opening_balance" | "invoice_payment" | "reconciliation_adjustment";
+          source_type: "manual" | "bank_transaction" | "opening_balance" | "invoice_payment" | "reconciliation_adjustment" | "import";
           source_transaction_id?: string | null;
           created_by: string;
           is_locked?: boolean;
@@ -600,7 +600,7 @@ export type Database = {
           entity_id?: string;
           entry_date?: string;
           description?: string | null;
-          source_type?: "manual" | "bank_transaction" | "opening_balance" | "invoice_payment" | "reconciliation_adjustment";
+          source_type?: "manual" | "bank_transaction" | "opening_balance" | "invoice_payment" | "reconciliation_adjustment" | "import";
           source_transaction_id?: string | null;
           created_by?: string;
           is_locked?: boolean;
@@ -648,6 +648,7 @@ export type Database = {
           budget: number | null;
           description: string | null;
           client_name: string | null;
+          customer_id: string | null;
           display_order: number;
           created_at: string;
           updated_at: string;
@@ -663,6 +664,7 @@ export type Database = {
           budget?: number | null;
           description?: string | null;
           client_name?: string | null;
+          customer_id?: string | null;
           display_order?: number;
           created_at?: string;
           updated_at?: string;
@@ -678,6 +680,7 @@ export type Database = {
           budget?: number | null;
           description?: string | null;
           client_name?: string | null;
+          customer_id?: string | null;
           display_order?: number;
           created_at?: string;
           updated_at?: string;
@@ -953,6 +956,7 @@ export type Database = {
           id: string;
           entity_id: string;
           project_id: string | null;
+          customer_id: string | null;
           client_name: string;
           client_email: string | null;
           invoice_number: string;
@@ -971,6 +975,7 @@ export type Database = {
           id?: string;
           entity_id: string;
           project_id?: string | null;
+          customer_id?: string | null;
           client_name: string;
           client_email?: string | null;
           invoice_number: string;
@@ -989,6 +994,7 @@ export type Database = {
           id?: string;
           entity_id?: string;
           project_id?: string | null;
+          customer_id?: string | null;
           client_name?: string;
           client_email?: string | null;
           invoice_number?: string;
@@ -1032,6 +1038,138 @@ export type Database = {
           unit_price?: number;
           amount?: number;
           display_order?: number;
+        };
+        Relationships: [];
+      };
+      finance_customers: {
+        Row: {
+          id: string;
+          entity_id: string;
+          name: string;
+          email: string | null;
+          phone: string | null;
+          address: string | null;
+          external_id: string | null;
+          source: "manual" | "quickbooks" | "wave";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          entity_id: string;
+          name: string;
+          email?: string | null;
+          phone?: string | null;
+          address?: string | null;
+          external_id?: string | null;
+          source?: "manual" | "quickbooks" | "wave";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          entity_id?: string;
+          name?: string;
+          email?: string | null;
+          phone?: string | null;
+          address?: string | null;
+          external_id?: string | null;
+          source?: "manual" | "quickbooks" | "wave";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      qbo_connections: {
+        Row: {
+          id: string;
+          entity_id: string;
+          owner_id: string;
+          qbo_realm_id: string;
+          access_token_encrypted: string;
+          refresh_token_encrypted: string;
+          access_token_expires_at: string;
+          refresh_token_expires_at: string;
+          environment: "sandbox" | "production";
+          status: "active" | "error" | "revoked";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          entity_id: string;
+          owner_id: string;
+          qbo_realm_id: string;
+          access_token_encrypted: string;
+          refresh_token_encrypted: string;
+          access_token_expires_at: string;
+          refresh_token_expires_at: string;
+          environment?: "sandbox" | "production";
+          status?: "active" | "error" | "revoked";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          entity_id?: string;
+          owner_id?: string;
+          qbo_realm_id?: string;
+          access_token_encrypted?: string;
+          refresh_token_encrypted?: string;
+          access_token_expires_at?: string;
+          refresh_token_expires_at?: string;
+          environment?: "sandbox" | "production";
+          status?: "active" | "error" | "revoked";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      import_jobs: {
+        Row: {
+          id: string;
+          owner_id: string;
+          entity_id: string | null;
+          source: "quickbooks" | "wave";
+          status: "pending" | "running" | "completed" | "failed";
+          phase: string;
+          progress_current: number;
+          progress_total: number;
+          cursor_state: Record<string, unknown>;
+          staged_data_path: string | null;
+          error_message: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          owner_id: string;
+          entity_id?: string | null;
+          source: "quickbooks" | "wave";
+          status?: "pending" | "running" | "completed" | "failed";
+          phase?: string;
+          progress_current?: number;
+          progress_total?: number;
+          cursor_state?: Record<string, unknown>;
+          staged_data_path?: string | null;
+          error_message?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          owner_id?: string;
+          entity_id?: string | null;
+          source?: "quickbooks" | "wave";
+          status?: "pending" | "running" | "completed" | "failed";
+          phase?: string;
+          progress_current?: number;
+          progress_total?: number;
+          cursor_state?: Record<string, unknown>;
+          staged_data_path?: string | null;
+          error_message?: string | null;
+          created_at?: string;
+          updated_at?: string;
         };
         Relationships: [];
       };

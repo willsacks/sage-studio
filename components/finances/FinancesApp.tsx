@@ -35,9 +35,11 @@ const TABS: { id: Tab; label: string; icon: typeof LayoutGrid }[] = [
   { id: "accounts", label: "Chart of Accounts", icon: BookOpen },
 ];
 
-export function FinancesApp({ initialEntities }: { initialEntities: FinanceEntity[] }) {
+export function FinancesApp({ initialEntities, initialEntityId }: { initialEntities: FinanceEntity[]; initialEntityId?: string }) {
   const [entities, setEntities] = useState(initialEntities);
-  const [currentEntityId, setCurrentEntityId] = useState<string | null>(initialEntities[0]?.id ?? null);
+  const [currentEntityId, setCurrentEntityId] = useState<string | null>(
+    (initialEntityId && initialEntities.some((e) => e.id === initialEntityId) ? initialEntityId : initialEntities[0]?.id) ?? null
+  );
   const [tab, setTab] = useState<Tab>("overview");
   const [sharing, setSharing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);

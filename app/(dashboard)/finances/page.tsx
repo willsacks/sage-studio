@@ -6,10 +6,11 @@ import { FinancesApp } from "@/components/finances/FinancesApp";
 
 export const metadata: Metadata = { title: "Finances" };
 
-export default async function FinancesPage() {
+export default async function FinancesPage({ searchParams }: { searchParams: Promise<{ entity?: string }> }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  const { entity: requestedEntityId } = await searchParams;
 
   // A user sees entities they own AND entities they've been invited to as a
   // collaborator (e.g. a bookkeeper) — not just what they own.
@@ -36,7 +37,7 @@ export default async function FinancesPage() {
         </p>
       </div>
 
-      <FinancesApp initialEntities={entities ?? []} />
+      <FinancesApp initialEntities={entities ?? []} initialEntityId={requestedEntityId} />
     </div>
   );
 }

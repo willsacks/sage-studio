@@ -3,7 +3,7 @@
 // "Debit"/"Credit" columns — covers the large majority of real bank/credit
 // card exports without needing a full column-mapping UI.
 
-function parseCsvLines(text: string): string[][] {
+export function parseCsvLines(text: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";
@@ -56,7 +56,7 @@ function normalizeHeader(h: string): string {
   return h.trim().toLowerCase();
 }
 
-function toIsoDate(raw: string): string | null {
+export function toIsoDate(raw: string): string | null {
   const trimmed = raw.trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
   const mdy = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
@@ -75,7 +75,7 @@ function toIsoDate(raw: string): string | null {
   return null;
 }
 
-function parseAmount(raw: string): number | null {
+export function parseAmount(raw: string): number | null {
   const cleaned = raw.replace(/[$,]/g, "").trim();
   if (!cleaned) return null;
   const negative = /^\(.*\)$/.test(cleaned);
