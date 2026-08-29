@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Loader2, Plus, Trash2, Split, Upload, Flag, X, Check, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,15 +71,20 @@ function CreatableSelect({
   newPlaceholder,
   onCreate,
   className,
+  extraField,
 }: {
   value: string;
   onChange: (id: string) => void;
-  options: { id: string; name: string }[];
+  options: { id: string; name: string; group?: string }[];
   placeholder: string;
   newLabel: string;
   newPlaceholder: string;
   onCreate: (name: string) => Promise<{ error: string } | { id: string }>;
   className: string;
+  /** Rendered alongside the inline "add new" input — e.g. an income/expense
+   * toggle when the list mixes both categories and the transaction's sign
+   * alone can't tell you which type a new one should be (refunds). */
+  extraField?: ReactNode;
 }) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
@@ -117,6 +122,7 @@ function CreatableSelect({
               if (e.key === "Escape") { setAdding(false); setName(""); }
             }}
           />
+          {extraField}
           <button onClick={handleAdd} disabled={saving} className="p-1 text-[var(--primary)] hover:opacity-80">
             {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
           </button>
@@ -129,6 +135,8 @@ function CreatableSelect({
     );
   }
 
+  const groups = Array.from(new Set(options.map((o) => o.group).filter((g): g is string => !!g)));
+
   return (
     <select
       value={value}
@@ -139,9 +147,17 @@ function CreatableSelect({
       className={className}
     >
       <option value="">{placeholder}</option>
-      {options.map((o) => (
-        <option key={o.id} value={o.id}>{o.name}</option>
-      ))}
+      {groups.length > 0
+        ? groups.map((g) => (
+            <optgroup key={g} label={g}>
+              {options.filter((o) => o.group === g).map((o) => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+            </optgroup>
+          ))
+        : options.map((o) => (
+            <option key={o.id} value={o.id}>{o.name}</option>
+          ))}
       <option value="__new__">{newLabel}</option>
     </select>
   );
@@ -232,15 +248,14 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
+  // Fetches the full transaction set once (all statuses, all dates) — the
+  // account/status/date-range controls below all filter this in memory, so
+  // switching between them is instant and never re-triggers the loading
+  // spinner or a server round trip.
   const refresh = useCallback(async () => {
     setLoading(true);
     const [txnResult, accountsResult, projectsResult] = await Promise.all([
-      listTransactions({
-        entityId: entity.id,
-        status: statusFilter === "all" ? undefined : statusFilter,
-        startDate: startDate || undefined,
-        endDate: endDate || undefined,
-      }),
+      listTransactions({ entityId: entity.id }),
       listChartOfAccounts(entity.id),
       listFinanceProjects(entity.id),
     ]);
@@ -248,7 +263,7 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
     setAccounts((accountsResult.accounts ?? []) as Account[]);
     setProjects((projectsResult.projects ?? []) as Project[]);
     setLoading(false);
-  }, [entity.id, statusFilter, startDate, endDate]);
+  }, [entity.id]);
 
   useEffect(() => {
     refresh();
@@ -267,9 +282,13 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
     (a) => (direction === "in" ? a.account_type === "income" : a.account_type === "expense") && a.is_active
   );
 
-  const filteredTransactions = accountFilter
-    ? transactions.filter((t) => resolvedAccountId(t) === accountFilter)
-    : transactions;
+  const filteredTransactions = transactions.filter((t) => {
+    if (accountFilter && resolvedAccountId(t) !== accountFilter) return false;
+    if (statusFilter !== "all" && t.status !== statusFilter) return false;
+    if (startDate && t.date < startDate) return false;
+    if (endDate && t.date > endDate) return false;
+    return true;
+  });
 
   // Single pass: every transaction lands in exactly one of these three
   // buckets, so there's no risk of a row appearing twice (or nowhere) as
@@ -651,8 +670,18 @@ function CategoryPickerRow({
   const [saving, setSaving] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Defaults the new-category type to the transaction's own sign, but stays
+  // overridable — a refund flips the expected sign (e.g. money coming back
+  // in from a return should land in an Expense category, not Income).
+  const [newCategoryType, setNewCategoryType] = useState<"income" | "expense">(transaction.amount >= 0 ? "income" : "expense");
 
-  const categoryAccounts = accounts.filter((a) => (transaction.amount >= 0 ? a.account_type === "income" : a.account_type === "expense") && a.is_active);
+  // Both income and expense categories are shown, grouped — a positive
+  // amount is usually income and a negative one an expense, but refunds
+  // break that assumption in either direction, so the user needs to be able
+  // to pick against the grain of the transaction's sign.
+  const categoryAccounts = accounts
+    .filter((a) => (a.account_type === "income" || a.account_type === "expense") && a.is_active)
+    .map((a) => ({ id: a.id, name: a.name, group: a.account_type === "income" ? "Income" : "Expense" }));
   const currentCategory = transaction.transaction_splits[0]
     ? accounts.find((a) => a.id === transaction.transaction_splits[0].chart_account_id)?.name
     : null;
@@ -707,14 +736,23 @@ function CategoryPickerRow({
           options={categoryAccounts}
           placeholder={currentCategory ? "Change category..." : "Category..."}
           newLabel="+ New category..."
-          newPlaceholder={`New ${transaction.amount >= 0 ? "income" : "expense"} category`}
+          newPlaceholder={`New ${newCategoryType} category`}
           onCreate={async (name): Promise<{ error: string } | { id: string }> => {
-            const accountType = transaction.amount >= 0 ? "income" : "expense";
-            const result = await createChartAccount({ entityId, name, accountType, accountSubtype: "Other" });
+            const result = await createChartAccount({ entityId, name, accountType: newCategoryType, accountSubtype: "Other" });
             if (actionFailed(result)) return { error: result.error };
-            onAccountCreated({ id: result.accountId, name, account_type: accountType, account_subtype: "Other", is_active: true });
+            onAccountCreated({ id: result.accountId, name, account_type: newCategoryType, account_subtype: "Other", is_active: true });
             return { id: result.accountId };
           }}
+          extraField={
+            <select
+              value={newCategoryType}
+              onChange={(e) => setNewCategoryType(e.target.value as "income" | "expense")}
+              className="h-8 px-1 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs"
+            >
+              <option value="income">Income</option>
+              <option value="expense">Expense</option>
+            </select>
+          }
           className="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs"
         />
         <CreatableSelect
