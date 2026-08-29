@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getStripe } from "@/lib/stripe";
 import Link from "next/link";
-import { LayoutDashboard, UserPlus, Globe, Zap, MessageSquare, BrainCircuit, ShieldCheck, FileText, Lock, KeyRound, ExternalLink } from "lucide-react";
+import { LayoutDashboard, UserPlus, Globe, Zap, MessageSquare, BrainCircuit, ShieldCheck, FileText, Lock, KeyRound, Trash2, ExternalLink } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { AiAccessTable, type UserRow } from "@/components/admin/AiAccessTable";
 import { AiPromptEditor } from "@/components/admin/AiPromptEditor";
@@ -243,10 +243,11 @@ export default async function AdminPage() {
       {/* Legal & Compliance */}
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-[var(--muted-foreground)] uppercase tracking-wide">Legal & Compliance</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {[
             { href: "/security", label: "Security Policy", icon: ShieldCheck },
             { href: "/access-controls", label: "Access Controls Policy", icon: KeyRound },
+            { href: "/data-retention", label: "Data Retention Policy", icon: Trash2 },
             { href: "/privacy", label: "Privacy Policy", icon: Lock },
             { href: "/terms", label: "Terms of Service", icon: FileText },
           ].map((doc) => (
