@@ -121,6 +121,13 @@ export default function LoginPage() {
                   Send magic link
                 </button>
               </form>
+
+              <p className="text-center text-xs text-[var(--muted-foreground)]">
+                By continuing, you agree to our{" "}
+                <Link href="/terms" className="underline hover:text-[var(--foreground)]">Terms of Service</Link>{" "}
+                and{" "}
+                <Link href="/privacy" className="underline hover:text-[var(--foreground)]">Privacy Policy</Link>.
+              </p>
             </>
           )}
         </div>
