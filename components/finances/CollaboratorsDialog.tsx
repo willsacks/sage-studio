@@ -141,16 +141,24 @@ export function CollaboratorsDialog({ entityId, entityName, onClose }: { entityI
 
         <div className="rounded-xl border border-[var(--border)] p-3 space-y-2">
           <div className="flex gap-2">
-            <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="bookkeeper@email.com" className="flex-1 h-9 text-sm" />
-            <select value={role} onChange={(e) => setRole(e.target.value as Role)} className="h-9 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-sm">
+            {/* min-w-0 overrides the flex item's default min-width:auto — without
+                it, a long-content sibling (the role select) can force this to
+                shrink to almost nothing instead of actually sharing the row. */}
+            <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="bookkeeper@email.com" className="flex-1 min-w-0 h-9 text-sm" />
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value as Role)}
+              className="w-28 flex-shrink-0 h-9 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-sm"
+            >
               {(Object.keys(ROLE_LABELS) as Role[]).map((r) => (
-                <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>
               ))}
             </select>
             <Button size="sm" onClick={handleInvite} disabled={inviting || !email.trim()}>
               {inviting ? <Loader2 size={13} className="animate-spin" /> : "Invite"}
             </Button>
           </div>
+          <p className="text-xs text-[var(--muted-foreground)]">{ROLE_LABELS[role]}</p>
           {error && <p className="text-sm text-red-500">{error}</p>}
           {newLink && (
             <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30">

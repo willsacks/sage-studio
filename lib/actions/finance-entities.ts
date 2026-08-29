@@ -13,13 +13,26 @@ async function requireAuth() {
 
 export async function listFinanceEntities() {
   const { supabase, user } = await requireAuth();
-  const { data, error } = await supabase
-    .from("finance_entities")
-    .select("*")
-    .eq("owner_id", user.id)
-    .order("created_at", { ascending: true });
-  if (error) return { error: error.message, entities: [] };
-  return { entities: data ?? [] };
+
+  // Entities the user owns AND entities they've been invited to as a
+  // collaborator (e.g. a bookkeeper) — not just what they own.
+  const [{ data: ownedEntities, error: ownedError }, { data: memberships, error: membershipsError }] = await Promise.all([
+    supabase.from("finance_entities").select("*").eq("owner_id", user.id),
+    supabase.from("finance_entity_members").select("entity_id").eq("user_id", user.id).eq("status", "accepted"),
+  ]);
+  if (ownedError) return { error: ownedError.message, entities: [] };
+  if (membershipsError) return { error: membershipsError.message, entities: [] };
+
+  const memberEntityIds = (memberships ?? []).map((m) => m.entity_id);
+  const { data: memberEntities, error: memberEntitiesError } = memberEntityIds.length
+    ? await supabase.from("finance_entities").select("*").in("id", memberEntityIds)
+    : { data: [], error: null };
+  if (memberEntitiesError) return { error: memberEntitiesError.message, entities: [] };
+
+  const entities = [...(ownedEntities ?? []), ...(memberEntities ?? [])].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+  return { entities };
 }
 
 export async function createFinanceEntity(params: { name: string; entityType: "personal" | "business" }) {
