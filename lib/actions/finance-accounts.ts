@@ -37,16 +37,20 @@ export async function createChartAccount(params: {
   const name = params.name.trim();
   if (!name) return { error: "A name is required" };
 
-  const { error } = await supabase.from("chart_of_accounts").insert({
-    entity_id: params.entityId,
-    name,
-    account_type: params.accountType,
-    account_subtype: params.accountSubtype.trim() || "Other",
-    normal_balance: normalBalanceForType(params.accountType),
-  });
+  const { data, error } = await supabase
+    .from("chart_of_accounts")
+    .insert({
+      entity_id: params.entityId,
+      name,
+      account_type: params.accountType,
+      account_subtype: params.accountSubtype.trim() || "Other",
+      normal_balance: normalBalanceForType(params.accountType),
+    })
+    .select("id")
+    .single();
   if (error) return { error: error.message };
   revalidatePath("/finances");
-  return { success: true };
+  return { accountId: data.id as string };
 }
 
 export async function renameChartAccount(accountId: string, entityId: string, name: string) {

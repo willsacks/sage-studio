@@ -187,6 +187,20 @@ export async function resolveReviewFlag(transactionId: string, entityId: string)
   return { success: true };
 }
 
+export async function updateTransactionNote(transactionId: string, entityId: string, note: string) {
+  const { supabase, user } = await requireAuth();
+  await requireFinanceEntityRole(supabase, entityId, user.id, "editor");
+
+  const { error } = await supabase
+    .from("transactions")
+    .update({ notes: note.trim() || null })
+    .eq("id", transactionId)
+    .eq("entity_id", entityId);
+  if (error) return { error: error.message };
+  revalidatePath("/finances");
+  return { success: true };
+}
+
 export async function excludeTransaction(transactionId: string, entityId: string) {
   const { supabase, user } = await requireAuth();
   await requireFinanceEntityRole(supabase, entityId, user.id, "editor");
@@ -233,9 +247,10 @@ export async function listTransactions(params: {
 
   let query = supabase
     .from("transactions")
-    .select("*, transaction_splits(*)")
+    .select("*, transaction_splits(*), bank_accounts(chart_account_id)")
     .eq("entity_id", params.entityId)
-    .order("date", { ascending: false });
+    .order("date", { ascending: false })
+    .order("created_at", { ascending: false });
 
   if (params.status) query = query.eq("status", params.status);
   if (params.startDate) query = query.gte("date", params.startDate);

@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Plus, Trash2, Split, Upload, Flag, X, Check } from "lucide-react";
+import { Loader2, Plus, Trash2, Split, Upload, Flag, X, Check, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { listChartOfAccounts } from "@/lib/actions/finance-accounts";
-import { listFinanceProjects } from "@/lib/actions/finance-projects";
+import { listChartOfAccounts, createChartAccount } from "@/lib/actions/finance-accounts";
+import { listFinanceProjects, createFinanceProject } from "@/lib/actions/finance-projects";
 import {
   createManualTransaction,
   deleteManualTransaction,
@@ -13,6 +13,7 @@ import {
   categorizeTransaction,
   flagTransactionForReview,
   resolveReviewFlag,
+  updateTransactionNote,
 } from "@/lib/actions/finance-transactions";
 import type { SplitInput } from "@/lib/finance/categorize";
 import { CsvImportDialog } from "./CsvImportDialog";
@@ -27,9 +28,12 @@ type Transaction = {
   payee_name: string;
   amount: number;
   bank_account_id: string | null;
+  money_account_id: string | null;
   status: string;
   needs_review: boolean;
   review_note: string | null;
+  notes: string | null;
+  bank_accounts?: { chart_account_id: string } | { chart_account_id: string }[] | null;
   transaction_splits: { chart_account_id: string; amount: number; project_id: string | null }[];
 };
 
@@ -37,7 +41,174 @@ function money(n: number) {
   return n.toLocaleString(undefined, { style: "currency", currency: "USD" });
 }
 
+/** Server actions' inferred return types don't always narrow cleanly via a
+ * plain `"error" in result` check once passed through the RSC boundary, so
+ * this guard checks the value itself rather than relying on key presence. */
+function actionFailed<T extends { error?: string }>(result: T): result is T & { error: string } {
+  return typeof result.error === "string";
+}
+
+/** Resolves which money account (Cash/Bank/Credit Card chart-of-accounts
+ * entry) a transaction belongs to — CSV/manual transactions carry
+ * money_account_id directly, while Plaid-synced ones only know their
+ * bank_accounts row, which maps to a chart account via chart_account_id. */
+function resolvedAccountId(t: Transaction): string | null {
+  if (t.money_account_id) return t.money_account_id;
+  const bankAccount = Array.isArray(t.bank_accounts) ? t.bank_accounts[0] : t.bank_accounts;
+  return bankAccount?.chart_account_id ?? null;
+}
+
+/** A category/project <select> that also offers an inline "+ New..." option
+ * — picking it swaps the select for a small name input so the user can
+ * create the category/project without leaving the transaction row, then
+ * immediately selects the new one. */
+function CreatableSelect({
+  value,
+  onChange,
+  options,
+  placeholder,
+  newLabel,
+  newPlaceholder,
+  onCreate,
+  className,
+}: {
+  value: string;
+  onChange: (id: string) => void;
+  options: { id: string; name: string }[];
+  placeholder: string;
+  newLabel: string;
+  newPlaceholder: string;
+  onCreate: (name: string) => Promise<{ error: string } | { id: string }>;
+  className: string;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleAdd() {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setSaving(true);
+    setError(null);
+    const result = await onCreate(trimmed);
+    setSaving(false);
+    if ("error" in result) {
+      setError(result.error);
+      return;
+    }
+    onChange(result.id);
+    setAdding(false);
+    setName("");
+  }
+
+  if (adding) {
+    return (
+      <div className="flex flex-col gap-0.5">
+        <div className="flex items-center gap-1">
+          <Input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={newPlaceholder}
+            className="h-8 text-xs w-36"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); handleAdd(); }
+              if (e.key === "Escape") { setAdding(false); setName(""); }
+            }}
+          />
+          <button onClick={handleAdd} disabled={saving} className="p-1 text-[var(--primary)] hover:opacity-80">
+            {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+          </button>
+          <button onClick={() => { setAdding(false); setName(""); }} className="p-1 text-[var(--muted-foreground)]">
+            <X size={13} />
+          </button>
+        </div>
+        {error && <p className="text-xs text-red-500">{error}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <select
+      value={value}
+      onChange={(e) => {
+        if (e.target.value === "__new__") { setAdding(true); return; }
+        onChange(e.target.value);
+      }}
+      className={className}
+    >
+      <option value="">{placeholder}</option>
+      {options.map((o) => (
+        <option key={o.id} value={o.id}>{o.name}</option>
+      ))}
+      <option value="__new__">{newLabel}</option>
+    </select>
+  );
+}
+
+/** Inline note editor — a small icon that expands into a text field so
+ * notes can be added without leaving the transaction row. */
+function NoteButton({
+  transactionId,
+  entityId,
+  note,
+  onSaved,
+}: {
+  transactionId: string;
+  entityId: string;
+  note: string | null;
+  onSaved: (note: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState(note ?? "");
+  const [saving, setSaving] = useState(false);
+
+  async function submit() {
+    setSaving(true);
+    const result = await updateTransactionNote(transactionId, entityId, value);
+    setSaving(false);
+    if (!result.error) {
+      setOpen(false);
+      onSaved(value.trim() || null);
+    }
+  }
+
+  if (open) {
+    return (
+      <div className="flex items-center gap-1">
+        <Input
+          autoFocus
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="Add a note..."
+          className="h-7 w-40 text-xs"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") { e.preventDefault(); submit(); }
+            if (e.key === "Escape") setOpen(false);
+          }}
+        />
+        <button onClick={submit} disabled={saving} className="p-1 text-[var(--primary)] hover:opacity-80">
+          {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+        </button>
+        <button onClick={() => setOpen(false)} className="p-1 text-[var(--muted-foreground)]"><X size={13} /></button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setOpen(true)}
+      className={`p-1.5 ${note ? "text-[var(--primary)]" : "text-[var(--muted-foreground)]"} hover:opacity-80`}
+      title={note ?? "Add a note"}
+    >
+      <StickyNote size={14} />
+    </button>
+  );
+}
+
 const MONEY_SUBTYPES = ["Cash and Bank", "Credit Card"];
+type StatusFilter = "all" | "categorized" | "uncategorized";
 
 export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -56,10 +227,20 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [accountFilter, setAccountFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
   const refresh = useCallback(async () => {
     setLoading(true);
     const [txnResult, accountsResult, projectsResult] = await Promise.all([
-      listTransactions({ entityId: entity.id }),
+      listTransactions({
+        entityId: entity.id,
+        status: statusFilter === "all" ? undefined : statusFilter,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+      }),
       listChartOfAccounts(entity.id),
       listFinanceProjects(entity.id),
     ]);
@@ -67,17 +248,35 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
     setAccounts((accountsResult.accounts ?? []) as Account[]);
     setProjects((projectsResult.projects ?? []) as Project[]);
     setLoading(false);
-  }, [entity.id]);
+  }, [entity.id, statusFilter, startDate, endDate]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
+  function updateTransaction(id: string, patch: Partial<Transaction>) {
+    setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+  }
+
+  function removeTransaction(id: string) {
+    setTransactions((prev) => prev.filter((t) => t.id !== id));
+  }
+
+  const moneyAccounts = accounts.filter((a) => MONEY_SUBTYPES.includes(a.account_subtype) && a.is_active);
+  const categoryAccounts = accounts.filter(
+    (a) => (direction === "in" ? a.account_type === "income" : a.account_type === "expense") && a.is_active
+  );
+
+  const filteredTransactions = accountFilter
+    ? transactions.filter((t) => resolvedAccountId(t) === accountFilter)
+    : transactions;
+
   // Single pass: every transaction lands in exactly one of these three
   // buckets, so there's no risk of a row appearing twice (or nowhere) as
   // new statuses/flags are added — instead of three independent .filter()
-  // calls each re-stating overlapping conditions.
-  const { needsReview, uncategorized, rest } = transactions.reduce(
+  // calls each re-stating overlapping conditions. Transactions already
+  // arrive sorted chronologically (newest first) from listTransactions.
+  const { needsReview, uncategorized, rest } = filteredTransactions.reduce(
     (buckets, t) => {
       if (t.needs_review) buckets.needsReview.push(t);
       else if (t.status === "uncategorized") buckets.uncategorized.push(t);
@@ -85,10 +284,6 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
       return buckets;
     },
     { needsReview: [] as Transaction[], uncategorized: [] as Transaction[], rest: [] as Transaction[] }
-  );
-  const moneyAccounts = accounts.filter((a) => MONEY_SUBTYPES.includes(a.account_subtype) && a.is_active);
-  const categoryAccounts = accounts.filter(
-    (a) => (direction === "in" ? a.account_type === "income" : a.account_type === "expense") && a.is_active
   );
 
   function updateSplit(index: number, patch: Partial<Split>) {
@@ -140,8 +335,8 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
   }
 
   async function handleDelete(transactionId: string) {
+    removeTransaction(transactionId);
     await deleteManualTransaction(transactionId, entity.id);
-    refresh();
   }
 
   if (loading) {
@@ -150,13 +345,31 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end gap-2">
-        <Button size="sm" variant="outline" onClick={() => setShowImport(true)}>
-          <Upload size={14} className="mr-1" /> Import CSV
-        </Button>
-        <Button size="sm" onClick={() => setShowForm((v) => !v)}>
-          <Plus size={14} className="mr-1" /> Add transaction
-        </Button>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={accountFilter} onChange={(e) => setAccountFilter(e.target.value)} className="h-9 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-sm">
+            <option value="">All accounts</option>
+            {moneyAccounts.map((a) => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)} className="h-9 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-sm">
+            <option value="all">All</option>
+            <option value="categorized">Categorized</option>
+            <option value="uncategorized">Uncategorized</option>
+          </select>
+          <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-9 w-36 text-sm" title="From date" />
+          <span className="text-xs text-[var(--muted-foreground)]">to</span>
+          <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-9 w-36 text-sm" title="To date" />
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => setShowImport(true)}>
+            <Upload size={14} className="mr-1" /> Import CSV
+          </Button>
+          <Button size="sm" onClick={() => setShowForm((v) => !v)}>
+            <Plus size={14} className="mr-1" /> Add transaction
+          </Button>
+        </div>
       </div>
 
       {showImport && (
@@ -208,26 +421,44 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
             <label className="text-xs font-medium text-[var(--muted-foreground)]">Category{splits.length > 1 ? "s (split)" : ""}</label>
             {splits.map((s, i) => (
               <div key={i} className="flex gap-2 items-center">
-                <select
+                <CreatableSelect
                   value={s.accountId}
-                  onChange={(e) => updateSplit(i, { accountId: e.target.value })}
+                  onChange={(id) => updateSplit(i, { accountId: id })}
+                  options={categoryAccounts}
+                  placeholder="Category..."
+                  newLabel="+ New category..."
+                  newPlaceholder={`New ${direction === "in" ? "income" : "expense"} category`}
+                  onCreate={async (name): Promise<{ error: string } | { id: string }> => {
+                    const result = await createChartAccount({
+                      entityId: entity.id,
+                      name,
+                      accountType: direction === "in" ? "income" : "expense",
+                      accountSubtype: "Other",
+                    });
+                    if (actionFailed(result)) return { error: result.error };
+                    setAccounts((prev) => [
+                      ...prev,
+                      { id: result.accountId, name, account_type: direction === "in" ? "income" : "expense", account_subtype: "Other", is_active: true },
+                    ]);
+                    return { id: result.accountId };
+                  }}
                   className="flex-1 h-9 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-sm"
-                >
-                  <option value="">Category...</option>
-                  {categoryAccounts.map((a) => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
-                  ))}
-                </select>
-                <select
+                />
+                <CreatableSelect
                   value={s.projectId}
-                  onChange={(e) => updateSplit(i, { projectId: e.target.value })}
+                  onChange={(id) => updateSplit(i, { projectId: id })}
+                  options={projects}
+                  placeholder="No project"
+                  newLabel="+ New project..."
+                  newPlaceholder="New project name"
+                  onCreate={async (name): Promise<{ error: string } | { id: string }> => {
+                    const result = await createFinanceProject({ entityId: entity.id, name });
+                    if (actionFailed(result)) return { error: result.error };
+                    setProjects((prev) => [...prev, { id: result.projectId, name }]);
+                    return { id: result.projectId };
+                  }}
                   className="w-40 h-9 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-sm"
-                >
-                  <option value="">No project</option>
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
+                />
                 <Input
                   type="number"
                   value={s.amount}
@@ -259,7 +490,18 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
           <p className="text-xs font-medium text-red-500 uppercase tracking-wide mb-1.5">Needs your review ({needsReview.length})</p>
           <div className="rounded-xl border border-red-500/30 divide-y divide-[var(--border)]">
             {needsReview.map((t) => (
-              <CategoryPickerRow key={t.id} transaction={t} accounts={accounts} projects={projects} entityId={entity.id} onDone={refresh} onDeleted={handleDelete} showReviewControls />
+              <CategoryPickerRow
+                key={t.id}
+                transaction={t}
+                accounts={accounts}
+                projects={projects}
+                entityId={entity.id}
+                onUpdated={updateTransaction}
+                onDeleted={handleDelete}
+                onAccountCreated={(a) => setAccounts((prev) => [...prev, a])}
+                onProjectCreated={(p) => setProjects((prev) => [...prev, p])}
+                showReviewControls
+              />
             ))}
           </div>
         </div>
@@ -270,18 +512,35 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
           <p className="text-xs font-medium text-amber-600 uppercase tracking-wide mb-1.5">Needs categorizing ({uncategorized.length})</p>
           <div className="rounded-xl border border-amber-500/30 divide-y divide-[var(--border)]">
             {uncategorized.map((t) => (
-              <CategoryPickerRow key={t.id} transaction={t} accounts={accounts} projects={projects} entityId={entity.id} onDone={refresh} showReviewControls={false} />
+              <CategoryPickerRow
+                key={t.id}
+                transaction={t}
+                accounts={accounts}
+                projects={projects}
+                entityId={entity.id}
+                onUpdated={updateTransaction}
+                onAccountCreated={(a) => setAccounts((prev) => [...prev, a])}
+                onProjectCreated={(p) => setProjects((prev) => [...prev, p])}
+                showReviewControls={false}
+              />
             ))}
           </div>
         </div>
       )}
 
-      {transactions.length === 0 ? (
+      {filteredTransactions.length === 0 ? (
         <p className="text-sm text-[var(--muted-foreground)] py-8 text-center">No transactions yet.</p>
       ) : (
         <div className="rounded-xl border border-[var(--border)] divide-y divide-[var(--border)]">
           {rest.map((t) => (
-            <TransactionRow key={t.id} transaction={t} entityId={entity.id} onDeleted={handleDelete} onFlagged={refresh} />
+            <TransactionRow
+              key={t.id}
+              transaction={t}
+              entityId={entity.id}
+              onDeleted={handleDelete}
+              onFlagged={(patch) => updateTransaction(t.id, patch)}
+              onNoteSaved={(note) => updateTransaction(t.id, { notes: note })}
+            />
           ))}
         </div>
       )}
@@ -289,18 +548,20 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
   );
 }
 
-function FlagButton({ transactionId, entityId, onFlagged }: { transactionId: string; entityId: string; onFlagged: () => void }) {
+function FlagButton({ transactionId, entityId, onFlagged }: { transactionId: string; entityId: string; onFlagged: (patch: Partial<Transaction>) => void }) {
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
 
   async function submit() {
     setSaving(true);
-    await flagTransactionForReview(transactionId, entityId, note || undefined);
+    const result = await flagTransactionForReview(transactionId, entityId, note || undefined);
     setSaving(false);
     setOpen(false);
+    if (!result.error) {
+      onFlagged({ needs_review: true, review_note: note.trim() || null });
+    }
     setNote("");
-    onFlagged();
   }
 
   if (open) {
@@ -327,20 +588,26 @@ function TransactionRow({
   entityId,
   onDeleted,
   onFlagged,
+  onNoteSaved,
 }: {
   transaction: Transaction;
   entityId: string;
   onDeleted: (id: string) => void;
-  onFlagged: () => void;
+  onFlagged: (patch: Partial<Transaction>) => void;
+  onNoteSaved: (note: string | null) => void;
 }) {
   return (
-    <div className="flex items-center justify-between px-4 py-2.5">
-      <div>
-        <p className="text-sm font-medium">{transaction.payee_name}</p>
-        <p className="text-xs text-[var(--muted-foreground)]">{transaction.date} · {transaction.transaction_splits.length} categor{transaction.transaction_splits.length === 1 ? "y" : "ies"}</p>
+    <div className="flex items-center gap-3 px-4 py-2.5">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium truncate">{transaction.payee_name}</p>
+        <p className="text-xs text-[var(--muted-foreground)] truncate">
+          {transaction.date} · {transaction.transaction_splits.length} categor{transaction.transaction_splits.length === 1 ? "y" : "ies"}
+          {transaction.notes ? ` · "${transaction.notes}"` : ""}
+        </p>
       </div>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 flex-none whitespace-nowrap">
         <span className={`text-sm font-medium mr-2 ${transaction.amount >= 0 ? "text-green-600" : "text-red-500"}`}>{money(transaction.amount)}</span>
+        <NoteButton transactionId={transaction.id} entityId={entityId} note={transaction.notes} onSaved={onNoteSaved} />
         <FlagButton transactionId={transaction.id} entityId={entityId} onFlagged={onFlagged} />
         {!transaction.bank_account_id && (
           <button onClick={() => onDeleted(transaction.id)} className="p-1.5 text-[var(--muted-foreground)] hover:text-red-500">
@@ -363,16 +630,20 @@ function CategoryPickerRow({
   accounts,
   projects,
   entityId,
-  onDone,
+  onUpdated,
   onDeleted,
+  onAccountCreated,
+  onProjectCreated,
   showReviewControls,
 }: {
   transaction: Transaction;
   accounts: Account[];
   projects: Project[];
   entityId: string;
-  onDone: () => void;
+  onUpdated: (id: string, patch: Partial<Transaction>) => void;
   onDeleted?: (id: string) => void;
+  onAccountCreated: (account: Account) => void;
+  onProjectCreated: (project: Project) => void;
   showReviewControls: boolean;
 }) {
   const [accountId, setAccountId] = useState("");
@@ -401,39 +672,66 @@ function CategoryPickerRow({
       setError(result.error);
       return;
     }
-    onDone();
+    onUpdated(transaction.id, {
+      status: "categorized",
+      needs_review: false,
+      review_note: null,
+      transaction_splits: [{ chart_account_id: accountId, amount: Math.abs(transaction.amount), project_id: projectId || null }],
+    });
   }
 
   async function handleResolve() {
     setResolving(true);
-    await resolveReviewFlag(transaction.id, entityId);
+    const result = await resolveReviewFlag(transaction.id, entityId);
     setResolving(false);
-    onDone();
+    if (!result.error) {
+      onUpdated(transaction.id, { needs_review: false, review_note: null });
+    }
   }
 
   return (
-    <div className="flex items-center justify-between px-4 py-2.5 gap-2 flex-wrap">
-      <div>
-        <p className="text-sm font-medium">{transaction.payee_name}</p>
-        <p className="text-xs text-[var(--muted-foreground)]">
+    <div className="flex items-center gap-3 px-4 py-2.5">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium truncate">{transaction.payee_name}</p>
+        <p className="text-xs text-[var(--muted-foreground)] truncate">
           {transaction.date}{currentCategory ? ` · currently: ${currentCategory}` : ""}
         </p>
-        {transaction.review_note && <p className="text-xs text-red-500 mt-0.5">"{transaction.review_note}"</p>}
+        {transaction.review_note && <p className="text-xs text-red-500 mt-0.5 truncate">&quot;{transaction.review_note}&quot;</p>}
+        {error && <p className="text-xs text-red-500 mt-0.5">{error}</p>}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-none flex-wrap justify-end">
         <span className={`text-sm font-medium ${transaction.amount >= 0 ? "text-green-600" : "text-red-500"}`}>{money(transaction.amount)}</span>
-        <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs">
-          <option value="">{currentCategory ? "Change category..." : "Category..."}</option>
-          {categoryAccounts.map((a) => (
-            <option key={a.id} value={a.id}>{a.name}</option>
-          ))}
-        </select>
-        <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs">
-          <option value="">No project</option>
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
+        <CreatableSelect
+          value={accountId}
+          onChange={setAccountId}
+          options={categoryAccounts}
+          placeholder={currentCategory ? "Change category..." : "Category..."}
+          newLabel="+ New category..."
+          newPlaceholder={`New ${transaction.amount >= 0 ? "income" : "expense"} category`}
+          onCreate={async (name): Promise<{ error: string } | { id: string }> => {
+            const accountType = transaction.amount >= 0 ? "income" : "expense";
+            const result = await createChartAccount({ entityId, name, accountType, accountSubtype: "Other" });
+            if (actionFailed(result)) return { error: result.error };
+            onAccountCreated({ id: result.accountId, name, account_type: accountType, account_subtype: "Other", is_active: true });
+            return { id: result.accountId };
+          }}
+          className="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs"
+        />
+        <CreatableSelect
+          value={projectId}
+          onChange={setProjectId}
+          options={projects}
+          placeholder="No project"
+          newLabel="+ New project..."
+          newPlaceholder="New project name"
+          onCreate={async (name): Promise<{ error: string } | { id: string }> => {
+            const result = await createFinanceProject({ entityId, name });
+            if (actionFailed(result)) return { error: result.error };
+            onProjectCreated({ id: result.projectId, name });
+            return { id: result.projectId };
+          }}
+          className="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs"
+        />
         <Button size="sm" className="h-8 text-xs" onClick={handleSave} disabled={saving}>
           {saving ? <Loader2 size={12} className="animate-spin" /> : "Save"}
         </Button>
@@ -442,15 +740,15 @@ function CategoryPickerRow({
             {resolving ? <Loader2 size={12} className="animate-spin" /> : "Resolved"}
           </Button>
         ) : (
-          <FlagButton transactionId={transaction.id} entityId={entityId} onFlagged={onDone} />
+          <FlagButton transactionId={transaction.id} entityId={entityId} onFlagged={(patch) => onUpdated(transaction.id, patch)} />
         )}
+        <NoteButton transactionId={transaction.id} entityId={entityId} note={transaction.notes} onSaved={(note) => onUpdated(transaction.id, { notes: note })} />
         {onDeleted && !transaction.bank_account_id && (
           <button onClick={() => onDeleted(transaction.id)} className="p-1.5 text-[var(--muted-foreground)] hover:text-red-500">
             <Trash2 size={14} />
           </button>
         )}
       </div>
-      {error && <p className="text-xs text-red-500 w-full">{error}</p>}
     </div>
   );
 }
