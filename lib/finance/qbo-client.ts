@@ -74,6 +74,29 @@ export async function queryQbo<T>(params: {
   return { results, startPosition, maxResults };
 }
 
+/** Gets a total row count for a QuickBooks object type via COUNT(*), used
+ * only to drive the import progress UI (progress_total) — never for
+ * pagination logic itself, since QUERY's own STARTPOSITION/MAXRESULTS
+ * response is the source of truth for whether more pages remain. */
+export async function queryQboCount(params: {
+  accessToken: string;
+  realmId: string;
+  environment: "sandbox" | "production";
+  entity: string;
+}): Promise<number> {
+  const { accessToken, realmId, environment, entity } = params;
+  const query = `SELECT COUNT(*) FROM ${entity}`;
+  const url = `${QBO_API_BASE[environment]}/v3/company/${realmId}/query?query=${encodeURIComponent(query)}&minorversion=65`;
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
+  });
+  if (!response.ok) return 0;
+
+  const body = await response.json();
+  return Number(body?.QueryResponse?.totalCount ?? 0);
+}
+
 /**
  * Pages through an entire QuickBooks object type, calling onPage for each
  * page as it arrives (so callers can commit incrementally rather than

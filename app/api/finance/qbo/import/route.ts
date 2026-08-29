@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
-import { queryQboAllPages, QboApiError } from "@/lib/finance/qbo-client";
+import { queryQboAllPages, queryQboCount, QboApiError } from "@/lib/finance/qbo-client";
 import { getValidQboAccessToken } from "@/lib/finance/qbo-token";
 import { commitAccounts, commitCustomers, commitInvoiceBatch, commitPayment } from "@/lib/finance/import-commit";
 import { mapQboAccount, mapQboContact, mapQboInvoice, mapQboPayment } from "@/lib/finance/qbo-mapping";
@@ -24,7 +24,7 @@ export const maxDuration = 300;
 const PHASE_ORDER = ["accounts", "customers", "invoices", "payments", "done"] as const;
 type Phase = (typeof PHASE_ORDER)[number];
 
-type CursorState = { startPosition?: number; subEntity?: "Customer" | "Vendor" };
+type CursorState = { startPosition?: number; subEntity?: "Customer" | "Vendor"; committedSoFar?: number };
 
 function nextPhase(phase: Phase): Phase {
   const idx = PHASE_ORDER.indexOf(phase);
@@ -76,7 +76,10 @@ export async function POST(request: NextRequest) {
 
   async function persistProgress(nextCursor: CursorState) {
     cursor = nextCursor;
-    await supabase.from("import_jobs").update({ cursor_state: cursor, updated_at: new Date().toISOString() }).eq("id", jobId);
+    await supabase
+      .from("import_jobs")
+      .update({ cursor_state: cursor, progress_current: cursor.committedSoFar ?? 0, updated_at: new Date().toISOString() })
+      .eq("id", jobId);
   }
 
   function continueLater() {
@@ -87,21 +90,42 @@ export async function POST(request: NextRequest) {
     triggerImportRun(request.url, jobId);
   }
 
+  /** Runs one QuickBooks object type end-to-end (resuming from `cursor` if
+   * this phase was already in progress), reporting live counts to
+   * import_jobs.progress_current/progress_total as pages commit, so the UI
+   * can show real numbers instead of an indefinite spinner. Returns
+   * `continuing: true` if the caller should persist+trigger a continuation
+   * and return, or `false` once this object type is fully committed. */
+  async function runEntity<T>(entity: string, startPosition: number, commitPage: (rows: T[]) => Promise<{ error: string } | void>): Promise<{ continuing: boolean; nextStartPosition: number; committedSoFar: number }> {
+    if (startPosition === 1) {
+      const total = await queryQboCount({ accessToken, realmId, environment, entity });
+      await supabase.from("import_jobs").update({ progress_total: total, progress_current: 0 }).eq("id", jobId);
+    }
+    let committedSoFar = cursor.committedSoFar ?? 0;
+    const { done, nextStartPosition } = await queryQboAllPages<T>({
+      accessToken, realmId, environment, entity,
+      startPosition,
+      deadline,
+      onPage: async (rows) => {
+        const result = await commitPage(rows);
+        if (result && "error" in result) throw new Error(result.error);
+        committedSoFar += rows.length;
+        await supabase.from("import_jobs").update({ progress_current: committedSoFar, updated_at: new Date().toISOString() }).eq("id", jobId);
+      },
+    });
+    return { continuing: !done, nextStartPosition, committedSoFar };
+  }
+
   try {
     while (phase !== "done") {
       if (phase === "accounts") {
-        const { done, nextStartPosition } = await queryQboAllPages<QboAccountRow>({
-          accessToken, realmId, environment, entity: "Account",
-          startPosition: cursor.startPosition ?? 1,
-          deadline,
-          onPage: async (rows) => {
-            const result = await commitAccounts(supabase, entityId, rows.map(mapQboAccount));
-            if ("error" in result) throw new Error(result.error);
-          },
+        const { continuing, nextStartPosition, committedSoFar } = await runEntity<QboAccountRow>("Account", cursor.startPosition ?? 1, async (rows) => {
+          const result = await commitAccounts(supabase, entityId, rows.map(mapQboAccount));
+          return "error" in result ? result : undefined;
         });
-        if (!done) {
-          await persistProgress({ startPosition: nextStartPosition });
-          await continueLater();
+        if (continuing) {
+          await persistProgress({ startPosition: nextStartPosition, committedSoFar });
+          continueLater();
           return NextResponse.json({ status: "continuing", phase });
         }
       }
@@ -110,67 +134,53 @@ export async function POST(request: NextRequest) {
         const subEntities: ("Customer" | "Vendor")[] = ["Customer", "Vendor"];
         const startFrom = subEntities.indexOf(cursor.subEntity ?? "Customer");
         for (const subEntity of subEntities.slice(Math.max(startFrom, 0))) {
-          const { done, nextStartPosition } = await queryQboAllPages<QboContactRow>({
-            accessToken, realmId, environment, entity: subEntity,
-            startPosition: subEntity === cursor.subEntity ? (cursor.startPosition ?? 1) : 1,
-            deadline,
-            onPage: async (rows) => {
-              const result = await commitCustomers(supabase, entityId, rows.map(mapQboContact), "quickbooks");
-              if ("error" in result) throw new Error(result.error);
-            },
+          const startPosition = subEntity === cursor.subEntity ? (cursor.startPosition ?? 1) : 1;
+          const { continuing, nextStartPosition, committedSoFar } = await runEntity<QboContactRow>(subEntity, startPosition, async (rows) => {
+            const result = await commitCustomers(supabase, entityId, rows.map(mapQboContact), "quickbooks");
+            return "error" in result ? result : undefined;
           });
-          if (!done) {
-            await persistProgress({ subEntity, startPosition: nextStartPosition });
-            await continueLater();
+          if (continuing) {
+            await persistProgress({ subEntity, startPosition: nextStartPosition, committedSoFar });
+            continueLater();
             return NextResponse.json({ status: "continuing", phase });
           }
         }
       }
 
       if (phase === "invoices") {
-        const { done, nextStartPosition } = await queryQboAllPages<QboInvoiceRow>({
-          accessToken, realmId, environment, entity: "Invoice",
-          startPosition: cursor.startPosition ?? 1,
-          deadline,
-          onPage: async (rows) => {
-            const result = await commitInvoiceBatch(supabase, entityId, rows.map(mapQboInvoice));
-            if ("error" in result) throw new Error(result.error);
-          },
+        const { continuing, nextStartPosition, committedSoFar } = await runEntity<QboInvoiceRow>("Invoice", cursor.startPosition ?? 1, async (rows) => {
+          const result = await commitInvoiceBatch(supabase, entityId, rows.map(mapQboInvoice));
+          return "error" in result ? result : undefined;
         });
-        if (!done) {
-          await persistProgress({ startPosition: nextStartPosition });
-          await continueLater();
+        if (continuing) {
+          await persistProgress({ startPosition: nextStartPosition, committedSoFar });
+          continueLater();
           return NextResponse.json({ status: "continuing", phase });
         }
       }
 
       if (phase === "payments") {
-        const { done, nextStartPosition } = await queryQboAllPages<QboPaymentRow>({
-          accessToken, realmId, environment, entity: "Payment",
-          startPosition: cursor.startPosition ?? 1,
-          deadline,
-          onPage: async (rows) => {
-            for (const payment of rows.flatMap(mapQboPayment)) {
-              const result = await commitPayment(supabase, entityId, job.owner_id, payment);
-              // A single unresolvable payment (e.g. references an invoice
-              // that was excluded/voided in QuickBooks) shouldn't abort the
-              // whole import — log it as a job-level note and keep going.
-              if ("error" in result) {
-                await supabase.from("import_jobs").update({ error_message: result.error }).eq("id", jobId);
-              }
+        const { continuing, nextStartPosition, committedSoFar } = await runEntity<QboPaymentRow>("Payment", cursor.startPosition ?? 1, async (rows) => {
+          for (const payment of rows.flatMap(mapQboPayment)) {
+            const result = await commitPayment(supabase, entityId, job.owner_id, payment);
+            // A single unresolvable payment (e.g. references an invoice
+            // that was excluded/voided in QuickBooks) shouldn't abort the
+            // whole import — log it as a job-level note and keep going.
+            if ("error" in result) {
+              await supabase.from("import_jobs").update({ error_message: result.error }).eq("id", jobId);
             }
-          },
+          }
         });
-        if (!done) {
-          await persistProgress({ startPosition: nextStartPosition });
-          await continueLater();
+        if (continuing) {
+          await persistProgress({ startPosition: nextStartPosition, committedSoFar });
+          continueLater();
           return NextResponse.json({ status: "continuing", phase });
         }
       }
 
       phase = nextPhase(phase);
       cursor = {};
-      await supabase.from("import_jobs").update({ phase, cursor_state: {}, updated_at: new Date().toISOString() }).eq("id", jobId);
+      await supabase.from("import_jobs").update({ phase, cursor_state: {}, progress_current: 0, progress_total: 0, updated_at: new Date().toISOString() }).eq("id", jobId);
     }
 
     await supabase.from("import_jobs").update({ status: "completed", phase: "done" }).eq("id", jobId);
