@@ -4,6 +4,7 @@ import { queryQboAllPages, QboApiError } from "@/lib/finance/qbo-client";
 import { getValidQboAccessToken } from "@/lib/finance/qbo-token";
 import { commitAccounts, commitCustomers, commitInvoiceBatch, commitPayment } from "@/lib/finance/import-commit";
 import { mapQboAccount, mapQboContact, mapQboInvoice, mapQboPayment } from "@/lib/finance/qbo-mapping";
+import { triggerImportRun } from "@/lib/finance/trigger-import";
 
 // Chunked/resumable historical pull — a company file with thousands of
 // records across many object types can exceed one request's time budget.
@@ -78,8 +79,12 @@ export async function POST(request: NextRequest) {
     await supabase.from("import_jobs").update({ cursor_state: cursor, updated_at: new Date().toISOString() }).eq("id", jobId);
   }
 
-  async function continueLater() {
-    fetch(request.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobId }) }).catch(() => {});
+  function continueLater() {
+    // Same after()-based trigger as the OAuth callback route uses to kick
+    // this runner off in the first place — a bare fire-and-forget fetch
+    // here would be subject to the exact same serverless-freeze risk this
+    // whole chunking design exists to work around.
+    triggerImportRun(request.url, jobId);
   }
 
   try {

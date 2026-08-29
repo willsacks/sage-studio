@@ -82,17 +82,29 @@ export async function commitCreateEntity(
   return { entityId: entity.id as string };
 }
 
-/** Bulk-upserts an imported chart of accounts, returning a map from each
+/** Upserts an imported chart of accounts, returning a map from each
  * account's externalId to its new chart_of_accounts.id (used immediately
  * for parent-account resolution below, and by later phases — e.g. Payment/
  * Deposit — that re-query chart_of_accounts.external_id fresh from the DB,
  * since a resumed/self-re-invoked import can't rely on this map surviving
- * across requests). Two-pass: accounts are upserted first with no parent,
- * then parent_account_id is backfilled once every row exists, so the
- * source system's ordering of parent/child accounts doesn't matter. Upsert
- * on (entity_id, external_id) — the unique constraint added in
- * scripts/add-import-phase2-schema.ts — makes a retried/resumed import
- * idempotent instead of creating duplicate accounts. */
+ * across requests).
+ *
+ * Matches each account by external_id first (already imported in a prior
+ * run), then falls back to matching by name — a plain upsert keyed only on
+ * (entity_id, external_id) will happily try to INSERT a new row for, say,
+ * QuickBooks' own "Accounts Receivable" account, which collides with the
+ * (entity_id, name) unique constraint against the fallback "Accounts
+ * Receivable" row commitCreateEntity already seeded (external_id null) —
+ * confirmed in production as `duplicate key value violates unique
+ * constraint "chart_of_accounts_entity_id_name_key"`. Matching by name
+ * first lets the import "claim" that pre-seeded row instead of colliding
+ * with it. Row-by-row rather than a single bulk upsert — chart-of-accounts
+ * sizes are small enough (tens to low hundreds of rows) that this isn't a
+ * performance concern, and correctness here matters more than round-trips.
+ *
+ * Two-pass: accounts are committed first with no parent, then
+ * parent_account_id is backfilled once every row exists, so the source
+ * system's ordering of parent/child accounts doesn't matter. */
 export async function commitAccounts(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: SupabaseClient<Database> | any,
@@ -102,25 +114,47 @@ export async function commitAccounts(
   const externalIdToAccountId = new Map<string, string>();
   if (accounts.length === 0) return { externalIdToAccountId };
 
-  const { data: inserted, error } = await supabase
-    .from("chart_of_accounts")
-    .upsert(
-      accounts.map((a) => ({
-        entity_id: entityId,
-        name: a.name,
-        account_type: a.accountType,
-        account_subtype: a.accountSubtype,
-        normal_balance: normalBalanceForType(a.accountType),
-        is_default: false,
-        external_id: a.externalId ?? null,
-      })),
-      { onConflict: "entity_id,external_id" }
-    )
-    .select("id, external_id");
-  if (error) return { error: error.message };
+  for (const a of accounts) {
+    let existingId: string | null = null;
 
-  for (const row of inserted as { id: string; external_id: string | null }[]) {
-    if (row.external_id) externalIdToAccountId.set(row.external_id, row.id);
+    if (a.externalId) {
+      const { data } = await supabase.from("chart_of_accounts").select("id").eq("entity_id", entityId).eq("external_id", a.externalId).maybeSingle();
+      existingId = data?.id ?? null;
+    }
+    if (!existingId) {
+      const { data } = await supabase.from("chart_of_accounts").select("id").eq("entity_id", entityId).eq("name", a.name).maybeSingle();
+      existingId = data?.id ?? null;
+    }
+
+    if (existingId) {
+      const { error } = await supabase
+        .from("chart_of_accounts")
+        .update({
+          account_type: a.accountType,
+          account_subtype: a.accountSubtype,
+          normal_balance: normalBalanceForType(a.accountType),
+          external_id: a.externalId ?? null,
+        })
+        .eq("id", existingId);
+      if (error) return { error: error.message };
+      if (a.externalId) externalIdToAccountId.set(a.externalId, existingId);
+    } else {
+      const { data, error } = await supabase
+        .from("chart_of_accounts")
+        .insert({
+          entity_id: entityId,
+          name: a.name,
+          account_type: a.accountType,
+          account_subtype: a.accountSubtype,
+          normal_balance: normalBalanceForType(a.accountType),
+          is_default: false,
+          external_id: a.externalId ?? null,
+        })
+        .select("id")
+        .single();
+      if (error) return { error: error.message };
+      if (a.externalId) externalIdToAccountId.set(a.externalId, data.id);
+    }
   }
 
   // Second pass: resolve parent_account_id now that every account has a

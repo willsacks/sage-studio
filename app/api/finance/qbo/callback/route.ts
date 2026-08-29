@@ -4,6 +4,12 @@ import { getQboOAuthClient } from "@/lib/finance/qbo-client";
 import { parseQboState } from "@/lib/finance/qbo-state";
 import { encryptQboToken } from "@/lib/crypto";
 import { commitCreateEntity } from "@/lib/finance/import-commit";
+import { triggerImportRun } from "@/lib/finance/trigger-import";
+
+// Needs to outlive the default function timeout on some Vercel plans while
+// its after() callback waits (up to 8s) for the import runner to accept
+// the trigger request.
+export const maxDuration = 30;
 
 /** OAuth is a full-page redirect, not a modal (unlike Plaid Link) — Intuit
  * sends the user's browser here directly with ?code&realmId&state. Runs on
@@ -80,15 +86,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${redirectBase}/finances?qboError=${encodeURIComponent(jobError?.message ?? "job_creation_failed")}`);
   }
 
-  // Fire-and-forget: kicks off the chunked/resumable import runner. The
-  // redirect below returns immediately; the runner (and its own
-  // self-re-invocations if the pull takes longer than one request) drives
-  // progress independently of this response.
-  fetch(`${redirectBase}/api/finance/qbo/import`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ jobId: job.id }),
-  }).catch(() => {});
+  // Kicks off the chunked/resumable import runner via after() rather than a
+  // bare fire-and-forget fetch — see trigger-import.ts for why the naive
+  // version is unreliable on serverless. The redirect below still returns
+  // immediately; the runner (and its own self-re-invocations if the pull
+  // takes longer than one request) drives progress independently.
+  triggerImportRun(`${redirectBase}/api/finance/qbo/import`, job.id);
 
   return NextResponse.redirect(`${redirectBase}/finances/import/${job.id}`);
 }
