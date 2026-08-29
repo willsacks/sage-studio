@@ -46,15 +46,20 @@ export function CsvImportDialog({
     formData.append("entityId", entityId);
     formData.append("moneyAccountId", moneyAccountId);
 
-    const response = await fetch("/api/finance/import-transactions", { method: "POST", body: formData });
-    const data = await response.json();
-    setImporting(false);
-    if (data.error) {
-      setError(data.error);
-      return;
+    try {
+      const response = await fetch("/api/finance/import-transactions", { method: "POST", body: formData });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data || data.error) {
+        setError(data?.error ?? `Import failed (${response.status})`);
+        return;
+      }
+      setResult({ imported: data.imported, skipped: data.skipped });
+      onImported();
+    } catch {
+      setError("Import failed — check your connection and try again");
+    } finally {
+      setImporting(false);
     }
-    setResult({ imported: data.imported, skipped: data.skipped });
-    onImported();
   }
 
   return (
@@ -77,7 +82,12 @@ export function CsvImportDialog({
           </select>
         </div>
 
-        <input ref={fileInputRef} type="file" accept=".csv" className="text-sm" />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv"
+          className="w-full text-sm text-[var(--muted-foreground)] file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border file:border-[var(--border)] file:bg-[var(--card)] file:text-sm file:font-medium file:text-[var(--foreground)] hover:file:bg-[var(--accent)] file:cursor-pointer file:transition-colors"
+        />
 
         {error && <p className="text-sm text-red-500">{error}</p>}
         {result && (

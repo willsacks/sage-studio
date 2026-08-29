@@ -61,6 +61,9 @@ export async function POST(request: NextRequest) {
       { count: "exact" }
     );
   if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
+  if (!count) {
+    return NextResponse.json({ error: "No transactions were saved — you may not have permission to add transactions to this entity" }, { status: 403 });
+  }
 
-  return NextResponse.json({ imported: count ?? transactions.length, skipped, errors });
+  return NextResponse.json({ imported: count, skipped, errors });
 }
