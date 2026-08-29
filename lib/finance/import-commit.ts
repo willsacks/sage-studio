@@ -352,17 +352,42 @@ export type StagedPayment = {
   moneyAccountExternalId?: string;
 };
 
+/** Looks up an income-type account to credit for an imported payment. QBO's
+ * Payment object doesn't carry a revenue category itself (that lives on the
+ * Invoice's line items, tied to QBO Items, which aren't resolved by this
+ * importer yet) — so every imported payment lands in one general account
+ * rather than being split across the same categories the original invoice
+ * used. Prefers the "Revenue" subtype (the bucket the accounts phase maps
+ * QBO's own "Income" AccountType into) and falls back to any income
+ * account on the entity. Real per-line-item categorization is a
+ * reasonable future improvement, not something this import claims to do. */
+async function findIncomeAccountId(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: SupabaseClient<Database> | any,
+  entityId: string
+): Promise<string | null> {
+  const { data } = await supabase.from("chart_of_accounts").select("id, account_subtype").eq("entity_id", entityId).eq("account_type", "income");
+  if (!data || data.length === 0) return null;
+  const revenue = data.find((a: { id: string; account_subtype: string }) => a.account_subtype === "Revenue");
+  return (revenue ?? data[0]).id;
+}
+
 /** Posts an imported payment against an already-imported invoice: credits
- * the entity's default Accounts Receivable account (a deliberate,
- * documented divergence from the manual recordInvoicePayment flow, which
- * credits an income account directly — an imported Payment is reconciling
- * an already-invoiced AR balance, not recognizing new income at the point
- * of cash receipt) via postImportedTransaction, then inserts
- * invoice_payments and recomputes the invoice's status exactly like
- * recordInvoicePayment does. Falls back to Accounts Receivable itself as
- * the money-side account if the payment's deposit-to account can't be
- * resolved, since AR is guaranteed to exist (seeded by commitCreateEntity)
- * on every business entity. */
+ * an income account (matching recordInvoicePayment's manual-entry
+ * behavior — see findIncomeAccountId for how the specific account is
+ * chosen) via postImportedTransaction, then inserts invoice_payments and
+ * recomputes the invoice's status exactly like recordInvoicePayment does.
+ *
+ * An earlier version of this credited Accounts Receivable instead, on the
+ * theory that an imported Payment is "reconciling an already-invoiced AR
+ * balance" rather than recognizing new income. That reasoning doesn't
+ * actually hold here: Sage Studio's invoices never post anything to the
+ * ledger at invoice-time (commitInvoiceBatch is deliberately ledger-free,
+ * matching how manually-created invoices behave) — so there's no
+ * offsetting AR debit for a payment's AR credit to reconcile against.
+ * Confirmed against a real QuickBooks sandbox import: crediting AR made
+ * every imported payment invisible on the Income Statement, since that
+ * report only sums income/expense account types. */
 export async function commitPayment(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: SupabaseClient<Database> | any,
@@ -379,15 +404,13 @@ export async function commitPayment(
   if (invoiceError) return { error: invoiceError.message };
   if (!invoice) return { error: `Payment references an invoice (${payment.invoiceExternalId}) that wasn't imported` };
 
-  const arAccountId = await findDefaultAccountId(supabase, entityId, "Accounts Receivable");
-  if (!arAccountId) return { error: "No Accounts Receivable account found on this entity" };
+  const incomeAccountId = await findIncomeAccountId(supabase, entityId);
+  if (!incomeAccountId) return { error: "No income account found on this entity to credit this payment against" };
 
   let moneyAccountId = payment.moneyAccountExternalId ? await findAccountIdByExternalId(supabase, entityId, payment.moneyAccountExternalId) : null;
   if (!moneyAccountId) {
     // DepositToAccountRef wasn't resolvable — fall back to any imported
-    // Cash and Bank account rather than AR itself. Using AR on both sides
-    // of the entry would net to zero (a no-op that doesn't actually record
-    // the cash received), which is worse than a best-guess bank account.
+    // Cash and Bank account.
     const { data: fallbackAccount } = await supabase
       .from("chart_of_accounts")
       .select("id")
@@ -405,7 +428,7 @@ export async function commitPayment(
     date: payment.paidDate,
     payeeName: `${invoice.invoice_number} — ${invoice.client_name}`,
     amount: payment.amount,
-    splits: [{ accountId: arAccountId, amount: payment.amount }],
+    splits: [{ accountId: incomeAccountId, amount: payment.amount }],
     createdBy,
     sourceType: "import",
   });

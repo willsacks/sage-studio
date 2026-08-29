@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Loader2, Plus, Trash2, Split, Upload, Flag, X, Check, StickyNote } from "lucide-react";
+import { Loader2, Plus, Trash2, Split, Upload, Flag, X, Check, StickyNote, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { listChartOfAccounts, createChartAccount } from "@/lib/actions/finance-accounts";
@@ -245,6 +245,7 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
 
   const [accountFilter, setAccountFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
@@ -551,16 +552,33 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
         <p className="text-sm text-[var(--muted-foreground)] py-8 text-center">No transactions yet.</p>
       ) : (
         <div className="rounded-xl border border-[var(--border)] divide-y divide-[var(--border)]">
-          {rest.map((t) => (
-            <TransactionRow
-              key={t.id}
-              transaction={t}
-              entityId={entity.id}
-              onDeleted={handleDelete}
-              onFlagged={(patch) => updateTransaction(t.id, patch)}
-              onNoteSaved={(note) => updateTransaction(t.id, { notes: note })}
-            />
-          ))}
+          {rest.map((t) =>
+            editingCategoryId === t.id ? (
+              <CategoryPickerRow
+                key={t.id}
+                transaction={t}
+                accounts={accounts}
+                projects={projects}
+                entityId={entity.id}
+                onUpdated={(id, patch) => { updateTransaction(id, patch); setEditingCategoryId(null); }}
+                onDeleted={handleDelete}
+                onAccountCreated={(a) => setAccounts((prev) => [...prev, a])}
+                onProjectCreated={(p) => setProjects((prev) => [...prev, p])}
+                showReviewControls={false}
+                onCancel={() => setEditingCategoryId(null)}
+              />
+            ) : (
+              <TransactionRow
+                key={t.id}
+                transaction={t}
+                entityId={entity.id}
+                onDeleted={handleDelete}
+                onFlagged={(patch) => updateTransaction(t.id, patch)}
+                onNoteSaved={(note) => updateTransaction(t.id, { notes: note })}
+                onEditCategory={() => setEditingCategoryId(t.id)}
+              />
+            )
+          )}
         </div>
       )}
     </div>
@@ -608,12 +626,14 @@ function TransactionRow({
   onDeleted,
   onFlagged,
   onNoteSaved,
+  onEditCategory,
 }: {
   transaction: Transaction;
   entityId: string;
   onDeleted: (id: string) => void;
   onFlagged: (patch: Partial<Transaction>) => void;
   onNoteSaved: (note: string | null) => void;
+  onEditCategory: () => void;
 }) {
   return (
     <div className="flex items-center gap-3 px-4 py-2.5">
@@ -626,6 +646,9 @@ function TransactionRow({
       </div>
       <div className="flex items-center gap-1 flex-none whitespace-nowrap">
         <span className={`text-sm font-medium mr-2 ${transaction.amount >= 0 ? "text-green-600" : "text-red-500"}`}>{money(transaction.amount)}</span>
+        <button onClick={onEditCategory} className="p-1.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" title="Change category">
+          <Pencil size={14} />
+        </button>
         <NoteButton transactionId={transaction.id} entityId={entityId} note={transaction.notes} onSaved={onNoteSaved} />
         <FlagButton transactionId={transaction.id} entityId={entityId} onFlagged={onFlagged} />
         {!transaction.bank_account_id && (
@@ -654,6 +677,7 @@ function CategoryPickerRow({
   onAccountCreated,
   onProjectCreated,
   showReviewControls,
+  onCancel,
 }: {
   transaction: Transaction;
   accounts: Account[];
@@ -664,6 +688,11 @@ function CategoryPickerRow({
   onAccountCreated: (account: Account) => void;
   onProjectCreated: (project: Project) => void;
   showReviewControls: boolean;
+  /** Present only when this picker is being used to edit an already-
+   * categorized transaction's category (from the plain transaction list),
+   * rather than in the always-open "needs categorizing"/"needs review"
+   * sections — lets the user back out without saving a change. */
+  onCancel?: () => void;
 }) {
   const [accountId, setAccountId] = useState("");
   const [projectId, setProjectId] = useState("");
@@ -773,6 +802,11 @@ function CategoryPickerRow({
         <Button size="sm" className="h-8 text-xs" onClick={handleSave} disabled={saving}>
           {saving ? <Loader2 size={12} className="animate-spin" /> : "Save"}
         </Button>
+        {onCancel && (
+          <button onClick={onCancel} className="p-1.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" title="Cancel">
+            <X size={14} />
+          </button>
+        )}
         {showReviewControls ? (
           <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleResolve} disabled={resolving}>
             {resolving ? <Loader2 size={12} className="animate-spin" /> : "Resolved"}

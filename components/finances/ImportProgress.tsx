@@ -64,7 +64,7 @@ export function ImportProgress({ jobId }: { jobId: string }) {
       }
 
       if (job.status === "pending" || job.status === "running") {
-        setTimeout(poll, 2500);
+        setTimeout(poll, 1000);
       }
     }
     poll();
