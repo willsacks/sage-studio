@@ -24,7 +24,7 @@ export function CsvImportDialog({
   const [moneyAccountId, setMoneyAccountId] = useState("");
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ imported: number; skipped: number } | null>(null);
+  const [result, setResult] = useState<{ imported: number; skipped: number; errors: string[] } | null>(null);
 
   const moneyAccounts = accounts.filter((a) => MONEY_SUBTYPES.includes(a.account_subtype));
 
@@ -53,7 +53,7 @@ export function CsvImportDialog({
         setError(data?.error ?? `Import failed (${response.status})`);
         return;
       }
-      setResult({ imported: data.imported, skipped: data.skipped });
+      setResult({ imported: data.imported, skipped: data.skipped, errors: data.errors ?? [] });
       onImported();
     } catch {
       setError("Import failed — check your connection and try again");
@@ -91,10 +91,17 @@ export function CsvImportDialog({
 
         {error && <p className="text-sm text-red-500">{error}</p>}
         {result && (
-          <p className="text-sm text-green-600">
-            Imported {result.imported} transaction{result.imported === 1 ? "" : "s"}
-            {result.skipped > 0 ? ` (${result.skipped} rows skipped — couldn't parse)` : ""}. They'll show up as uncategorized.
-          </p>
+          <div className="space-y-1">
+            <p className="text-sm text-green-600">
+              Imported {result.imported} transaction{result.imported === 1 ? "" : "s"}
+              {result.skipped > 0 ? ` (${result.skipped} row${result.skipped === 1 ? "" : "s"} skipped — couldn't parse)` : ""}. They'll show up as uncategorized.
+            </p>
+            {result.errors.length > 0 && (
+              <ul className="text-xs text-[var(--muted-foreground)] list-disc pl-4 space-y-0.5">
+                {result.errors.map((e, i) => <li key={i}>{e}</li>)}
+              </ul>
+            )}
+          </div>
         )}
 
         <Button size="sm" onClick={handleImport} disabled={importing}>

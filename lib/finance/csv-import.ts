@@ -127,7 +127,16 @@ export function parseTransactionsCsv(text: string): CsvParseResult {
 
     if (!date || !payeeName || amount === null || amount === 0) {
       skipped++;
-      if (errors.length < 10) errors.push(`Row ${i + 1}: couldn't parse (skipped)`);
+      if (errors.length < 10) {
+        const reason = !date
+          ? "unrecognized or missing date"
+          : !payeeName
+          ? "missing description"
+          : amount === null
+          ? "unrecognized or missing amount"
+          : "amount is zero";
+        errors.push(`Row ${i + 1}: skipped (${reason})`);
+      }
       continue;
     }
 

@@ -44,7 +44,10 @@ export async function POST(request: NextRequest) {
   const text = await file.text();
   const { transactions, skipped, errors } = parseTransactionsCsv(text);
   if (transactions.length === 0) {
-    return NextResponse.json({ error: errors[0] ?? "No transactions found in that file", imported: 0, skipped }, { status: 400 });
+    const summary = errors.length > 0
+      ? `No valid rows found. ${errors.slice(0, 3).join("; ")}${skipped > errors.length ? ` (+${skipped - errors.length} more)` : ""}`
+      : "No transactions found in that file";
+    return NextResponse.json({ error: summary, imported: 0, skipped, errors }, { status: 400 });
   }
 
   const { error: insertError, count } = await supabase

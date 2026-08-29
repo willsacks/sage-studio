@@ -163,7 +163,7 @@ export function CollaboratorsDialog({ entityId, entityName, onClose }: { entityI
           {newLink && (
             <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
               <Link2 size={13} className="text-emerald-600 flex-shrink-0" />
-              <code className="text-xs flex-1 truncate">{newLink}</code>
+              <code className="text-xs flex-1 min-w-0 truncate">{newLink}</code>
               <button onClick={() => handleCopy(newLink)} className="flex-shrink-0">
                 {copied ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
               </button>
