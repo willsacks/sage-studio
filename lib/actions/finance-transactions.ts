@@ -13,8 +13,6 @@ async function requireAuth() {
   return { supabase, user };
 }
 
-export type { SplitInput };
-
 /** One-shot manual entry — Wave-style single form with both the money
  * account and category chosen at once, rather than a separate
  * uncategorized→categorize step (that two-step flow is reserved for

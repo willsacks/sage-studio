@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Trash2, Copy, Check, X, Link2 } from "lucide-react";
+import { Loader2, Trash2, Copy, Check, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   listFinanceCollaborators,
   inviteFinanceCollaborator,
@@ -100,15 +101,12 @@ export function CollaboratorsDialog({ entityId, entityName, onClose }: { entityI
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-[var(--background)] rounded-xl border border-[var(--border)] p-5 w-full max-w-md max-h-[85vh] overflow-y-auto space-y-4">
-        <div className="flex justify-between items-center">
-          <div>
-            <h3 className="font-semibold text-sm">Share access — {entityName}</h3>
-            <p className="text-xs text-[var(--muted-foreground)] mt-0.5">Invite a bookkeeper or accountant to help manage these books.</p>
-          </div>
-          <button onClick={onClose} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"><X size={16} /></button>
-        </div>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto space-y-4">
+        <DialogHeader>
+          <DialogTitle>Share access — {entityName}</DialogTitle>
+          <DialogDescription>Invite a bookkeeper or accountant to help manage these books.</DialogDescription>
+        </DialogHeader>
 
         {loading ? (
           <div className="flex justify-center py-6"><Loader2 size={16} className="animate-spin text-[var(--muted-foreground)]" /></div>
@@ -165,7 +163,7 @@ export function CollaboratorsDialog({ entityId, entityName, onClose }: { entityI
           )}
           <p className="text-xs text-[var(--muted-foreground)]">Copy the link and share it however you'd like — nothing is emailed automatically.</p>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

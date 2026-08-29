@@ -13,8 +13,8 @@ import {
   categorizeTransaction,
   flagTransactionForReview,
   resolveReviewFlag,
-  type SplitInput,
 } from "@/lib/actions/finance-transactions";
+import type { SplitInput } from "@/lib/finance/categorize";
 import { CsvImportDialog } from "./CsvImportDialog";
 import type { FinanceEntity } from "./FinancesApp";
 

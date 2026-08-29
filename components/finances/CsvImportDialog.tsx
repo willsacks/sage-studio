@@ -1,8 +1,9 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Loader2, X, Upload } from "lucide-react";
+import { Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 type Account = { id: string; name: string; account_subtype: string };
 
@@ -57,15 +58,14 @@ export function CsvImportDialog({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-[var(--background)] rounded-xl border border-[var(--border)] p-5 w-full max-w-sm space-y-3">
-        <div className="flex justify-between items-center">
-          <h3 className="font-semibold text-sm">Import transactions from CSV</h3>
-          <button onClick={onClose} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"><X size={16} /></button>
-        </div>
-        <p className="text-xs text-[var(--muted-foreground)]">
-          Expects a header row with Date, Description, and either an Amount column (positive = money in) or separate Debit/Credit columns.
-        </p>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-sm space-y-3">
+        <DialogHeader>
+          <DialogTitle>Import transactions from CSV</DialogTitle>
+          <DialogDescription>
+            Expects a header row with Date, Description, and either an Amount column (positive = money in) or separate Debit/Credit columns.
+          </DialogDescription>
+        </DialogHeader>
 
         <div className="space-y-1">
           <label className="text-xs font-medium text-[var(--muted-foreground)]">Which account are these for?</label>
@@ -91,7 +91,7 @@ export function CsvImportDialog({
           {importing ? <Loader2 size={13} className="animate-spin mr-1" /> : <Upload size={13} className="mr-1" />}
           Import
         </Button>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
