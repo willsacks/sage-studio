@@ -22,7 +22,12 @@ function parseCsvLines(text: string): string[][] {
       } else {
         field += char;
       }
-    } else if (char === '"') {
+    } else if (char === '"' && field.length === 0) {
+      // Only treat a quote as opening a quoted field when it's the very
+      // first character of that field — a stray quote mid-field (e.g. a
+      // payee name like `3" Pipe Fitting Co`) is just a literal character,
+      // not the start of quoting, otherwise it swallows every comma/newline
+      // until the next quote and silently merges/corrupts following rows.
       inQuotes = true;
     } else if (char === ",") {
       row.push(field);
@@ -55,7 +60,16 @@ function toIsoDate(raw: string): string | null {
   const trimmed = raw.trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
   const mdy = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (mdy) return `${mdy[3]}-${mdy[1].padStart(2, "0")}-${mdy[2].padStart(2, "0")}`;
+  if (mdy) {
+    const month = Number(mdy[1]);
+    const day = Number(mdy[2]);
+    // Reject out-of-range values instead of emitting an invalid date like
+    // "2024-25-03" — a DD/MM/YYYY file (common outside the US) would
+    // otherwise silently produce a date Postgres rejects, aborting the
+    // whole batch insert rather than just skipping the one bad row.
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    return `${mdy[3]}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
   const parsed = new Date(trimmed);
   if (!isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
   return null;

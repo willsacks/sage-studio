@@ -51,15 +51,24 @@ export function CollaboratorsDialog({ entityId, entityName, onClose }: { entityI
     setError(null);
     setNewLink(null);
     setInviting(true);
-    const result = await inviteFinanceCollaborator(entityId, email.trim(), role);
-    setInviting(false);
-    if (result.error || !result.collaborator) {
-      setError(result.error ?? "Something went wrong");
-      return;
+    try {
+      const result = await inviteFinanceCollaborator(entityId, email.trim(), role);
+      if (result.error || !result.collaborator) {
+        setError(result.error ?? "Something went wrong");
+        return;
+      }
+      setNewLink(`${originFromWindow()}/finance-invite/${result.collaborator.invite_token}`);
+      setEmail("");
+      refresh();
+    } catch (err) {
+      // requireFinanceEntityRole throws rather than returning an error object
+      // when the caller isn't authorized — without this catch, a non-manager
+      // collaborator opening this dialog would leave the button stuck
+      // spinning forever since setInviting(false) below would never run.
+      setError(err instanceof Error ? err.message : "You don't have permission to invite collaborators");
+    } finally {
+      setInviting(false);
     }
-    setNewLink(`${originFromWindow()}/finance-invite/${result.collaborator.invite_token}`);
-    setEmail("");
-    refresh();
   }
 
   function handleCopy(link: string) {
@@ -69,12 +78,24 @@ export function CollaboratorsDialog({ entityId, entityName, onClose }: { entityI
   }
 
   async function handleRoleChange(collaboratorId: string, newRole: Role) {
-    await updateFinanceCollaboratorRole(collaboratorId, newRole);
+    setError(null);
+    try {
+      const result = await updateFinanceCollaboratorRole(collaboratorId, newRole);
+      if (result.error) setError(result.error);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "You don't have permission to change roles");
+    }
     refresh();
   }
 
   async function handleRemove(collaboratorId: string) {
-    await removeFinanceCollaborator(collaboratorId);
+    setError(null);
+    try {
+      const result = await removeFinanceCollaborator(collaboratorId);
+      if (result.error) setError(result.error);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "You don't have permission to remove collaborators");
+    }
     refresh();
   }
 

@@ -63,11 +63,13 @@ export async function updateFinanceCollaboratorRole(collaboratorId: string, role
 
   await requireFinanceEntityRole(supabase, collaborator.entity_id, user.id, "manager");
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("finance_entity_members")
     .update({ role, updated_at: new Date().toISOString() })
-    .eq("id", collaboratorId);
+    .eq("id", collaboratorId)
+    .select("id");
   if (error) return { error: error.message };
+  if (!data || data.length === 0) return { error: "Not authorized to change this collaborator's role" };
 
   revalidatePath("/finances");
   return { success: true };
@@ -85,7 +87,10 @@ export async function removeFinanceCollaborator(collaboratorId: string) {
 
   await requireFinanceEntityRole(supabase, collaborator.entity_id, user.id, "manager");
 
-  await supabase.from("finance_entity_members").delete().eq("id", collaboratorId);
+  const { data, error } = await supabase.from("finance_entity_members").delete().eq("id", collaboratorId).select("id");
+  if (error) return { error: error.message };
+  if (!data || data.length === 0) return { error: "Not authorized to remove this collaborator" };
+
   revalidatePath("/finances");
   return { success: true };
 }

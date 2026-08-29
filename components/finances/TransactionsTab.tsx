@@ -249,7 +249,7 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
           <p className="text-xs font-medium text-red-500 uppercase tracking-wide mb-1.5">Needs your review ({needsReview.length})</p>
           <div className="rounded-xl border border-red-500/30 divide-y divide-[var(--border)]">
             {needsReview.map((t) => (
-              <ReviewRow key={t.id} transaction={t} accounts={accounts} projects={projects} entityId={entity.id} onDone={refresh} />
+              <ReviewRow key={t.id} transaction={t} accounts={accounts} projects={projects} entityId={entity.id} onDone={refresh} onDeleted={handleDelete} />
             ))}
           </div>
         </div>
@@ -416,12 +416,14 @@ function ReviewRow({
   projects,
   entityId,
   onDone,
+  onDeleted,
 }: {
   transaction: Transaction;
   accounts: Account[];
   projects: Project[];
   entityId: string;
   onDone: () => void;
+  onDeleted: (id: string) => void;
 }) {
   const [accountId, setAccountId] = useState("");
   const [projectId, setProjectId] = useState("");
@@ -490,6 +492,11 @@ function ReviewRow({
         <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleResolve} disabled={resolving}>
           {resolving ? <Loader2 size={12} className="animate-spin" /> : "Resolved"}
         </Button>
+        {!transaction.bank_account_id && (
+          <button onClick={() => onDeleted(transaction.id)} className="p-1.5 text-[var(--muted-foreground)] hover:text-red-500">
+            <Trash2 size={14} />
+          </button>
+        )}
       </div>
       {error && <p className="text-xs text-red-500 w-full">{error}</p>}
     </div>

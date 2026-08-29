@@ -28,11 +28,18 @@ export async function POST(request: NextRequest) {
 
   const { data: account } = await supabase
     .from("chart_of_accounts")
-    .select("id")
+    .select("id, account_subtype")
     .eq("id", moneyAccountId)
     .eq("entity_id", entityId)
     .maybeSingle();
   if (!account) return NextResponse.json({ error: "Account not found on this entity" }, { status: 400 });
+  // The client dropdown already filters to money accounts, but the request
+  // body is attacker-controlled — an income/expense account here would post
+  // real debits/credits against the wrong side of the ledger later, when
+  // categorizeTransaction falls back to this transaction's money_account_id.
+  if (!["Cash and Bank", "Credit Card"].includes(account.account_subtype)) {
+    return NextResponse.json({ error: "Choose a cash or credit card account, not a category" }, { status: 400 });
+  }
 
   const text = await file.text();
   const { transactions, skipped, errors } = parseTransactionsCsv(text);
