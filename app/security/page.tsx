@@ -22,7 +22,7 @@ export default function SecurityPolicyPage() {
       <main className="max-w-3xl mx-auto px-6 py-8 pb-24 space-y-8">
         <div>
           <h1 className="text-2xl font-bold">Information Security Policy</h1>
-          <p className="text-sm text-[var(--muted-foreground)] mt-1">Effective date: August 29, 2026 · Reviewed annually</p>
+          <p className="text-sm text-[var(--muted-foreground)] mt-1">Effective date: April 1, 2026 · Reviewed annually</p>
         </div>
 
         <section className="space-y-2">
