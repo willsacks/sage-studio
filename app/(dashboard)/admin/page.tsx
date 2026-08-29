@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getStripe } from "@/lib/stripe";
-import { LayoutDashboard, UserPlus, Globe, Zap, MessageSquare, BrainCircuit } from "lucide-react";
+import Link from "next/link";
+import { LayoutDashboard, UserPlus, Globe, Zap, MessageSquare, BrainCircuit, ShieldCheck, FileText, Lock, ExternalLink } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { AiAccessTable, type UserRow } from "@/components/admin/AiAccessTable";
 import { AiPromptEditor } from "@/components/admin/AiPromptEditor";
@@ -238,6 +239,32 @@ export default async function AdminPage() {
           Sage Studio platform metrics.
         </p>
       </div>
+
+      {/* Legal & Compliance */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-[var(--muted-foreground)] uppercase tracking-wide">Legal & Compliance</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {[
+            { href: "/security", label: "Security Policy", icon: ShieldCheck },
+            { href: "/privacy", label: "Privacy Policy", icon: Lock },
+            { href: "/terms", label: "Terms of Service", icon: FileText },
+          ].map((doc) => (
+            <Link
+              key={doc.href}
+              href={doc.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 hover:bg-[var(--accent)] transition-colors"
+            >
+              <span className="flex items-center gap-2 text-sm font-medium">
+                <doc.icon size={15} className="text-[var(--muted-foreground)]" />
+                {doc.label}
+              </span>
+              <ExternalLink size={13} className="text-[var(--muted-foreground)]" />
+            </Link>
+          ))}
+        </div>
+      </section>
 
       {/* Revenue */}
       <section className="space-y-3">
