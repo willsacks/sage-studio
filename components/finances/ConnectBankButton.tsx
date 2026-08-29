@@ -20,6 +20,13 @@ export function ConnectBankButton({ entityId, onConnected }: { entityId: string;
       setError(result.error);
       return;
     }
+    // OAuth-based institutions (most major US banks) navigate the whole
+    // page away to the bank's own login and back — persisting these so
+    // app/(dashboard)/finances/plaid-oauth/page.tsx can resume the exact
+    // same Link session on return, since a fresh link token can't be
+    // substituted mid-OAuth-flow.
+    sessionStorage.setItem("plaid_link_token", result.linkToken!);
+    sessionStorage.setItem("plaid_entity_id", entityId);
     setLinkToken(result.linkToken!);
   }
 
@@ -30,6 +37,8 @@ export function ConnectBankButton({ entityId, onConnected }: { entityId: string;
       const result = await exchangePlaidPublicToken({ entityId, publicToken });
       setLoading(false);
       setLinkToken(null);
+      sessionStorage.removeItem("plaid_link_token");
+      sessionStorage.removeItem("plaid_entity_id");
       if (result.error) {
         setError(result.error);
         return;

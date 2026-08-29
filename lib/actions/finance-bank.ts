@@ -18,6 +18,8 @@ export async function createPlaidLinkToken(entityId: string) {
   const { supabase, user } = await requireAuth();
   await requireFinanceEntityRole(supabase, entityId, user.id, "editor");
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://sagestudio.org";
+
   try {
     const plaid = getPlaidClient();
     const response = await plaid.linkTokenCreate({
@@ -26,6 +28,16 @@ export async function createPlaidLinkToken(entityId: string) {
       country_codes: [CountryCode.Us],
       user: { client_user_id: user.id },
       products: [Products.Transactions],
+      // Without this, Plaid never calls our webhook route and incremental
+      // sync only ever happens when the user manually clicks "sync".
+      webhook: `${appUrl}/api/finance/webhooks/plaid`,
+      // Only OAuth-based institutions (most major US banks) need this, and
+      // Plaid rejects the request if a redirect_uri is passed that isn't
+      // registered in the Dashboard — so this stays unset until
+      // PLAID_REDIRECT_URI is actually configured there (see
+      // app/(dashboard)/finances/plaid-oauth/page.tsx for the other half
+      // of this flow).
+      ...(process.env.PLAID_REDIRECT_URI ? { redirect_uri: process.env.PLAID_REDIRECT_URI } : {}),
     });
     return { linkToken: response.data.link_token };
   } catch (err) {
