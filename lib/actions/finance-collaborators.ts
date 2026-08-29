@@ -12,6 +12,26 @@ async function requireAuth() {
   return { supabase, user };
 }
 
+/** Shared by update/remove: both need "which entity does this collaborator
+ * row belong to, and is the caller a manager of it" before touching the
+ * row, so this is the one place that lookup+authorization happens rather
+ * than each action repeating the same fetch-then-check. */
+async function requireCollaboratorManagerAccess(
+  supabase: Awaited<ReturnType<typeof requireAuth>>["supabase"],
+  userId: string,
+  collaboratorId: string
+): Promise<{ entityId: string } | { error: string }> {
+  const { data: collaborator } = await supabase
+    .from("finance_entity_members")
+    .select("entity_id")
+    .eq("id", collaboratorId)
+    .single();
+  if (!collaborator) return { error: "Collaborator not found" };
+
+  await requireFinanceEntityRole(supabase, collaborator.entity_id, userId, "manager");
+  return { entityId: collaborator.entity_id };
+}
+
 export async function listFinanceCollaborators(entityId: string) {
   const { supabase, user } = await requireAuth();
   await requireFinanceEntityRole(supabase, entityId, user.id, "viewer");
@@ -54,14 +74,8 @@ export async function inviteFinanceCollaborator(
 export async function updateFinanceCollaboratorRole(collaboratorId: string, role: "viewer" | "editor" | "manager") {
   const { supabase, user } = await requireAuth();
 
-  const { data: collaborator } = await supabase
-    .from("finance_entity_members")
-    .select("entity_id")
-    .eq("id", collaboratorId)
-    .single();
-  if (!collaborator) return { error: "Collaborator not found" };
-
-  await requireFinanceEntityRole(supabase, collaborator.entity_id, user.id, "manager");
+  const access = await requireCollaboratorManagerAccess(supabase, user.id, collaboratorId);
+  if ("error" in access) return access;
 
   const { data, error } = await supabase
     .from("finance_entity_members")
@@ -78,14 +92,8 @@ export async function updateFinanceCollaboratorRole(collaboratorId: string, role
 export async function removeFinanceCollaborator(collaboratorId: string) {
   const { supabase, user } = await requireAuth();
 
-  const { data: collaborator } = await supabase
-    .from("finance_entity_members")
-    .select("entity_id")
-    .eq("id", collaboratorId)
-    .single();
-  if (!collaborator) return { error: "Collaborator not found" };
-
-  await requireFinanceEntityRole(supabase, collaborator.entity_id, user.id, "manager");
+  const access = await requireCollaboratorManagerAccess(supabase, user.id, collaboratorId);
+  if ("error" in access) return access;
 
   const { data, error } = await supabase.from("finance_entity_members").delete().eq("id", collaboratorId).select("id");
   if (error) return { error: error.message };

@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, X, Check } from "lucide-react";
+import { Loader2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   listReconciliations,
   startReconciliation,
@@ -145,12 +146,11 @@ export function ReconciliationView({
     : null;
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-[var(--background)] rounded-xl border border-[var(--border)] p-5 w-full max-w-2xl max-h-[85vh] overflow-y-auto space-y-4">
-        <div className="flex justify-between items-center">
-          <h3 className="font-semibold">Reconcile — {accountName}</h3>
-          <button onClick={onClose} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"><X size={16} /></button>
-        </div>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto space-y-4">
+        <DialogHeader>
+          <DialogTitle>Reconcile — {accountName}</DialogTitle>
+        </DialogHeader>
 
         {loading ? (
           <div className="flex justify-center py-8"><Loader2 size={18} className="animate-spin text-[var(--muted-foreground)]" /></div>
@@ -221,7 +221,7 @@ export function ReconciliationView({
             </Button>
           </div>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

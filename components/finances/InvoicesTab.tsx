@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Loader2, Plus, Trash2, FileText, Send, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { listInvoices, createInvoice, setInvoiceStatus, recordInvoicePayment, type InvoiceLineItemInput } from "@/lib/actions/finance-invoices";
 import { listChartOfAccounts } from "@/lib/actions/finance-accounts";
 import { listFinanceProjects } from "@/lib/actions/finance-projects";
@@ -292,9 +293,11 @@ function RecordPaymentDialog({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-[var(--background)] rounded-xl border border-[var(--border)] p-5 w-full max-w-sm space-y-3">
-        <h3 className="font-semibold text-sm">Record payment — {invoice.invoice_number}</h3>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-sm space-y-3">
+        <DialogHeader>
+          <DialogTitle>Record payment — {invoice.invoice_number}</DialogTitle>
+        </DialogHeader>
         <div className="space-y-1">
           <label className="text-xs font-medium text-[var(--muted-foreground)]">Amount</label>
           <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="h-9 text-sm" />
@@ -328,7 +331,7 @@ function RecordPaymentDialog({
             {saving && <Loader2 size={13} className="animate-spin mr-1" />} Save payment
           </Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

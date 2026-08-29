@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { NAV } from "@/components/nav/Sidebar";
 import { setHiddenNavItems } from "@/lib/actions/profile";
+import { Switch } from "@/components/ui/switch";
 
 export function NavVisibilityForm({ initialHidden }: { initialHidden: string[] }) {
   const router = useRouter();
@@ -22,22 +23,21 @@ export function NavVisibilityForm({ initialHidden }: { initialHidden: string[] }
   return (
     <div className="space-y-1">
       {NAV.map((item) => (
-        <label
+        <div
           key={item.href}
-          className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-[var(--accent)] cursor-pointer"
+          className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-[var(--accent)]"
         >
           <span className="flex items-center gap-2 text-sm">
             <item.icon size={15} className="text-[var(--muted-foreground)]" />
             {item.label}
           </span>
-          <input
-            type="checkbox"
+          <Switch
             checked={!hidden.includes(item.href)}
-            onChange={() => toggle(item.href)}
+            onCheckedChange={() => toggle(item.href)}
             disabled={isPending}
-            className="rounded"
+            aria-label={`Show ${item.label} in menu`}
           />
-        </label>
+        </div>
       ))}
     </div>
   );

@@ -73,9 +73,19 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
     refresh();
   }, [refresh]);
 
-  const needsReview = transactions.filter((t) => t.needs_review);
-  const uncategorized = transactions.filter((t) => t.status === "uncategorized" && !t.needs_review);
-  const rest = transactions.filter((t) => t.status !== "uncategorized" && !t.needs_review);
+  // Single pass: every transaction lands in exactly one of these three
+  // buckets, so there's no risk of a row appearing twice (or nowhere) as
+  // new statuses/flags are added — instead of three independent .filter()
+  // calls each re-stating overlapping conditions.
+  const { needsReview, uncategorized, rest } = transactions.reduce(
+    (buckets, t) => {
+      if (t.needs_review) buckets.needsReview.push(t);
+      else if (t.status === "uncategorized") buckets.uncategorized.push(t);
+      else buckets.rest.push(t);
+      return buckets;
+    },
+    { needsReview: [] as Transaction[], uncategorized: [] as Transaction[], rest: [] as Transaction[] }
+  );
   const moneyAccounts = accounts.filter((a) => MONEY_SUBTYPES.includes(a.account_subtype) && a.is_active);
   const categoryAccounts = accounts.filter(
     (a) => (direction === "in" ? a.account_type === "income" : a.account_type === "expense") && a.is_active
@@ -249,7 +259,7 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
           <p className="text-xs font-medium text-red-500 uppercase tracking-wide mb-1.5">Needs your review ({needsReview.length})</p>
           <div className="rounded-xl border border-red-500/30 divide-y divide-[var(--border)]">
             {needsReview.map((t) => (
-              <ReviewRow key={t.id} transaction={t} accounts={accounts} projects={projects} entityId={entity.id} onDone={refresh} onDeleted={handleDelete} />
+              <CategoryPickerRow key={t.id} transaction={t} accounts={accounts} projects={projects} entityId={entity.id} onDone={refresh} onDeleted={handleDelete} showReviewControls />
             ))}
           </div>
         </div>
@@ -260,7 +270,7 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
           <p className="text-xs font-medium text-amber-600 uppercase tracking-wide mb-1.5">Needs categorizing ({uncategorized.length})</p>
           <div className="rounded-xl border border-amber-500/30 divide-y divide-[var(--border)]">
             {uncategorized.map((t) => (
-              <CategorizeRow key={t.id} transaction={t} accounts={accounts} projects={projects} entityId={entity.id} onDone={refresh} />
+              <CategoryPickerRow key={t.id} transaction={t} accounts={accounts} projects={projects} entityId={entity.id} onDone={refresh} showReviewControls={false} />
             ))}
           </div>
         </div>
@@ -342,88 +352,28 @@ function TransactionRow({
   );
 }
 
-function CategorizeRow({
-  transaction,
-  accounts,
-  projects,
-  entityId,
-  onDone,
-}: {
-  transaction: Transaction;
-  accounts: Account[];
-  projects: Project[];
-  entityId: string;
-  onDone: () => void;
-}) {
-  const [accountId, setAccountId] = useState("");
-  const [projectId, setProjectId] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const categoryAccounts = accounts.filter((a) => (transaction.amount >= 0 ? a.account_type === "income" : a.account_type === "expense") && a.is_active);
-
-  async function handleSave() {
-    if (!accountId) {
-      setError("Choose a category");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    const result = await categorizeTransaction(transaction.id, entityId, [
-      { accountId, amount: Math.abs(transaction.amount), projectId: projectId || undefined },
-    ]);
-    setSaving(false);
-    if (result.error) {
-      setError(result.error);
-      return;
-    }
-    onDone();
-  }
-
-  return (
-    <div className="flex items-center justify-between px-4 py-2.5 gap-2 flex-wrap">
-      <div>
-        <p className="text-sm font-medium">{transaction.payee_name}</p>
-        <p className="text-xs text-[var(--muted-foreground)]">{transaction.date}</p>
-      </div>
-      <div className="flex items-center gap-2">
-        <span className={`text-sm font-medium ${transaction.amount >= 0 ? "text-green-600" : "text-red-500"}`}>{money(transaction.amount)}</span>
-        <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs">
-          <option value="">Category...</option>
-          {categoryAccounts.map((a) => (
-            <option key={a.id} value={a.id}>{a.name}</option>
-          ))}
-        </select>
-        <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs">
-          <option value="">No project</option>
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
-        <Button size="sm" className="h-8 text-xs" onClick={handleSave} disabled={saving}>
-          {saving ? <Loader2 size={12} className="animate-spin" /> : "Save"}
-        </Button>
-        <FlagButton transactionId={transaction.id} entityId={entityId} onFlagged={onDone} />
-      </div>
-      {error && <p className="text-xs text-red-500 w-full">{error}</p>}
-    </div>
-  );
-}
-
-function ReviewRow({
+/** Shared by the "Needs categorizing" and "Needs your review" sections —
+ * both are fundamentally "pick a category (and optionally a project) for
+ * this transaction," differing only in whether a review note/current
+ * category is shown and whether a plain "Resolved" (no re-categorization)
+ * option is offered. Kept as one component so the two states can't quietly
+ * drift apart (e.g. one offering delete/flag affordances the other lacks). */
+function CategoryPickerRow({
   transaction,
   accounts,
   projects,
   entityId,
   onDone,
   onDeleted,
+  showReviewControls,
 }: {
   transaction: Transaction;
   accounts: Account[];
   projects: Project[];
   entityId: string;
   onDone: () => void;
-  onDeleted: (id: string) => void;
+  onDeleted?: (id: string) => void;
+  showReviewControls: boolean;
 }) {
   const [accountId, setAccountId] = useState("");
   const [projectId, setProjectId] = useState("");
@@ -484,15 +434,17 @@ function ReviewRow({
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>
-        {accountId && (
-          <Button size="sm" className="h-8 text-xs" onClick={handleSave} disabled={saving}>
-            {saving ? <Loader2 size={12} className="animate-spin" /> : "Save"}
-          </Button>
-        )}
-        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleResolve} disabled={resolving}>
-          {resolving ? <Loader2 size={12} className="animate-spin" /> : "Resolved"}
+        <Button size="sm" className="h-8 text-xs" onClick={handleSave} disabled={saving}>
+          {saving ? <Loader2 size={12} className="animate-spin" /> : "Save"}
         </Button>
-        {!transaction.bank_account_id && (
+        {showReviewControls ? (
+          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleResolve} disabled={resolving}>
+            {resolving ? <Loader2 size={12} className="animate-spin" /> : "Resolved"}
+          </Button>
+        ) : (
+          <FlagButton transactionId={transaction.id} entityId={entityId} onFlagged={onDone} />
+        )}
+        {onDeleted && !transaction.bank_account_id && (
           <button onClick={() => onDeleted(transaction.id)} className="p-1.5 text-[var(--muted-foreground)] hover:text-red-500">
             <Trash2 size={14} />
           </button>

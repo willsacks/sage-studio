@@ -82,7 +82,7 @@ export function CollaboratorsDialog({ entityId, entityName, onClose }: { entityI
     setError(null);
     try {
       const result = await updateFinanceCollaboratorRole(collaboratorId, newRole);
-      if (result.error) setError(result.error);
+      if ("error" in result) setError(result.error);
     } catch (err) {
       setError(err instanceof Error ? err.message : "You don't have permission to change roles");
     }
@@ -93,7 +93,7 @@ export function CollaboratorsDialog({ entityId, entityName, onClose }: { entityI
     setError(null);
     try {
       const result = await removeFinanceCollaborator(collaboratorId);
-      if (result.error) setError(result.error);
+      if ("error" in result) setError(result.error);
     } catch (err) {
       setError(err instanceof Error ? err.message : "You don't have permission to remove collaborators");
     }
