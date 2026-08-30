@@ -97,7 +97,14 @@ export async function applyMatchingRule(
 export async function applyRuleToExistingTransactions(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: SupabaseClient<Database> | any,
-  params: { entityId: string; rule: CategorizationRule }
+  params: {
+    entityId: string;
+    rule: CategorizationRule;
+    // Invoked after each matched transaction is processed — lets a caller
+    // stream live progress instead of the caller only finding out once every
+    // matching transaction (which can be dozens) has already been posted.
+    onProgress?: (done: number, total: number) => void | Promise<void>;
+  }
 ): Promise<{ matchedCount: number }> {
   const { data: transactions } = await supabase
     .from("transactions")
@@ -110,11 +117,13 @@ export async function applyRuleToExistingTransactions(
   );
 
   let matchedCount = 0;
-  for (const t of matches) {
+  for (let i = 0; i < matches.length; i++) {
+    const t = matches[i];
     const result = await categorizeTransaction(t.id, params.entityId, [
       { accountId: params.rule.chart_account_id, amount: Math.abs(t.amount), projectId: params.rule.default_project_id ?? undefined },
     ]);
     if (!("error" in result)) matchedCount++;
+    await params.onProgress?.(i + 1, matches.length);
   }
   return { matchedCount };
 }

@@ -604,6 +604,7 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
               <TransactionRow
                 key={t.id}
                 transaction={t}
+                accounts={accounts}
                 entityId={entity.id}
                 onDeleted={handleDelete}
                 onFlagged={(patch) => updateTransaction(t.id, patch)}
@@ -655,6 +656,7 @@ function FlagButton({ transactionId, entityId, onFlagged }: { transactionId: str
 
 function TransactionRow({
   transaction,
+  accounts,
   entityId,
   onDeleted,
   onFlagged,
@@ -662,18 +664,24 @@ function TransactionRow({
   onEditCategory,
 }: {
   transaction: Transaction;
+  accounts: Account[];
   entityId: string;
   onDeleted: (id: string) => void;
   onFlagged: (patch: Partial<Transaction>) => void;
   onNoteSaved: (note: string | null) => void;
   onEditCategory: () => void;
 }) {
+  const categoryLabel = transaction.transaction_splits
+    .map((s) => accounts.find((a) => a.id === s.chart_account_id)?.name)
+    .filter((name): name is string => Boolean(name))
+    .join(", ") || "Uncategorized";
+
   return (
     <div className="flex items-center gap-3 px-4 py-2.5">
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium truncate" title={transaction.payee_name}>{transaction.payee_name}</p>
         <p className="text-xs text-[var(--muted-foreground)] truncate">
-          {transaction.date} · {transaction.transaction_splits.length} categor{transaction.transaction_splits.length === 1 ? "y" : "ies"}
+          {transaction.date} · {categoryLabel}
           {transaction.notes ? ` · "${transaction.notes}"` : ""}
         </p>
       </div>

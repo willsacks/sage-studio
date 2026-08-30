@@ -28,6 +28,11 @@ import { applyRuleToExistingTransactions } from "@/lib/finance/categorization-ru
 
 const MAX_TURNS = 20;
 
+// A single create_rule_and_apply call can walk dozens of pre-existing
+// transactions (one sequential categorizeTransaction DB round-trip each) —
+// give it real headroom instead of the platform's short serverless default.
+export const maxDuration = 300;
+
 function emit(controller: ReadableStreamDefaultController, event: object) {
   controller.enqueue(new TextEncoder().encode(JSON.stringify(event) + "\n"));
 }
@@ -167,7 +172,7 @@ ${payeesList}`;
                   if (!result.accountId) { resultText = result.error ?? "Failed to create account"; isError = true; break; }
                   knownAccounts.push({ id: result.accountId, name, account_type: accountType });
                   resultText = `Created account "${name}".`;
-                  emit(controller, { type: "action_result", label: `✓ Created account "${name}"` });
+                  emit(controller, { type: "action_result", label: `Created account "${name}"` });
                   break;
                 }
                 case "create_project": {
@@ -181,7 +186,7 @@ ${payeesList}`;
                   if (!result.projectId) { resultText = result.error ?? "Failed to create project"; isError = true; break; }
                   knownProjects.push({ id: result.projectId, name });
                   resultText = `Created project "${name}".`;
-                  emit(controller, { type: "action_result", label: `✓ Created project "${name}"` });
+                  emit(controller, { type: "action_result", label: `Created project "${name}"` });
                   break;
                 }
                 case "create_rule_and_apply": {
@@ -215,11 +220,20 @@ ${payeesList}`;
                   const applied = await applyRuleToExistingTransactions(supabase, {
                     entityId,
                     rule: { id: "", match_type: matchType, match_value: matchValue, chart_account_id: account.id, default_project_id: project?.id ?? null, priority: 0 },
+                    onProgress: (done, total) => {
+                      if (total > 1) {
+                        emit(controller, {
+                          type: "tool_call",
+                          name: "create_rule_and_apply",
+                          label: `Applying rule: ${matchType} "${matchValue}" → ${accountName}... (${done}/${total})`,
+                        });
+                      }
+                    },
                   });
                   resultText = `Rule created (${matchType} "${matchValue}" → ${accountName}). Matched and categorized ${applied.matchedCount} existing transaction${applied.matchedCount === 1 ? "" : "s"}.`;
                   emit(controller, {
                     type: "action_result",
-                    label: `✓ Rule: ${matchType} "${matchValue}" → ${accountName} (${applied.matchedCount} categorized)`,
+                    label: `Rule: ${matchType} "${matchValue}" → ${accountName} (${applied.matchedCount} categorized)`,
                   });
                   break;
                 }

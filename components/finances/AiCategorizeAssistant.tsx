@@ -43,11 +43,22 @@ export function AiCategorizeAssistant({
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [stalled, setStalled] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Any single stream event resets this — so a genuinely quiet stretch (the
+  // model deciding its next move with no interim tool call) surfaces as
+  // reassurance rather than looking indistinguishable from a hang.
+  useEffect(() => {
+    if (!isStreaming) { setStalled(false); return; }
+    setStalled(false);
+    const timer = setTimeout(() => setStalled(true), 15000);
+    return () => clearTimeout(timer);
+  }, [isStreaming, messages]);
 
   async function handleSubmit(e?: React.FormEvent) {
     e?.preventDefault();
@@ -108,9 +119,21 @@ export function AiCategorizeAssistant({
               return { ...m, parts };
             }));
           } else if (event.type === "tool_call") {
-            setMessages((prev) => prev.map((m, i) =>
-              i === prev.length - 1 ? { ...m, parts: [...(m.parts ?? []), { type: "tool_call", name: event.name as string, label: event.label as string }] } : m
-            ));
+            setMessages((prev) => prev.map((m, i) => {
+              if (i !== prev.length - 1) return m;
+              const parts = [...(m.parts ?? [])];
+              const last = parts[parts.length - 1];
+              // A running create_rule_and_apply call re-emits this event with
+              // an updated "(n/total)" count as it works through matching
+              // transactions — update that line in place instead of piling
+              // up a new one per transaction.
+              if (last?.type === "tool_call" && last.name === event.name) {
+                parts[parts.length - 1] = { ...last, label: event.label as string };
+              } else {
+                parts.push({ type: "tool_call", name: event.name as string, label: event.label as string });
+              }
+              return { ...m, parts };
+            }));
           } else if (event.type === "action_result") {
             actedAtAll = true;
             setMessages((prev) => prev.map((m, i) =>
@@ -193,8 +216,11 @@ export function AiCategorizeAssistant({
                     );
                   })}
                   {showTrailingThinking && (
-                    <div className="rounded-xl px-3 py-2 bg-[var(--card)] border border-[var(--border)]">
+                    <div className="rounded-xl px-3 py-2 bg-[var(--card)] border border-[var(--border)] flex items-center gap-2">
                       <ThinkingDots />
+                      {stalled && (
+                        <span className="text-xs text-[var(--muted-foreground)]">Still working — larger batches can take a bit...</span>
+                      )}
                     </div>
                   )}
                 </div>
