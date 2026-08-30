@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { Loader2, TriangleAlert } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Loader2, TriangleAlert, Landmark } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { renameFinanceEntity, deleteFinanceEntity } from "@/lib/actions/finance-entities";
+import { getQboConnectionStatus, buildQboReconnectAuthUrl } from "@/lib/actions/finance-qbo";
 import type { FinanceEntity } from "./FinancesApp";
+
+type QboConnection = { status: "active" | "error" | "revoked"; environment: "sandbox" | "production" };
 
 export function EntitySettingsDialog({
   entity,
@@ -26,6 +29,28 @@ export function EntitySettingsDialog({
   const [confirmText, setConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const [qboConnection, setQboConnection] = useState<QboConnection | null>(null);
+  const [reconnecting, setReconnecting] = useState(false);
+  const [reconnectError, setReconnectError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getQboConnectionStatus(entity.id).then((result) => {
+      if (result.connection) setQboConnection(result.connection as QboConnection);
+    });
+  }, [entity.id]);
+
+  async function handleReconnect() {
+    setReconnecting(true);
+    setReconnectError(null);
+    try {
+      const result = await buildQboReconnectAuthUrl(entity.id);
+      window.location.href = result.authUrl;
+    } catch (err) {
+      setReconnecting(false);
+      setReconnectError(err instanceof Error ? err.message : "Something went wrong");
+    }
+  }
 
   async function handleRename() {
     if (!name.trim() || name.trim() === entity.name) return;
@@ -70,6 +95,29 @@ export function EntitySettingsDialog({
           </div>
           {renameError && <p className="text-sm text-red-500">{renameError}</p>}
         </div>
+
+        {qboConnection && (
+          <div className={`rounded-xl border p-4 space-y-2 ${qboConnection.status === "active" ? "border-[var(--border)]" : "border-amber-500/30 bg-amber-500/5"}`}>
+            <div className="flex items-center gap-2">
+              <Landmark size={15} className="text-[var(--muted-foreground)]" />
+              <p className="text-sm font-medium">QuickBooks connection</p>
+            </div>
+            <p className="text-xs text-[var(--muted-foreground)]">
+              {qboConnection.status === "active"
+                ? "Connected and active."
+                : qboConnection.status === "revoked"
+                ? "Disconnected — reconnect if you need to import more data from this company."
+                : "This connection needs attention (expired or revoked access) — reconnect to fix it."}
+            </p>
+            {qboConnection.status !== "active" && (
+              <Button size="sm" variant="outline" onClick={handleReconnect} disabled={reconnecting}>
+                {reconnecting ? <Loader2 size={13} className="animate-spin mr-1" /> : null}
+                Reconnect QuickBooks
+              </Button>
+            )}
+            {reconnectError && <p className="text-xs text-red-500">{reconnectError}</p>}
+          </div>
+        )}
 
         <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4 space-y-3">
           <div className="flex items-start gap-2">

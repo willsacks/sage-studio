@@ -52,6 +52,32 @@ export async function GET(request: NextRequest) {
   }
 
   const supabase = createAdminClient();
+  const now = Date.now();
+  const environment = process.env.QBO_ENVIRONMENT === "production" ? "production" : "sandbox";
+
+  // Reconnect mode: re-authenticate an EXISTING entity's connection (e.g.
+  // after a refresh token expired or was revoked) — never creates a new
+  // entity or a new import job, just refreshes the stored tokens/status.
+  if (state.mode === "reconnect") {
+    const { error: reconnectError } = await supabase
+      .from("qbo_connections")
+      .update({
+        qbo_realm_id: realmId,
+        access_token_encrypted: encryptQboToken(token.access_token),
+        refresh_token_encrypted: encryptQboToken(token.refresh_token),
+        access_token_expires_at: new Date(now + (token.expires_in ?? 3600) * 1000).toISOString(),
+        refresh_token_expires_at: new Date(now + (token.x_refresh_token_expires_in ?? 8_640_000) * 1000).toISOString(),
+        environment,
+        status: "active",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("entity_id", state.entityId)
+      .eq("owner_id", state.userId);
+    if (reconnectError) {
+      return NextResponse.redirect(`${redirectBase}/finances?qboError=${encodeURIComponent(reconnectError.message)}`);
+    }
+    return NextResponse.redirect(`${redirectBase}/finances?entity=${state.entityId}&qboReconnected=1`);
+  }
 
   const created = await commitCreateEntity(supabase, {
     ownerId: state.userId,
@@ -62,7 +88,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${redirectBase}/finances?qboError=${encodeURIComponent(created.error)}`);
   }
 
-  const now = Date.now();
   const { error: connectionError } = await supabase.from("qbo_connections").insert({
     entity_id: created.entityId,
     owner_id: state.userId,
@@ -71,7 +96,7 @@ export async function GET(request: NextRequest) {
     refresh_token_encrypted: encryptQboToken(token.refresh_token),
     access_token_expires_at: new Date(now + (token.expires_in ?? 3600) * 1000).toISOString(),
     refresh_token_expires_at: new Date(now + (token.x_refresh_token_expires_in ?? 8_640_000) * 1000).toISOString(),
-    environment: process.env.QBO_ENVIRONMENT === "production" ? "production" : "sandbox",
+    environment,
   });
   if (connectionError) {
     return NextResponse.redirect(`${redirectBase}/finances?qboError=${encodeURIComponent(connectionError.message)}`);

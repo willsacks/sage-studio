@@ -49,6 +49,16 @@ export async function getValidQboAccessToken(
     authResponse = await oauthClient.refreshUsingToken(refreshToken);
   } catch (err) {
     await supabase.from("qbo_connections").update({ status: "error" }).eq("id", connectionId);
+    // invalid_grant specifically means the refresh token itself was
+    // rejected (revoked, already used, or the underlying authorization was
+    // withdrawn) — distinct from a transient network failure, and the one
+    // case where retrying with the same token can never succeed. Surfaced
+    // with a distinct message so the UI's "reconnect" prompt is accurate
+    // rather than implying a temporary glitch.
+    const code = (err as { code?: string } | undefined)?.code;
+    if (code === "invalid_grant") {
+      return { error: "QuickBooks revoked this connection's access — reconnect required" };
+    }
     return { error: err instanceof Error ? err.message : "Failed to refresh QuickBooks token" };
   }
 

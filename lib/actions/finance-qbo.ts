@@ -38,6 +38,29 @@ export async function buildQboAuthUrl(params: { intendedEntityName: string; enti
   return { authUrl };
 }
 
+/** Re-authenticates an EXISTING entity's QuickBooks connection (e.g. after
+ * a refresh token expired/was revoked) — distinct from buildQboAuthUrl,
+ * which always creates a brand-new entity. The signed state payload
+ * carries `mode: "reconnect"` and the existing entityId so the callback
+ * route updates the existing qbo_connections row in place instead of
+ * calling commitCreateEntity. */
+export async function buildQboReconnectAuthUrl(entityId: string) {
+  const { supabase, user } = await requireAuth();
+  await requireFinanceEntityRole(supabase, entityId, user.id, "editor");
+
+  const payload = JSON.stringify({ userId: user.id, mode: "reconnect", entityId });
+  const encodedPayload = Buffer.from(payload).toString("base64url");
+  const signature = signQboState(encodedPayload);
+  const state = `${encodedPayload}.${signature}`;
+
+  const oauthClient = getQboOAuthClient();
+  const authUrl = oauthClient.authorizeUri({
+    scope: [OAuthClient.scopes.Accounting],
+    state,
+  });
+  return { authUrl };
+}
+
 export async function getQboConnectionStatus(entityId: string) {
   const { supabase, user } = await requireAuth();
   await requireFinanceEntityRole(supabase, entityId, user.id, "viewer");
