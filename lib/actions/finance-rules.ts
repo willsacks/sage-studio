@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireFinanceEntityRole } from "@/lib/access/finance-access";
+import { applyRuleToExistingTransactions, type CategorizationRule } from "@/lib/finance/categorization-rules";
 
 async function requireAuth() {
   const supabase = await createClient();
@@ -49,6 +50,32 @@ export async function createCategorizationRule(params: {
   if (error) return { error: error.message };
   revalidatePath("/finances");
   return { success: true };
+}
+
+/** Runs every one of the entity's existing rules against transactions that
+ * are already sitting uncategorized — rules only ever helped *future*
+ * transactions until now (auto-categorization only ran at Plaid-sync/CSV-
+ * import time), silently doing nothing for the backlog that usually
+ * prompts creating a rule in the first place. */
+export async function applyRulesToExistingTransactions(entityId: string) {
+  const { supabase, user } = await requireAuth();
+  await requireFinanceEntityRole(supabase, entityId, user.id, "editor");
+
+  const { data: rules, error } = await supabase
+    .from("categorization_rules")
+    .select("*")
+    .eq("entity_id", entityId)
+    .order("priority", { ascending: true });
+  if (error) return { error: error.message };
+
+  let matchedCount = 0;
+  for (const rule of (rules ?? []) as CategorizationRule[]) {
+    const result = await applyRuleToExistingTransactions(supabase, { entityId, rule });
+    matchedCount += result.matchedCount;
+  }
+
+  revalidatePath("/finances");
+  return { matchedCount };
 }
 
 export async function deleteCategorizationRule(ruleId: string, entityId: string) {

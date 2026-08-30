@@ -2,8 +2,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/db";
 import { postJournalEntry } from "@/lib/finance/ledger";
 import { buildJournalLines } from "@/lib/finance/categorize";
+import { categorizeTransaction } from "@/lib/actions/finance-transactions";
 
-type Rule = {
+export type CategorizationRule = {
   id: string;
   match_type: "contains" | "exact" | "starts_with";
   match_value: string;
@@ -11,8 +12,13 @@ type Rule = {
   default_project_id: string | null;
   priority: number;
 };
+type Rule = CategorizationRule;
 
-function matchesRule(payeeName: string, rule: Rule): boolean {
+/** Exported so any bulk-apply logic (e.g. applyRuleToExistingTransactions
+ * below, or the AI categorization assistant) uses the exact same
+ * match semantics as ingestion-time auto-categorization, instead of a
+ * second implementation that could quietly drift out of sync. */
+export function matchesRule(payeeName: string, rule: Rule): boolean {
   const name = payeeName.toLowerCase();
   const value = rule.match_value.toLowerCase();
   if (rule.match_type === "exact") return name === value;
@@ -74,4 +80,41 @@ export async function applyMatchingRule(
     .eq("id", params.transactionId);
 
   return true;
+}
+
+/**
+ * Applies one rule against every ALREADY-EXISTING uncategorized
+ * transaction in the entity — the gap `applyMatchingRule` above doesn't
+ * cover, since that one only ever runs at ingestion time (a new Plaid
+ * transaction or a freshly-imported CSV row). Without this, a rule only
+ * ever helps future transactions; the backlog that prompted creating the
+ * rule in the first place stays untouched. Goes through
+ * `categorizeTransaction` (the canonical categorize-one-transaction path,
+ * which resolves the money account, posts the balanced journal entry, and
+ * clears any review flag) rather than reimplementing posting here, so
+ * behavior stays identical to categorizing that same transaction by hand.
+ */
+export async function applyRuleToExistingTransactions(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: SupabaseClient<Database> | any,
+  params: { entityId: string; rule: CategorizationRule }
+): Promise<{ matchedCount: number }> {
+  const { data: transactions } = await supabase
+    .from("transactions")
+    .select("id, payee_name, amount")
+    .eq("entity_id", params.entityId)
+    .eq("status", "uncategorized");
+
+  const matches = ((transactions ?? []) as { id: string; payee_name: string; amount: number }[]).filter((t) =>
+    matchesRule(t.payee_name, params.rule)
+  );
+
+  let matchedCount = 0;
+  for (const t of matches) {
+    const result = await categorizeTransaction(t.id, params.entityId, [
+      { accountId: params.rule.chart_account_id, amount: Math.abs(t.amount), projectId: params.rule.default_project_id ?? undefined },
+    ]);
+    if (!("error" in result)) matchedCount++;
+  }
+  return { matchedCount };
 }

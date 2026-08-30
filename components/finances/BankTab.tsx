@@ -9,7 +9,7 @@ import { ReconciliationView } from "./ReconciliationView";
 import { listBankConnections, mapBankAccountToChartAccount, unlinkBankAccount } from "@/lib/actions/finance-bank";
 import { listChartOfAccounts, createChartAccount, setChartAccountActive } from "@/lib/actions/finance-accounts";
 import { listFinanceProjects } from "@/lib/actions/finance-projects";
-import { listCategorizationRules, createCategorizationRule, deleteCategorizationRule } from "@/lib/actions/finance-rules";
+import { listCategorizationRules, createCategorizationRule, deleteCategorizationRule, applyRulesToExistingTransactions } from "@/lib/actions/finance-rules";
 import type { FinanceEntity } from "./FinancesApp";
 import { MONEY_ACCOUNT_SUBTYPES } from "@/lib/finance/default-accounts";
 
@@ -258,6 +258,8 @@ function RulesManager({
   const [chartAccountId, setChartAccountId] = useState("");
   const [projectId, setProjectId] = useState("");
   const [creating, setCreating] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [applyResult, setApplyResult] = useState<string | null>(null);
 
   const categoryAccounts = accounts
     .filter((a) => a.account_type === "income" || a.account_type === "expense")
@@ -280,14 +282,40 @@ function RulesManager({
     onChanged();
   }
 
+  async function handleApplyToExisting() {
+    setApplying(true);
+    setApplyResult(null);
+    const result = await applyRulesToExistingTransactions(entityId);
+    setApplying(false);
+    if ("error" in result) {
+      setApplyResult(result.error ?? "Something went wrong");
+      return;
+    }
+    setApplyResult(
+      result.matchedCount === 0
+        ? "No existing uncategorized transactions matched your rules."
+        : `Categorized ${result.matchedCount} existing transaction${result.matchedCount === 1 ? "" : "s"}.`
+    );
+    onChanged();
+  }
+
   return (
     <div>
       <div className="flex justify-between items-center mb-2">
         <p className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wide">Auto-categorization rules</p>
-        <Button size="sm" variant="outline" onClick={() => setShowForm((v) => !v)}>
-          <Plus size={13} className="mr-1" /> New rule
-        </Button>
+        <div className="flex items-center gap-2">
+          {rules.length > 0 && (
+            <Button size="sm" variant="outline" onClick={handleApplyToExisting} disabled={applying} title="Rules only apply to new transactions automatically — use this to also apply them to transactions already sitting uncategorized.">
+              {applying ? <Loader2 size={13} className="animate-spin mr-1" /> : null}
+              Apply to existing transactions
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={() => setShowForm((v) => !v)}>
+            <Plus size={13} className="mr-1" /> New rule
+          </Button>
+        </div>
       </div>
+      {applyResult && <p className="text-xs text-[var(--muted-foreground)] mb-2">{applyResult}</p>}
 
       {showForm && (
         <div className="rounded-xl border border-[var(--border)] p-3 space-y-2 mb-2">
