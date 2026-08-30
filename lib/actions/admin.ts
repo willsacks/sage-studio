@@ -28,6 +28,21 @@ export async function toggleUserAiAccess(userId: string, enabled: boolean) {
   return { success: true };
 }
 
+/** Separate from toggleUserAiAccess (the site-content editor) — this gates
+ * the Transactions tab's AI categorization assistant, which mutates real
+ * financial data rather than site content, so it's an intentionally
+ * distinct opt-in. */
+export async function toggleUserFinanceAiAccess(userId: string, enabled: boolean) {
+  const admin = await requireAdmin();
+  const { error } = await admin
+    .from("profiles")
+    .update({ ai_finance_assistant_enabled: enabled })
+    .eq("id", userId);
+  if (error) return { error: error.message };
+  revalidatePath("/admin");
+  return { success: true };
+}
+
 export async function getAiPrompts() {
   const admin = await requireAdmin();
   const { data } = await admin

@@ -199,7 +199,7 @@ function FeedEvent({ event }: { event: ActivityEvent }) {
 async function getAiAccessUsers(): Promise<UserRow[]> {
   const admin = createAdminClient();
   const [{ data: profiles }, { data: authUsers }] = await Promise.all([
-    admin.from("profiles").select("id, display_name, tier_key, ai_assistant_enabled").order("created_at", { ascending: false }),
+    admin.from("profiles").select("id, display_name, tier_key, ai_assistant_enabled, ai_finance_assistant_enabled").order("created_at", { ascending: false }),
     admin.auth.admin.listUsers({ perPage: 1000 }),
   ]);
   const emailMap = new Map((authUsers?.users ?? []).map((u) => [u.id, u.email ?? ""]));
@@ -209,6 +209,7 @@ async function getAiAccessUsers(): Promise<UserRow[]> {
     email: emailMap.get(p.id) ?? "",
     tier_key: p.tier_key ?? "free",
     ai_assistant_enabled: p.ai_assistant_enabled ?? false,
+    ai_finance_assistant_enabled: p.ai_finance_assistant_enabled ?? false,
   }));
 }
 

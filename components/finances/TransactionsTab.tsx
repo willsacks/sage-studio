@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Loader2, Plus, Trash2, Split, Upload, Flag, X, Check, StickyNote, Pencil } from "lucide-react";
+import { Loader2, Plus, Trash2, Split, Upload, Flag, X, Check, StickyNote, Pencil, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { listChartOfAccounts, createChartAccount } from "@/lib/actions/finance-accounts";
@@ -15,8 +15,10 @@ import {
   resolveReviewFlag,
   updateTransactionNote,
 } from "@/lib/actions/finance-transactions";
+import { getAiFinanceAssistantEnabled } from "@/lib/actions/finance-ai";
 import type { SplitInput } from "@/lib/finance/categorize";
 import { CsvImportDialog } from "./CsvImportDialog";
+import { AiCategorizeAssistant } from "./AiCategorizeAssistant";
 import type { FinanceEntity } from "./FinancesApp";
 import { MONEY_ACCOUNT_SUBTYPES } from "@/lib/finance/default-accounts";
 
@@ -234,6 +236,8 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showAiAssistant, setShowAiAssistant] = useState(false);
+  const [aiAssistantEnabled, setAiAssistantEnabled] = useState(false);
 
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [payeeName, setPayeeName] = useState("");
@@ -277,6 +281,10 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
     await silentRefresh();
     setLoading(false);
   }, [silentRefresh]);
+
+  useEffect(() => {
+    getAiFinanceAssistantEnabled().then(setAiAssistantEnabled);
+  }, []);
 
   useEffect(() => {
     refresh();
@@ -395,6 +403,11 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
           <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-9 w-36 text-sm" title="To date" />
         </div>
         <div className="flex gap-2">
+          {aiAssistantEnabled && (
+            <Button size="sm" variant="outline" onClick={() => setShowAiAssistant(true)}>
+              <Sparkles size={14} className="mr-1" /> Ask AI to categorize
+            </Button>
+          )}
           <Button size="sm" variant="outline" onClick={() => setShowImport(true)}>
             <Upload size={14} className="mr-1" /> Import CSV
           </Button>
@@ -410,6 +423,14 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
           accounts={accounts}
           onClose={() => setShowImport(false)}
           onImported={silentRefresh}
+        />
+      )}
+
+      {showAiAssistant && (
+        <AiCategorizeAssistant
+          entityId={entity.id}
+          onClose={() => setShowAiAssistant(false)}
+          onCategorized={silentRefresh}
         />
       )}
 
