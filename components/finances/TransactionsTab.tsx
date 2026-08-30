@@ -253,8 +253,14 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
   // account/status/date-range controls below all filter this in memory, so
   // switching between them is instant and never re-triggers the loading
   // spinner or a server round trip.
-  const refresh = useCallback(async () => {
-    setLoading(true);
+  // Doesn't touch `loading` — used when refetching behind an open dialog
+  // (e.g. after a CSV import) that the user should keep seeing, including
+  // its own success message. Toggling `loading` there would hit the early
+  // `if (loading) return <spinner>` below and unmount the whole tab —
+  // dialog included — making a successful import look like the "Import"
+  // modal had silently popped back up with no confirmation, when it had
+  // actually just been torn down and remounted fresh.
+  const silentRefresh = useCallback(async () => {
     const [txnResult, accountsResult, projectsResult] = await Promise.all([
       listTransactions({ entityId: entity.id }),
       listChartOfAccounts(entity.id),
@@ -263,8 +269,13 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
     setTransactions((txnResult.transactions ?? []) as Transaction[]);
     setAccounts((accountsResult.accounts ?? []) as Account[]);
     setProjects((projectsResult.projects ?? []) as Project[]);
-    setLoading(false);
   }, [entity.id]);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    await silentRefresh();
+    setLoading(false);
+  }, [silentRefresh]);
 
   useEffect(() => {
     refresh();
@@ -397,7 +408,7 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
           entityId={entity.id}
           accounts={accounts}
           onClose={() => setShowImport(false)}
-          onImported={refresh}
+          onImported={silentRefresh}
         />
       )}
 
