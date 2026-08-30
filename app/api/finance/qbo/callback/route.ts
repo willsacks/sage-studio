@@ -43,7 +43,13 @@ export async function GET(request: NextRequest) {
   try {
     authResponse = await oauthClient.createToken(request.url);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "token_exchange_failed";
+    // intuit_tid identifies this exact request on Intuit's side — captured
+    // here (and everywhere else QBO is called) so a support ticket can
+    // reference the specific failed request, not just our own description.
+    const intuitTid = (err as { intuit_tid?: string; authResponse?: { getIntuitTid?: () => string } } | undefined)?.intuit_tid
+      ?? (err as { authResponse?: { getIntuitTid?: () => string } } | undefined)?.authResponse?.getIntuitTid?.();
+    const message = `${err instanceof Error ? err.message : "token_exchange_failed"}${intuitTid ? ` (intuit_tid: ${intuitTid})` : ""}`;
+    console.error("QuickBooks token exchange failed:", message);
     return NextResponse.redirect(`${redirectBase}/finances?qboError=${encodeURIComponent(message)}`);
   }
   const token = authResponse.getToken();

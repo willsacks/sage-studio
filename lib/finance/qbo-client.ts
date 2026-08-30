@@ -33,7 +33,7 @@ export function getQboOAuthClient(): OAuthClient {
 }
 
 export class QboApiError extends Error {
-  constructor(message: string, public readonly status: number) {
+  constructor(message: string, public readonly status: number, public readonly intuitTid?: string) {
     super(message);
     this.name = "QboApiError";
   }
@@ -65,8 +65,18 @@ export async function queryQbo<T>(params: {
     },
   });
 
+  // Captured on every call (not just failures) — Intuit's own support team
+  // uses intuit_tid to look up a specific request on their side, so it's
+  // most valuable exactly when something goes wrong, but cheap enough to
+  // always read off the response.
+  const intuitTid = response.headers.get("intuit_tid") ?? undefined;
+
   if (!response.ok) {
-    throw new QboApiError(`QuickBooks query failed for ${entity}: ${response.status} ${await response.text()}`, response.status);
+    throw new QboApiError(
+      `QuickBooks query failed for ${entity}: ${response.status} ${await response.text()}${intuitTid ? ` (intuit_tid: ${intuitTid})` : ""}`,
+      response.status,
+      intuitTid
+    );
   }
 
   const body = await response.json();

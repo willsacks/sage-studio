@@ -197,8 +197,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "completed" });
   } catch (err) {
     const message = err instanceof QboApiError && err.status === 401
-      ? "QuickBooks access token was rejected — try reconnecting"
+      ? `QuickBooks access token was rejected — try reconnecting${err.intuitTid ? ` (intuit_tid: ${err.intuitTid})` : ""}`
       : err instanceof Error ? err.message : "Import failed";
+    // Full server-side log (Vercel) in addition to the persisted
+    // import_jobs.error_message — the DB row is what a customer/our own
+    // support sees, this stack trace is what we'd hand to Intuit support
+    // or use ourselves to debug, alongside the intuit_tid embedded above.
+    console.error(`QuickBooks import job ${jobId} failed:`, err);
     await failJob(supabase, jobId, message);
     return NextResponse.json({ error: message }, { status: 500 });
   }

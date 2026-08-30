@@ -48,6 +48,11 @@ export async function getValidQboAccessToken(
   try {
     authResponse = await oauthClient.refreshUsingToken(refreshToken);
   } catch (err) {
+    // intuit_tid identifies this specific request on Intuit's side — worth
+    // capturing on every OAuth failure so a support ticket can reference
+    // the exact request, not just our own description of what happened.
+    const intuitTid = (err as { intuit_tid?: string; authResponse?: { getIntuitTid?: () => string } } | undefined)?.intuit_tid
+      ?? (err as { authResponse?: { getIntuitTid?: () => string } } | undefined)?.authResponse?.getIntuitTid?.();
     await supabase.from("qbo_connections").update({ status: "error" }).eq("id", connectionId);
     // invalid_grant specifically means the refresh token itself was
     // rejected (revoked, already used, or the underlying authorization was
@@ -56,10 +61,11 @@ export async function getValidQboAccessToken(
     // with a distinct message so the UI's "reconnect" prompt is accurate
     // rather than implying a temporary glitch.
     const code = (err as { code?: string } | undefined)?.code;
+    const tidSuffix = intuitTid ? ` (intuit_tid: ${intuitTid})` : "";
     if (code === "invalid_grant") {
-      return { error: "QuickBooks revoked this connection's access — reconnect required" };
+      return { error: `QuickBooks revoked this connection's access — reconnect required${tidSuffix}` };
     }
-    return { error: err instanceof Error ? err.message : "Failed to refresh QuickBooks token" };
+    return { error: `${err instanceof Error ? err.message : "Failed to refresh QuickBooks token"}${tidSuffix}` };
   }
 
   const token = authResponse.getToken();
