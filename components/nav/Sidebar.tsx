@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Globe, Timer, CreditCard, Settings, Leaf, LogOut, LayoutDashboard, GitBranch, CheckSquare, Gamepad2, BookOpen, Mail, Wallet } from "lucide-react";
+import { Globe, Timer, CreditCard, Settings, Leaf, LogOut, LayoutDashboard, GitBranch, CheckSquare, Gamepad2, BookOpen, Mail, Wallet, LifeBuoy } from "lucide-react";
 import { signOut } from "@/lib/actions/auth";
 
 interface SidebarProps {
@@ -26,6 +26,7 @@ export const NAV = [
 export const SETTINGS_NAV = [
   { href: "/billing", label: "Billing", icon: CreditCard },
   { href: "/settings", label: "Settings", icon: Settings },
+  { href: "mailto:will@fulcrumventures.org?subject=Sage%20Studio%20Support", label: "Help & Support", icon: LifeBuoy },
 ];
 
 export function NavItem({
