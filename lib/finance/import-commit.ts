@@ -109,7 +109,8 @@ export async function commitAccounts(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: SupabaseClient<Database> | any,
   entityId: string,
-  accounts: StagedAccount[]
+  accounts: StagedAccount[],
+  onProgress?: () => Promise<void>
 ): Promise<{ externalIdToAccountId: Map<string, string> } | { error: string }> {
   const externalIdToAccountId = new Map<string, string>();
   if (accounts.length === 0) return { externalIdToAccountId };
@@ -155,6 +156,7 @@ export async function commitAccounts(
       if (error) return { error: error.message };
       if (a.externalId) externalIdToAccountId.set(a.externalId, data.id);
     }
+    await onProgress?.();
   }
 
   // Second pass: resolve parent_account_id now that every account has a
@@ -190,11 +192,12 @@ export async function findAccountIdByExternalId(
   return data?.id ?? null;
 }
 
-/** Looks up the entity's default fallback account for a given account_type
- * (e.g. the "Accounts Receivable" or "Uncategorized Expense" rows seeded by
- * commitCreateEntity) — used when an imported transaction's own account
- * can't be resolved, or (for Payment) as the intentional AR-crediting
- * target regardless of which bank account QuickBooks itself deposited to. */
+/** Looks up one of the entity's seeded fallback accounts (e.g. "Accounts
+ * Receivable" or "Uncategorized Expense", from commitCreateEntity) by
+ * account_subtype — used when an imported transaction's own account can't
+ * be resolved. Not currently used by commitPayment (see findIncomeAccountId
+ * below), kept for future phases (e.g. a BillPayment fallback to
+ * "Uncategorized Expense"). */
 export async function findDefaultAccountId(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: SupabaseClient<Database> | any,
@@ -211,40 +214,46 @@ export async function findDefaultAccountId(
   return data?.id ?? null;
 }
 
-/** Bulk-inserts imported customers/vendors into the unified finance_customers
- * table. Uses upsert on (entity_id, external_id) — the DB-level unique
- * constraint added in scripts/add-import-schema.ts — so re-running an
- * import after a partial failure never creates duplicate contacts. */
+/** Upserts imported customers/vendors into the unified finance_customers
+ * table, one row at a time (rather than a single bulk upsert) so
+ * onProgress can report real per-record progress to the import UI — the
+ * same reasoning as commitAccounts. Uses upsert on (entity_id,
+ * external_id) — the DB-level unique constraint added in
+ * scripts/add-import-schema.ts — so re-running an import after a partial
+ * failure never creates duplicate contacts. */
 export async function commitCustomers(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: SupabaseClient<Database> | any,
   entityId: string,
   customers: StagedCustomer[],
-  source: "quickbooks" | "wave"
+  source: "quickbooks" | "wave",
+  onProgress?: () => Promise<void>
 ): Promise<{ externalIdToCustomerId: Map<string, string> } | { error: string }> {
   const externalIdToCustomerId = new Map<string, string>();
   if (customers.length === 0) return { externalIdToCustomerId };
 
-  const { data, error } = await supabase
-    .from("finance_customers")
-    .upsert(
-      customers.map((c) => ({
-        entity_id: entityId,
-        name: c.name,
-        email: c.email ?? null,
-        phone: c.phone ?? null,
-        address: c.address ?? null,
-        external_id: c.externalId ?? null,
-        source,
-      })),
-      { onConflict: "entity_id,external_id" }
-    )
-    .select("id, external_id");
-  if (error) return { error: error.message };
-
-  for (const row of data as { id: string; external_id: string | null }[]) {
-    if (row.external_id) externalIdToCustomerId.set(row.external_id, row.id);
+  for (const c of customers) {
+    const { data, error } = await supabase
+      .from("finance_customers")
+      .upsert(
+        {
+          entity_id: entityId,
+          name: c.name,
+          email: c.email ?? null,
+          phone: c.phone ?? null,
+          address: c.address ?? null,
+          external_id: c.externalId ?? null,
+          source,
+        },
+        { onConflict: "entity_id,external_id" }
+      )
+      .select("id, external_id")
+      .single();
+    if (error) return { error: error.message };
+    if (data.external_id) externalIdToCustomerId.set(data.external_id, data.id);
+    await onProgress?.();
   }
+
   return { externalIdToCustomerId };
 }
 
@@ -289,7 +298,8 @@ export async function commitInvoiceBatch(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: SupabaseClient<Database> | any,
   entityId: string,
-  invoices: StagedInvoice[]
+  invoices: StagedInvoice[],
+  onProgress?: () => Promise<void>
 ): Promise<{ externalIdToInvoiceId: Map<string, string> } | { error: string }> {
   const externalIdToInvoiceId = new Map<string, string>();
   if (invoices.length === 0) return { externalIdToInvoiceId };
@@ -340,6 +350,7 @@ export async function commitInvoiceBatch(
       );
       if (lineItemsError) return { error: lineItemsError.message };
     }
+    await onProgress?.();
   }
 
   return { externalIdToInvoiceId };
