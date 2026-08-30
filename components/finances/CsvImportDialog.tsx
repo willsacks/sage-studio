@@ -4,10 +4,11 @@ import { useRef, useState } from "react";
 import { Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { MONEY_ACCOUNT_SUBTYPES } from "@/lib/finance/default-accounts";
 
 type Account = { id: string; name: string; account_subtype: string };
 
-const MONEY_SUBTYPES = ["Cash and Bank", "Credit Card"];
+const MONEY_SUBTYPES = MONEY_ACCOUNT_SUBTYPES;
 
 export function CsvImportDialog({
   entityId,
@@ -24,7 +25,7 @@ export function CsvImportDialog({
   const [moneyAccountId, setMoneyAccountId] = useState("");
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ imported: number; skipped: number; errors: string[] } | null>(null);
+  const [result, setResult] = useState<{ imported: number; skipped: number; errors: string[]; autoCategorized: number } | null>(null);
 
   const moneyAccounts = accounts.filter((a) => MONEY_SUBTYPES.includes(a.account_subtype));
 
@@ -53,7 +54,7 @@ export function CsvImportDialog({
         setError(data?.error ?? `Import failed (${response.status})`);
         return;
       }
-      setResult({ imported: data.imported, skipped: data.skipped, errors: data.errors ?? [] });
+      setResult({ imported: data.imported, skipped: data.skipped, errors: data.errors ?? [], autoCategorized: data.autoCategorized ?? 0 });
       onImported();
     } catch {
       setError("Import failed — check your connection and try again");
@@ -93,8 +94,11 @@ export function CsvImportDialog({
         {result && (
           <div className="space-y-1">
             <p className="text-sm text-green-600">
-              Imported {result.imported} transaction{result.imported === 1 ? "" : "s"}
-              {result.skipped > 0 ? ` (${result.skipped} row${result.skipped === 1 ? "" : "s"} skipped — couldn't parse)` : ""}. They'll show up as uncategorized.
+              Imported {result.imported} transaction{result.imported === 1 ? "" : "s"}, no errors
+              {result.skipped > 0 ? ` (${result.skipped} row${result.skipped === 1 ? "" : "s"} skipped — couldn't parse)` : ""}.
+              {result.autoCategorized > 0
+                ? ` ${result.autoCategorized} auto-categorized by your rules; the rest will show up as uncategorized.`
+                : " They'll show up as uncategorized."}
             </p>
             {result.errors.length > 0 && (
               <ul className="text-xs text-[var(--muted-foreground)] list-disc pl-4 space-y-0.5">

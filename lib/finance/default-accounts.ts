@@ -6,6 +6,14 @@ export type DefaultAccount = {
   display_order: number;
 };
 
+// Account subtypes a transaction's own "which account is this for" side can
+// be — i.e. an account whose balance a transaction actually moves money in
+// or out of, as opposed to an income/expense category. Includes
+// "Investment" (e.g. a brokerage/robo-advisor account like Acorns, or a
+// retirement account) alongside plain bank/credit accounts, so a transfer
+// into savings has somewhere real to land.
+export const MONEY_ACCOUNT_SUBTYPES = ["Cash and Bank", "Credit Card", "Investment"];
+
 // asset/expense accounts carry a debit normal balance; liability/equity/income
 // carry credit — derived here once so callers never need a lookup table.
 export function normalBalanceForType(type: DefaultAccount["account_type"]): "debit" | "credit" {

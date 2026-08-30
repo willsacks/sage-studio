@@ -115,6 +115,10 @@ export function ChartOfAccountsTab({ entity }: { entity: FinanceEntity }) {
 
       {TYPE_ORDER.map((type) => {
         const group = accounts.filter((a) => a.account_type === type);
+        // Income/expense categories sort alphabetically — asset/liability/
+        // equity accounts stay in their existing display_order (that
+        // ordering matters more there, e.g. Checking before Savings).
+        if (type === "income" || type === "expense") group.sort((a, b) => a.name.localeCompare(b.name));
         if (group.length === 0) return null;
         return (
           <div key={type}>

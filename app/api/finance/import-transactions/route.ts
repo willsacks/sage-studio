@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requireFinanceEntityRole } from "@/lib/access/finance-access";
 import { parseTransactionsCsv } from "@/lib/finance/csv-import";
+import { applyMatchingRule } from "@/lib/finance/categorization-rules";
+import { MONEY_ACCOUNT_SUBTYPES } from "@/lib/finance/default-accounts";
 
 // Route Handler rather than a Server Action — a CSV of a few thousand rows
 // can trip the Flight-protocol size limit on Server Action arguments, same
@@ -37,7 +39,7 @@ export async function POST(request: NextRequest) {
   // body is attacker-controlled — an income/expense account here would post
   // real debits/credits against the wrong side of the ledger later, when
   // categorizeTransaction falls back to this transaction's money_account_id.
-  if (!["Cash and Bank", "Credit Card"].includes(account.account_subtype)) {
+  if (!MONEY_ACCOUNT_SUBTYPES.includes(account.account_subtype)) {
     return NextResponse.json({ error: "Choose a cash or credit card account, not a category" }, { status: 400 });
   }
 
@@ -50,7 +52,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: summary, imported: 0, skipped, errors }, { status: 400 });
   }
 
-  const { error: insertError, count } = await supabase
+  const { data: inserted, error: insertError } = await supabase
     .from("transactions")
     .insert(
       transactions.map((t) => ({
@@ -60,13 +62,31 @@ export async function POST(request: NextRequest) {
         payee_name: t.payeeName,
         amount: t.amount,
         status: "uncategorized" as const,
-      })),
-      { count: "exact" }
-    );
+      }))
+    )
+    .select("id, date, payee_name, amount");
   if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
-  if (!count) {
+  if (!inserted || inserted.length === 0) {
     return NextResponse.json({ error: "No transactions were saved — you may not have permission to add transactions to this entity" }, { status: 403 });
   }
 
-  return NextResponse.json({ imported: count, skipped, errors });
+  // Auto-categorize against any existing rules (Bank Accounts tab) rather
+  // than always leaving CSV-imported rows uncategorized regardless of
+  // rules the user already set up — matches what Plaid-synced transactions
+  // already get (lib/finance/plaid-sync.ts).
+  let autoCategorized = 0;
+  for (const t of inserted) {
+    const matched = await applyMatchingRule(supabase, {
+      entityId,
+      transactionId: t.id,
+      moneyAccountId,
+      payeeName: t.payee_name,
+      amount: t.amount,
+      date: t.date,
+      createdBy: user.id,
+    });
+    if (matched) autoCategorized++;
+  }
+
+  return NextResponse.json({ imported: inserted.length, skipped, errors, autoCategorized });
 }

@@ -11,6 +11,7 @@ import { listChartOfAccounts, createChartAccount, setChartAccountActive } from "
 import { listFinanceProjects } from "@/lib/actions/finance-projects";
 import { listCategorizationRules, createCategorizationRule, deleteCategorizationRule } from "@/lib/actions/finance-rules";
 import type { FinanceEntity } from "./FinancesApp";
+import { MONEY_ACCOUNT_SUBTYPES } from "@/lib/finance/default-accounts";
 
 type BankAccount = {
   id: string;
@@ -24,7 +25,7 @@ type Account = { id: string; name: string; account_subtype: string; account_type
 type Project = { id: string; name: string };
 type Rule = { id: string; match_type: string; match_value: string; chart_account_id: string; default_project_id: string | null };
 
-const MONEY_SUBTYPES = ["Cash and Bank", "Credit Card"];
+const MONEY_SUBTYPES = MONEY_ACCOUNT_SUBTYPES;
 
 export function BankTab({ entity }: { entity: FinanceEntity }) {
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
@@ -37,7 +38,7 @@ export function BankTab({ entity }: { entity: FinanceEntity }) {
   const [reconcilingAccount, setReconcilingAccount] = useState<BankAccount | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState("");
-  const [newSubtype, setNewSubtype] = useState<"Cash and Bank" | "Credit Card">("Cash and Bank");
+  const [newSubtype, setNewSubtype] = useState<"Cash and Bank" | "Credit Card" | "Investment">("Cash and Bank");
   const [creatingAccount, setCreatingAccount] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -91,6 +92,9 @@ export function BankTab({ entity }: { entity: FinanceEntity }) {
       name: newName.trim(),
       accountType: newSubtype === "Credit Card" ? "liability" : "asset",
       accountSubtype: newSubtype,
+      // A brokerage/retirement/robo-advisor account (e.g. Acorns) needs to
+      // exist as a real account so a transfer into it has somewhere to
+      // land — not just a category, since its own balance changes too.
     });
     setCreatingAccount(false);
     if ("error" in result) {
@@ -135,9 +139,10 @@ export function BankTab({ entity }: { entity: FinanceEntity }) {
           </div>
           <div className="space-y-1">
             <label className="text-xs font-medium text-[var(--muted-foreground)]">Type</label>
-            <select value={newSubtype} onChange={(e) => setNewSubtype(e.target.value as "Cash and Bank" | "Credit Card")} className="h-9 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-sm">
+            <select value={newSubtype} onChange={(e) => setNewSubtype(e.target.value as "Cash and Bank" | "Credit Card" | "Investment")} className="h-9 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-sm">
               <option value="Cash and Bank">Bank account</option>
               <option value="Credit Card">Credit card</option>
+              <option value="Investment">Investment / savings (e.g. Acorns, retirement)</option>
             </select>
           </div>
           <Button size="sm" onClick={handleCreateAccount} disabled={creatingAccount || !newName.trim()}>
@@ -254,7 +259,9 @@ function RulesManager({
   const [projectId, setProjectId] = useState("");
   const [creating, setCreating] = useState(false);
 
-  const categoryAccounts = accounts.filter((a) => a.account_type === "income" || a.account_type === "expense");
+  const categoryAccounts = accounts
+    .filter((a) => a.account_type === "income" || a.account_type === "expense")
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   async function handleCreate() {
     if (!matchValue.trim() || !chartAccountId) return;

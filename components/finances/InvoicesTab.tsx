@@ -9,6 +9,7 @@ import { listInvoices, createInvoice, setInvoiceStatus, recordInvoicePayment, ty
 import { listChartOfAccounts } from "@/lib/actions/finance-accounts";
 import { listFinanceProjects } from "@/lib/actions/finance-projects";
 import type { FinanceEntity } from "./FinancesApp";
+import { MONEY_ACCOUNT_SUBTYPES } from "@/lib/finance/default-accounts";
 
 type LineItemRow = { description: string; quantity: string; unitPrice: string };
 type Invoice = {
@@ -34,7 +35,7 @@ const STATUS_STYLES: Record<string, string> = {
   void: "bg-[var(--muted)] text-[var(--muted-foreground)] line-through",
 };
 
-const MONEY_SUBTYPES = ["Cash and Bank", "Credit Card"];
+const MONEY_SUBTYPES = MONEY_ACCOUNT_SUBTYPES;
 
 function money(n: number) {
   return n.toLocaleString(undefined, { style: "currency", currency: "USD" });
@@ -267,7 +268,7 @@ function RecordPaymentDialog({
   const [error, setError] = useState<string | null>(null);
 
   const moneyAccounts = accounts.filter((a) => MONEY_SUBTYPES.includes(a.account_subtype));
-  const incomeAccounts = accounts.filter((a) => a.account_type === "income");
+  const incomeAccounts = accounts.filter((a) => a.account_type === "income").sort((a, b) => a.name.localeCompare(b.name));
 
   async function handleSave() {
     if (!moneyAccountId || !incomeAccountId || !Number(amount)) {

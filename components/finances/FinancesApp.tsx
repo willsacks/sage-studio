@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { LayoutGrid, FolderKanban, ArrowLeftRight, BarChart3, BookOpen, Landmark, FileText, Users, Settings } from "lucide-react";
 import { EntitySwitcher } from "./EntitySwitcher";
 import { CreateEntityForm } from "./CreateEntityForm";
@@ -36,6 +37,7 @@ const TABS: { id: Tab; label: string; icon: typeof LayoutGrid }[] = [
 ];
 
 export function FinancesApp({ initialEntities, initialEntityId }: { initialEntities: FinanceEntity[]; initialEntityId?: string }) {
+  const router = useRouter();
   const [entities, setEntities] = useState(initialEntities);
   const [currentEntityId, setCurrentEntityId] = useState<string | null>(
     (initialEntityId && initialEntities.some((e) => e.id === initialEntityId) ? initialEntityId : initialEntities[0]?.id) ?? null
@@ -44,15 +46,39 @@ export function FinancesApp({ initialEntities, initialEntityId }: { initialEntit
   const [sharing, setSharing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  // Keeps ?entity= in the URL in sync with whichever entity is actually
+  // selected — the page's server component only knows which entity to
+  // pass down via this query param (falling back to the first entity in
+  // the list otherwise). Without this, switching entities was purely
+  // client-side state: if anything ever caused this component to remount
+  // from fresh server props (e.g. Next re-running the server component
+  // after a Server Action's revalidatePath — observed after saving two
+  // categorizations back to back), the URL still had no entity, so the
+  // remount silently fell back to entities[0] — landing the user in a
+  // completely different set of books with no warning.
+  function selectEntity(id: string | null) {
+    setCurrentEntityId(id);
+    if (id) router.replace(`/finances?entity=${id}`, { scroll: false });
+  }
+
+  useEffect(() => {
+    if (currentEntityId && !initialEntityId) {
+      router.replace(`/finances?entity=${currentEntityId}`, { scroll: false });
+    }
+    // Only needs to run once, to backfill the URL on first load — not on
+    // every currentEntityId change (selectEntity already handles that).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function handleEntityCreated(entity: FinanceEntity) {
     setEntities((prev) => [...prev, entity]);
-    setCurrentEntityId(entity.id);
+    selectEntity(entity.id);
   }
 
   function handleEntityDeleted(entityId: string) {
     setEntities((prev) => {
       const next = prev.filter((e) => e.id !== entityId);
-      setCurrentEntityId(next[0]?.id ?? null);
+      selectEntity(next[0]?.id ?? null);
       return next;
     });
     setSettingsOpen(false);
@@ -70,7 +96,7 @@ export function FinancesApp({ initialEntities, initialEntityId }: { initialEntit
         <EntitySwitcher
           entities={entities}
           currentEntityId={currentEntity.id}
-          onChange={setCurrentEntityId}
+          onChange={selectEntity}
           onCreated={handleEntityCreated}
         />
         <div className="flex items-center gap-1">

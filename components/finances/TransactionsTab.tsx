@@ -18,6 +18,7 @@ import {
 import type { SplitInput } from "@/lib/finance/categorize";
 import { CsvImportDialog } from "./CsvImportDialog";
 import type { FinanceEntity } from "./FinancesApp";
+import { MONEY_ACCOUNT_SUBTYPES } from "@/lib/finance/default-accounts";
 
 type Account = { id: string; name: string; account_type: string; account_subtype: string; is_active: boolean };
 type Project = { id: string; name: string };
@@ -223,7 +224,7 @@ function NoteButton({
   );
 }
 
-const MONEY_SUBTYPES = ["Cash and Bank", "Credit Card"];
+const MONEY_SUBTYPES = MONEY_ACCOUNT_SUBTYPES;
 type StatusFilter = "all" | "categorized" | "uncategorized";
 
 export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
@@ -290,9 +291,9 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
   }
 
   const moneyAccounts = accounts.filter((a) => MONEY_SUBTYPES.includes(a.account_subtype) && a.is_active);
-  const categoryAccounts = accounts.filter(
-    (a) => (direction === "in" ? a.account_type === "income" : a.account_type === "expense") && a.is_active
-  );
+  const categoryAccounts = accounts
+    .filter((a) => (direction === "in" ? a.account_type === "income" : a.account_type === "expense") && a.is_active)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   const filteredTransactions = transactions.filter((t) => {
     if (accountFilter && resolvedAccountId(t) !== accountFilter) return false;
@@ -649,7 +650,7 @@ function TransactionRow({
   return (
     <div className="flex items-center gap-3 px-4 py-2.5">
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium truncate">{transaction.payee_name}</p>
+        <p className="text-sm font-medium truncate" title={transaction.payee_name}>{transaction.payee_name}</p>
         <p className="text-xs text-[var(--muted-foreground)] truncate">
           {transaction.date} · {transaction.transaction_splits.length} categor{transaction.transaction_splits.length === 1 ? "y" : "ies"}
           {transaction.notes ? ` · "${transaction.notes}"` : ""}
@@ -717,15 +718,28 @@ function CategoryPickerRow({
   // Defaults the new-category type to the transaction's own sign, but stays
   // overridable — a refund flips the expected sign (e.g. money coming back
   // in from a return should land in an Expense category, not Income).
-  const [newCategoryType, setNewCategoryType] = useState<"income" | "expense">(transaction.amount >= 0 ? "income" : "expense");
+  const [newCategoryType, setNewCategoryType] = useState<"income" | "expense" | "transfer">(transaction.amount >= 0 ? "income" : "expense");
 
   // Both income and expense categories are shown, grouped — a positive
   // amount is usually income and a negative one an expense, but refunds
   // break that assumption in either direction, so the user needs to be able
-  // to pick against the grain of the transaction's sign.
+  // to pick against the grain of the transaction's sign. A "Transfer" group
+  // (other money accounts — savings, investment/retirement accounts like
+  // Acorns, credit cards) is also offered: categorizing a transaction
+  // against another money account rather than an income/expense category
+  // is exactly what a transfer is, and the ledger already supports posting
+  // a split against any account regardless of type — this was previously
+  // just a UI gap, not a backend limitation.
+  const ownMoneyAccountId = resolvedAccountId(transaction);
   const categoryAccounts = accounts
     .filter((a) => (a.account_type === "income" || a.account_type === "expense") && a.is_active)
+    .sort((a, b) => a.name.localeCompare(b.name))
     .map((a) => ({ id: a.id, name: a.name, group: a.account_type === "income" ? "Income" : "Expense" }));
+  const transferAccounts = accounts
+    .filter((a) => (a.account_type === "asset" || a.account_type === "liability") && a.is_active && a.id !== ownMoneyAccountId)
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((a) => ({ id: a.id, name: a.name, group: "Transfer" }));
+  const categoryAndTransferAccounts = [...categoryAccounts, ...transferAccounts];
   const currentCategory = transaction.transaction_splits[0]
     ? accounts.find((a) => a.id === transaction.transaction_splits[0].chart_account_id)?.name
     : null;
@@ -765,7 +779,7 @@ function CategoryPickerRow({
   return (
     <div className="flex items-center gap-3 px-4 py-2.5">
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium truncate">{transaction.payee_name}</p>
+        <p className="text-sm font-medium truncate" title={transaction.payee_name}>{transaction.payee_name}</p>
         <p className="text-xs text-[var(--muted-foreground)] truncate">
           {transaction.date}{currentCategory ? ` · currently: ${currentCategory}` : ""}
         </p>
@@ -777,24 +791,34 @@ function CategoryPickerRow({
         <CreatableSelect
           value={accountId}
           onChange={setAccountId}
-          options={categoryAccounts}
+          options={categoryAndTransferAccounts}
           placeholder={currentCategory ? "Change category..." : "Category..."}
           newLabel="+ New category..."
-          newPlaceholder={`New ${newCategoryType} category`}
+          newPlaceholder={newCategoryType === "transfer" ? "New account (e.g. Acorns, 401k)" : `New ${newCategoryType} category`}
           onCreate={async (name): Promise<{ error: string } | { id: string }> => {
-            const result = await createChartAccount({ entityId, name, accountType: newCategoryType, accountSubtype: "Other" });
+            const result =
+              newCategoryType === "transfer"
+                ? await createChartAccount({ entityId, name, accountType: "asset", accountSubtype: "Investment" })
+                : await createChartAccount({ entityId, name, accountType: newCategoryType, accountSubtype: "Other" });
             if (actionFailed(result)) return { error: result.error };
-            onAccountCreated({ id: result.accountId, name, account_type: newCategoryType, account_subtype: "Other", is_active: true });
+            onAccountCreated({
+              id: result.accountId,
+              name,
+              account_type: newCategoryType === "transfer" ? "asset" : newCategoryType,
+              account_subtype: newCategoryType === "transfer" ? "Investment" : "Other",
+              is_active: true,
+            });
             return { id: result.accountId };
           }}
           extraField={
             <select
               value={newCategoryType}
-              onChange={(e) => setNewCategoryType(e.target.value as "income" | "expense")}
+              onChange={(e) => setNewCategoryType(e.target.value as "income" | "expense" | "transfer")}
               className="h-8 px-1 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs"
             >
               <option value="income">Income</option>
               <option value="expense">Expense</option>
+              <option value="transfer">Transfer (new account)</option>
             </select>
           }
           className="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs"

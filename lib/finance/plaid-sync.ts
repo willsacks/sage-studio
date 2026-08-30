@@ -2,25 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/db";
 import { getPlaidClient } from "@/lib/finance/plaid-client";
 import { decryptPlaidToken } from "@/lib/crypto";
-import { postJournalEntry, reverseJournalEntry } from "@/lib/finance/ledger";
-import { buildJournalLines } from "@/lib/finance/categorize";
-
-type Rule = {
-  id: string;
-  match_type: "contains" | "exact" | "starts_with";
-  match_value: string;
-  chart_account_id: string;
-  default_project_id: string | null;
-  priority: number;
-};
-
-function matchesRule(payeeName: string, rule: Rule): boolean {
-  const name = payeeName.toLowerCase();
-  const value = rule.match_value.toLowerCase();
-  if (rule.match_type === "exact") return name === value;
-  if (rule.match_type === "starts_with") return name.startsWith(value);
-  return name.includes(value);
-}
+import { reverseJournalEntry } from "@/lib/finance/ledger";
+import { applyMatchingRule } from "@/lib/finance/categorization-rules";
 
 /** Pulls new/changed/removed transactions for one bank connection via
  * Plaid's cursor-based /transactions/sync, applies any matching
@@ -110,37 +93,18 @@ export async function syncBankConnection(
           addedCount++;
         }
 
-        // Auto-categorize via the entity's rules, highest priority first.
-        const { data: rules } = await supabase
-          .from("categorization_rules")
-          .select("*")
-          .eq("entity_id", bankAccount.entity_id)
-          .order("priority", { ascending: true });
-        const matchedRule = ((rules ?? []) as Rule[]).find((r) => matchesRule(payeeName, r));
-        if (matchedRule && bankAccount.chart_account_id) {
-          const posted = await postJournalEntry(supabase, {
+        // Auto-categorize via the entity's rules, highest priority first —
+        // never left silently uncategorized if a rule already matches.
+        if (bankAccount.chart_account_id) {
+          await applyMatchingRule(supabase, {
             entityId: bankAccount.entity_id,
-            entryDate: txn.date,
-            description: payeeName,
-            sourceType: "bank_transaction",
-            sourceTransactionId: transactionId,
+            transactionId,
+            moneyAccountId: bankAccount.chart_account_id,
+            payeeName,
+            amount,
+            date: txn.date,
             createdBy: connection.owner_id,
-            lines: buildJournalLines(bankAccount.chart_account_id, amount, [
-              { accountId: matchedRule.chart_account_id, amount: Math.abs(amount), projectId: matchedRule.default_project_id ?? undefined },
-            ]),
           });
-          if (!("error" in posted)) {
-            await supabase.from("transaction_splits").insert({
-              transaction_id: transactionId,
-              chart_account_id: matchedRule.chart_account_id,
-              project_id: matchedRule.default_project_id,
-              amount: Math.abs(amount),
-            });
-            await supabase
-              .from("transactions")
-              .update({ status: "categorized", journal_entry_id: posted.journalEntryId })
-              .eq("id", transactionId);
-          }
         }
       }
 
