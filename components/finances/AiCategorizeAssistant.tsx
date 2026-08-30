@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Send, Loader2, Sparkles, Check } from "lucide-react";
+import { Send, Sparkles, Check, Square } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 type AssistantPart =
@@ -16,6 +16,14 @@ interface Message {
   isStreaming?: boolean;
 }
 
+const THINKING_PHRASES = [
+  "Thinking...",
+  "Looking through your transactions...",
+  "Reviewing your categories...",
+  "Cross-checking existing rules...",
+  "Working on it...",
+];
+
 function ThinkingDots() {
   return (
     <span className="inline-flex items-center gap-1 py-0.5">
@@ -23,6 +31,45 @@ function ThinkingDots() {
         <span key={i} className="w-1.5 h-1.5 rounded-full bg-current opacity-60 animate-bounce" style={{ animationDelay: `${i * 150}ms` }} />
       ))}
     </span>
+  );
+}
+
+function renderInlineMarkdown(text: string, keyPrefix: string) {
+  // Splits on **bold** and `code` spans, keeping the delimiters via the
+  // capture group so they land in the output array alongside plain text.
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+  return parts.map((part, i) => {
+    const key = `${keyPrefix}-${i}`;
+    if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
+      return <strong key={key}>{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
+      return <code key={key} className="px-1 py-0.5 rounded bg-[var(--muted)] text-[0.8em]">{part.slice(1, -1)}</code>;
+    }
+    return part ? <span key={key}>{part}</span> : null;
+  });
+}
+
+/** Minimal markdown rendering for the assistant's text — **bold**, `code`,
+ * and "- "/"* " bullet lines, the only formatting the system prompt's own
+ * summaries actually produce (reported live: responses were showing raw
+ * "**Rule created**" asterisks instead of bold text). Deliberately not
+ * react-markdown — this codebase has no markdown-rendering dependency at
+ * all yet, and three formatting rules didn't seem worth introducing one for. */
+function MarkdownText({ text }: { text: string }) {
+  const lines = text.split("\n");
+  return (
+    <>
+      {lines.map((line, i) => {
+        const bulletMatch = line.match(/^\s*[-*]\s+(.*)$/);
+        const content = bulletMatch ? bulletMatch[1] : line;
+        return (
+          <span key={i} className={bulletMatch ? "block pl-3.5 relative before:content-['•'] before:absolute before:left-0" : "block"}>
+            {content ? renderInlineMarkdown(content, `l${i}`) : " "}
+          </span>
+        );
+      })}
+    </>
   );
 }
 
@@ -43,23 +90,28 @@ export function AiCategorizeAssistant({
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const [stalled, setStalled] = useState(false);
+  const [thinkingPhraseIndex, setThinkingPhraseIndex] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastActivityRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
+  const manualCancelRef = useRef(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Any single stream event resets this — so a genuinely quiet stretch (the
-  // model deciding its next move with no interim tool call) surfaces as
-  // reassurance rather than looking indistinguishable from a hang.
+  // Cycles a rotating "still doing something" phrase the whole time nothing
+  // concrete has arrived yet (no tool call, no text) — requested explicitly:
+  // a silent multi-second gap before the first token/tool call reads as
+  // stuck even though it's normal Anthropic API latency, and a single static
+  // "thinking" label doesn't convey that. Deliberately superfluous — none of
+  // these phrases reflect real backend state, they exist purely so the UI
+  // doesn't look abandoned. Resets to the first phrase on every new message
+  // so a quick response doesn't visibly cycle at all.
   useEffect(() => {
-    if (!isStreaming) { setStalled(false); return; }
-    setStalled(false);
-    const timer = setTimeout(() => setStalled(true), 15000);
-    return () => clearTimeout(timer);
+    if (!isStreaming) { setThinkingPhraseIndex(0); return; }
+    const interval = setInterval(() => setThinkingPhraseIndex((i) => (i + 1) % THINKING_PHRASES.length), 1500);
+    return () => clearInterval(interval);
   }, [isStreaming, messages]);
 
   // Real recovery, not just the cosmetic "stalled" message above — reported
@@ -100,6 +152,7 @@ export function AiCategorizeAssistant({
 
     let actedAtAll = false;
     lastActivityRef.current = Date.now();
+    manualCancelRef.current = false;
     const controller = new AbortController();
     abortRef.current = controller;
 
@@ -176,19 +229,18 @@ export function AiCategorizeAssistant({
         }
       }
     } catch (err) {
-      const timedOut = err instanceof DOMException && err.name === "AbortError";
+      const isAbort = err instanceof DOMException && err.name === "AbortError";
+      let content: string;
+      if (isAbort && manualCancelRef.current) {
+        content = "Stopped. Anything it already did before you cancelled is saved — check the Transactions tab and use the pencil icon on any row to fix or undo a wrong categorization.";
+      } else if (isAbort) {
+        content = "This stopped responding (possibly because the app was backgrounded) and was cancelled automatically. Anything it already did is saved — try again to pick up where it left off.";
+      } else {
+        content = "Network error. Please try again.";
+      }
       setMessages((prev) => prev.map((m, i) =>
         i === prev.length - 1
-          ? {
-              ...m,
-              parts: [...(m.parts ?? []), {
-                type: "text",
-                content: timedOut
-                  ? "This stopped responding (possibly because the app was backgrounded) and was cancelled automatically. Anything it already did is saved — try again to pick up where it left off."
-                  : "Network error. Please try again.",
-              }],
-              isStreaming: false,
-            }
+          ? { ...m, parts: [...(m.parts ?? []), { type: "text", content }], isStreaming: false }
           : m
       ));
     } finally {
@@ -196,6 +248,18 @@ export function AiCategorizeAssistant({
       setIsStreaming(false);
       if (actedAtAll) onCategorized();
     }
+  }
+
+  // The AI's tool calls execute real, persisted writes as they happen (real
+  // categorizations, real new accounts/rules) — reported live: watching it
+  // make several wrong categorizations in a row with no way to stop it.
+  // Aborting the fetch alone would only stop the browser from *watching*;
+  // the route checks request.signal between transactions/tool calls and
+  // stops making further writes once it sees the client disconnected, so
+  // this actually halts the in-progress work, not just the UI.
+  function handleCancel() {
+    manualCancelRef.current = true;
+    abortRef.current?.abort();
   }
 
   return (
@@ -236,8 +300,8 @@ export function AiCategorizeAssistant({
                   {parts.map((part, j) => {
                     if (part.type === "text") {
                       return (
-                        <div key={j} className="rounded-xl px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap bg-[var(--card)] border border-[var(--border)]">
-                          {part.content}
+                        <div key={j} className="rounded-xl px-3 py-2 text-sm leading-relaxed bg-[var(--card)] border border-[var(--border)]">
+                          <MarkdownText text={part.content} />
                           {j === parts.length - 1 && msg.isStreaming && <span className="inline-block w-1.5 h-3 bg-current opacity-60 ml-0.5 animate-pulse" />}
                         </div>
                       );
@@ -258,9 +322,7 @@ export function AiCategorizeAssistant({
                   {showTrailingThinking && (
                     <div className="rounded-xl px-3 py-2 bg-[var(--card)] border border-[var(--border)] flex items-center gap-2">
                       <ThinkingDots />
-                      {stalled && (
-                        <span className="text-xs text-[var(--muted-foreground)]">Still working — larger batches can take a bit...</span>
-                      )}
+                      <span className="text-xs text-[var(--muted-foreground)]">{THINKING_PHRASES[thinkingPhraseIndex]}</span>
                     </div>
                   )}
                 </div>
@@ -282,13 +344,24 @@ export function AiCategorizeAssistant({
             disabled={isStreaming}
             className="flex-1 resize-none rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm focus:outline-none focus:border-[var(--primary)] disabled:opacity-50"
           />
-          <button
-            type="submit"
-            disabled={isStreaming || !input.trim()}
-            className="flex-shrink-0 h-9 w-9 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] flex items-center justify-center disabled:opacity-50"
-          >
-            {isStreaming ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-          </button>
+          {isStreaming ? (
+            <button
+              type="button"
+              onClick={handleCancel}
+              title="Stop"
+              className="flex-shrink-0 h-9 w-9 rounded-lg bg-red-500/10 text-red-600 hover:bg-red-500/20 flex items-center justify-center"
+            >
+              <Square size={13} fill="currentColor" />
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={!input.trim()}
+              className="flex-shrink-0 h-9 w-9 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] flex items-center justify-center disabled:opacity-50"
+            >
+              <Send size={15} />
+            </button>
+          )}
         </form>
       </DialogContent>
     </Dialog>

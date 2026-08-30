@@ -104,6 +104,12 @@ export async function applyRuleToExistingTransactions(
     // stream live progress instead of the caller only finding out once every
     // matching transaction (which can be dozens) has already been posted.
     onProgress?: (done: number, total: number) => void | Promise<void>;
+    // Checked between transactions (not just once up front) so a mid-run
+    // cancel from the AI assistant's Stop button takes effect after the
+    // current transaction finishes rather than after the whole rule — the
+    // user-reported scenario this exists for was watching several wrong
+    // categorizations happen back-to-back with no way to stop them.
+    signal?: AbortSignal;
   }
 ): Promise<{ matchedCount: number }> {
   const { data: transactions } = await supabase
@@ -118,6 +124,7 @@ export async function applyRuleToExistingTransactions(
 
   let matchedCount = 0;
   for (let i = 0; i < matches.length; i++) {
+    if (params.signal?.aborted) break;
     const t = matches[i];
     const result = await categorizeTransaction(t.id, params.entityId, [
       { accountId: params.rule.chart_account_id, amount: Math.abs(t.amount), projectId: params.rule.default_project_id ?? undefined },

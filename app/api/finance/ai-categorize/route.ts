@@ -16,7 +16,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { requireFinanceEntityRole } from "@/lib/access/finance-access";
 import { DEFAULT_SYSTEM_FINANCE_ASSISTANT } from "@/lib/ai/prompts";
 import { getPlatformAiModel } from "@/lib/ai/get-platform-ai-model";
@@ -34,6 +34,12 @@ const MAX_TURNS = 20;
 export const maxDuration = 300;
 
 function emit(controller: ReadableStreamDefaultController, event: object) {
+  // A no-op once the client has disconnected (Stop button, tab closed,
+  // network drop) rather than throwing — desiredSize is null exactly when
+  // the stream is closed/errored, and every emit() call after a cancel
+  // would otherwise throw "Invalid state: Controller is already closed",
+  // itself getting caught and logged as if the run had crashed.
+  if (controller.desiredSize === null) return;
   controller.enqueue(new TextEncoder().encode(JSON.stringify(event) + "\n"));
 }
 
@@ -130,17 +136,43 @@ ${payeesList}`;
   // to tell afterward whether the assistant hung, errored, or genuinely
   // finished. Updated as the turn loop progresses so even a run that hangs
   // mid-turn leaves behind how far it got, not just a final verdict.
-  // Cast to `any` — not yet in the generated Database type, same convention
-  // as admin.ts's form_submissions query.
+  // Deliberately the admin/service-role client rather than the
+  // request-scoped `supabase` — reads/writes to this log table shouldn't
+  // depend on the calling user's own session at all, which matters because
+  // testing turned up a real gap: once the client disconnects (Stop
+  // button), the turn loop correctly stops making further categorizations
+  // (confirmed — halting that work is this feature's actual job), but *no*
+  // further DB write from inside that same request reliably lands, even
+  // through this admin client and even immediately after the abort is
+  // detected — `next dev`'s handling of a client-aborted streaming Route
+  // Handler appears to tear down the request's execution before any
+  // post-abort code finishes, Turbopack-dev-specific behavior not yet
+  // confirmed one way or the other in production. Net effect: a cancelled
+  // run's log row can be left sitting at status "running" indefinitely
+  // instead of flipping to an explicit cancelled/error state. The admin
+  // page's `likelyStalled` check (age > 5min while still "running") is the
+  // fallback signal for that case — not perfect, but real production runs
+  // have been observed taking up to ~3 minutes to legitimately finish, so
+  // that threshold can't be tightened further without false-flagging
+  // genuinely slow-but-working runs as stalled.
+  // Also cast to `any` — not yet in the generated Database type, same
+  // convention as admin.ts's form_submissions query.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const runLogTable = supabase as any;
-  const { data: runLog } = await runLogTable
+  const runLogTable = createAdminClient() as any;
+  const { data: runLog, error: runLogInsertError } = await runLogTable
     .from("finance_ai_categorize_runs")
     .insert({ entity_id: entityId, user_id: user.id, message })
     .select("id")
     .single();
+  if (runLogInsertError) console.error("[finance_ai_categorize_runs insert failed]", runLogInsertError.message);
   const runLogId = runLog?.id as string | undefined;
   let actionsTaken = 0;
+
+  async function updateRunLog(patch: Record<string, unknown>) {
+    if (!runLogId) return;
+    const { error } = await runLogTable.from("finance_ai_categorize_runs").update(patch).eq("id", runLogId);
+    if (error) console.error("[finance_ai_categorize_runs update failed]", error.message);
+  }
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -149,20 +181,28 @@ ${payeesList}`;
 
       try {
         while (turns < MAX_TURNS) {
+          // Checked at the top of every turn (not just once) — the Stop
+          // button aborts request.signal, and the point of that button is
+          // to actually halt further categorizations, not just stop the
+          // browser from watching them happen.
+          if (request.signal.aborted) break;
           turns++;
-          const messageStream = anthropic.messages.stream({
-            model,
-            // A single instruction can reasonably ask for a dozen-plus rules
-            // (e.g. "categorize everything: Acorns is X, Anthropic is Y, ...").
-            // At 4096 this measurably truncated mid-response on a real 17-rule
-            // message — the model spent its whole budget narrating the plan
-            // in prose and hit max_tokens before emitting a single tool_use
-            // block, silently doing nothing (see the max_tokens handling below).
-            max_tokens: 8192,
-            system,
-            tools: FINANCE_TOOLS,
-            messages: conversationMessages,
-          });
+          const messageStream = anthropic.messages.stream(
+            {
+              model,
+              // A single instruction can reasonably ask for a dozen-plus rules
+              // (e.g. "categorize everything: Acorns is X, Anthropic is Y, ...").
+              // At 4096 this measurably truncated mid-response on a real 17-rule
+              // message — the model spent its whole budget narrating the plan
+              // in prose and hit max_tokens before emitting a single tool_use
+              // block, silently doing nothing (see the max_tokens handling below).
+              max_tokens: 8192,
+              system,
+              tools: FINANCE_TOOLS,
+              messages: conversationMessages,
+            },
+            { signal: request.signal }
+          );
 
           messageStream.on("text", (text) => {
             emit(controller, { type: "text", content: text });
@@ -171,14 +211,13 @@ ${payeesList}`;
           const responseMessage = await messageStream.finalMessage();
           conversationMessages.push({ role: "assistant", content: responseMessage.content });
 
-          if (runLogId) {
-            await runLogTable.from("finance_ai_categorize_runs").update({ turns, stop_reason: responseMessage.stop_reason }).eq("id", runLogId);
-          }
+          await updateRunLog({ turns, stop_reason: responseMessage.stop_reason });
 
           if (responseMessage.stop_reason !== "tool_use" && responseMessage.stop_reason !== "max_tokens") break;
 
           const toolResults: Anthropic.ToolResultBlockParam[] = [];
           for (const block of responseMessage.content) {
+            if (request.signal.aborted) break;
             if (block.type !== "tool_use") continue;
             const input = block.input as Record<string, unknown>;
             emit(controller, { type: "tool_call", name: block.name, label: financeToolCallLabel(block.name, input) });
@@ -251,6 +290,7 @@ ${payeesList}`;
                   const applied = await applyRuleToExistingTransactions(supabase, {
                     entityId,
                     rule: { id: "", match_type: matchType, match_value: matchValue, chart_account_id: account.id, default_project_id: project?.id ?? null, priority: 0 },
+                    signal: request.signal,
                     onProgress: (done, total) => {
                       if (total > 1) {
                         emit(controller, {
@@ -314,16 +354,20 @@ ${payeesList}`;
           }
         }
 
-        emit(controller, { type: "done" });
-        if (runLogId) {
-          await runLogTable.from("finance_ai_categorize_runs").update({ status: "completed", finished_at: new Date().toISOString(), actions_taken: actionsTaken }).eq("id", runLogId);
+        // A clean break due to the aborted check above (as opposed to a
+        // thrown error) — the client is already gone, so emit() is a no-op
+        // here regardless, but the run log should say "cancelled by the
+        // user" rather than "completed" or a generic error.
+        if (request.signal.aborted) {
+          await updateRunLog({ status: "error", error: "Cancelled by the user", finished_at: new Date().toISOString(), actions_taken: actionsTaken });
+        } else {
+          emit(controller, { type: "done" });
+          await updateRunLog({ status: "completed", finished_at: new Date().toISOString(), actions_taken: actionsTaken });
         }
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Unknown error";
+        const msg = request.signal.aborted ? "Cancelled by the user" : err instanceof Error ? err.message : "Unknown error";
         emit(controller, { type: "error", message: msg });
-        if (runLogId) {
-          await runLogTable.from("finance_ai_categorize_runs").update({ status: "error", error: msg, finished_at: new Date().toISOString(), actions_taken: actionsTaken }).eq("id", runLogId);
-        }
+        await updateRunLog({ status: "error", error: msg, finished_at: new Date().toISOString(), actions_taken: actionsTaken });
       } finally {
         controller.close();
       }
