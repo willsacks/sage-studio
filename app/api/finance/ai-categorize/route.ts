@@ -19,7 +19,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { requireFinanceEntityRole } from "@/lib/access/finance-access";
 import { DEFAULT_SYSTEM_FINANCE_ASSISTANT } from "@/lib/ai/prompts";
-import { getPlatformAiModel } from "@/lib/ai/models";
+import { getPlatformAiModel } from "@/lib/ai/get-platform-ai-model";
 import { FINANCE_TOOLS, financeToolCallLabel } from "@/lib/finance/ai-tools";
 import { listChartOfAccounts, createChartAccount } from "@/lib/actions/finance-accounts";
 import { listFinanceProjects, createFinanceProject } from "@/lib/actions/finance-projects";
