@@ -694,8 +694,12 @@ function CategoryPickerRow({
    * sections — lets the user back out without saving a change. */
   onCancel?: () => void;
 }) {
-  const [accountId, setAccountId] = useState("");
-  const [projectId, setProjectId] = useState("");
+  // Pre-filled from the transaction's current split rather than starting
+  // blank — otherwise re-opening an already-categorized transaction just
+  // to add a project (without touching its category) incorrectly demands
+  // the user re-pick a category before Save will do anything.
+  const [accountId, setAccountId] = useState(transaction.transaction_splits[0]?.chart_account_id ?? "");
+  const [projectId, setProjectId] = useState(transaction.transaction_splits[0]?.project_id ?? "");
   const [saving, setSaving] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [error, setError] = useState<string | null>(null);
