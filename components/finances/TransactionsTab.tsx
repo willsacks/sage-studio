@@ -688,26 +688,31 @@ function TransactionRow({
     .join(", ") || "Uncategorized";
 
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5">
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium truncate" title={transaction.payee_name}>{transaction.payee_name}</p>
-        <p className="text-xs text-[var(--muted-foreground)] truncate">
+    <div className="px-4 py-2.5">
+      {/* Payee name gets its own full-width line — squeezed against the
+       * amount/action icons (a fixed ~150-200px block) on a single row, it
+       * was truncating most real merchant names down to a handful of
+       * characters. Everything else (date, category, controls) now sits on
+       * a second line where truncation only affects less-critical text. */}
+      <p className="text-sm font-medium" title={transaction.payee_name}>{transaction.payee_name}</p>
+      <div className="flex items-center justify-between gap-3 mt-0.5">
+        <p className="text-xs text-[var(--muted-foreground)] truncate min-w-0">
           {transaction.date} · {categoryLabel}
           {transaction.notes ? ` · "${transaction.notes}"` : ""}
         </p>
-      </div>
-      <div className="flex items-center gap-1 flex-none whitespace-nowrap">
-        <span className={`text-sm font-medium mr-2 ${transaction.amount >= 0 ? "text-green-600" : "text-red-500"}`}>{money(transaction.amount)}</span>
-        <button onClick={onEditCategory} className="p-1.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" title="Change category">
-          <Pencil size={14} />
-        </button>
-        <NoteButton transactionId={transaction.id} entityId={entityId} note={transaction.notes} onSaved={onNoteSaved} />
-        <FlagButton transactionId={transaction.id} entityId={entityId} onFlagged={onFlagged} />
-        {!transaction.bank_account_id && (
-          <button onClick={() => onDeleted(transaction.id)} className="p-1.5 text-[var(--muted-foreground)] hover:text-red-500">
-            <Trash2 size={14} />
+        <div className="flex items-center gap-1 flex-none whitespace-nowrap">
+          <span className={`text-sm font-medium mr-2 ${transaction.amount >= 0 ? "text-green-600" : "text-red-500"}`}>{money(transaction.amount)}</span>
+          <button onClick={onEditCategory} className="p-1.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" title="Change category">
+            <Pencil size={14} />
           </button>
-        )}
+          <NoteButton transactionId={transaction.id} entityId={entityId} note={transaction.notes} onSaved={onNoteSaved} />
+          <FlagButton transactionId={transaction.id} entityId={entityId} onFlagged={onFlagged} />
+          {!transaction.bank_account_id && (
+            <button onClick={() => onDeleted(transaction.id)} className="p-1.5 text-[var(--muted-foreground)] hover:text-red-500">
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -817,88 +822,94 @@ function CategoryPickerRow({
   }
 
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5">
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium truncate" title={transaction.payee_name}>{transaction.payee_name}</p>
-        <p className="text-xs text-[var(--muted-foreground)] truncate">
-          {transaction.date}{currentCategory ? ` · currently: ${currentCategory}` : ""}
-        </p>
-        {transaction.review_note && <p className="text-xs text-red-500 mt-0.5 truncate">&quot;{transaction.review_note}&quot;</p>}
-        {error && <p className="text-xs text-red-500 mt-0.5">{error}</p>}
-      </div>
-      <div className="flex items-center gap-2 flex-none flex-wrap justify-end">
-        <span className={`text-sm font-medium ${transaction.amount >= 0 ? "text-green-600" : "text-red-500"}`}>{money(transaction.amount)}</span>
-        <CreatableSelect
-          value={accountId}
-          onChange={setAccountId}
-          options={categoryAndTransferAccounts}
-          placeholder={currentCategory ? "Change category..." : "Category..."}
-          newLabel="+ New category..."
-          newPlaceholder={newCategoryType === "transfer" ? "New account (e.g. Acorns, 401k)" : `New ${newCategoryType} category`}
-          onCreate={async (name): Promise<{ error: string } | { id: string }> => {
-            const result =
-              newCategoryType === "transfer"
-                ? await createChartAccount({ entityId, name, accountType: "asset", accountSubtype: "Investment" })
-                : await createChartAccount({ entityId, name, accountType: newCategoryType, accountSubtype: "Other" });
-            if (actionFailed(result)) return { error: result.error };
-            onAccountCreated({
-              id: result.accountId,
-              name,
-              account_type: newCategoryType === "transfer" ? "asset" : newCategoryType,
-              account_subtype: newCategoryType === "transfer" ? "Investment" : "Other",
-              is_active: true,
-            });
-            return { id: result.accountId };
-          }}
-          extraField={
-            <select
-              value={newCategoryType}
-              onChange={(e) => setNewCategoryType(e.target.value as "income" | "expense" | "transfer")}
-              className="h-8 px-1 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs"
-            >
-              <option value="income">Income</option>
-              <option value="expense">Expense</option>
-              <option value="transfer">Transfer (new account)</option>
-            </select>
-          }
-          className="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs"
-        />
-        <CreatableSelect
-          value={projectId}
-          onChange={setProjectId}
-          options={projects}
-          placeholder="No project"
-          newLabel="+ New project..."
-          newPlaceholder="New project name"
-          onCreate={async (name): Promise<{ error: string } | { id: string }> => {
-            const result = await createFinanceProject({ entityId, name });
-            if (actionFailed(result)) return { error: result.error };
-            onProjectCreated({ id: result.projectId, name });
-            return { id: result.projectId };
-          }}
-          className="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs"
-        />
-        <Button size="sm" className="h-8 text-xs" onClick={handleSave} disabled={saving}>
-          {saving ? <Loader2 size={12} className="animate-spin" /> : "Save"}
-        </Button>
-        {onCancel && (
-          <button onClick={onCancel} className="p-1.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" title="Cancel">
-            <X size={14} />
-          </button>
-        )}
-        {showReviewControls ? (
-          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleResolve} disabled={resolving}>
-            {resolving ? <Loader2 size={12} className="animate-spin" /> : "Resolved"}
+    <div className="px-4 py-2.5 space-y-1">
+      {/* Same reasoning as TransactionRow: the payee name gets its own
+       * full-width line rather than sharing a row with the category/project
+       * selects and Save button, which are wide enough on their own to
+       * truncate most real merchant names down to a handful of characters. */}
+      <p className="text-sm font-medium" title={transaction.payee_name}>{transaction.payee_name}</p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <p className="text-xs text-[var(--muted-foreground)]">
+            {transaction.date}{currentCategory ? ` · currently: ${currentCategory}` : ""}
+          </p>
+          {transaction.review_note && <p className="text-xs text-red-500 mt-0.5">&quot;{transaction.review_note}&quot;</p>}
+          {error && <p className="text-xs text-red-500 mt-0.5">{error}</p>}
+        </div>
+        <div className="flex items-center gap-2 flex-none flex-wrap justify-end">
+          <span className={`text-sm font-medium ${transaction.amount >= 0 ? "text-green-600" : "text-red-500"}`}>{money(transaction.amount)}</span>
+          <CreatableSelect
+            value={accountId}
+            onChange={setAccountId}
+            options={categoryAndTransferAccounts}
+            placeholder={currentCategory ? "Change category..." : "Category..."}
+            newLabel="+ New category..."
+            newPlaceholder={newCategoryType === "transfer" ? "New account (e.g. Acorns, 401k)" : `New ${newCategoryType} category`}
+            onCreate={async (name): Promise<{ error: string } | { id: string }> => {
+              const result =
+                newCategoryType === "transfer"
+                  ? await createChartAccount({ entityId, name, accountType: "asset", accountSubtype: "Investment" })
+                  : await createChartAccount({ entityId, name, accountType: newCategoryType, accountSubtype: "Other" });
+              if (actionFailed(result)) return { error: result.error };
+              onAccountCreated({
+                id: result.accountId,
+                name,
+                account_type: newCategoryType === "transfer" ? "asset" : newCategoryType,
+                account_subtype: newCategoryType === "transfer" ? "Investment" : "Other",
+                is_active: true,
+              });
+              return { id: result.accountId };
+            }}
+            extraField={
+              <select
+                value={newCategoryType}
+                onChange={(e) => setNewCategoryType(e.target.value as "income" | "expense" | "transfer")}
+                className="h-8 px-1 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs"
+              >
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+                <option value="transfer">Transfer (new account)</option>
+              </select>
+            }
+            className="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs"
+          />
+          <CreatableSelect
+            value={projectId}
+            onChange={setProjectId}
+            options={projects}
+            placeholder="No project"
+            newLabel="+ New project..."
+            newPlaceholder="New project name"
+            onCreate={async (name): Promise<{ error: string } | { id: string }> => {
+              const result = await createFinanceProject({ entityId, name });
+              if (actionFailed(result)) return { error: result.error };
+              onProjectCreated({ id: result.projectId, name });
+              return { id: result.projectId };
+            }}
+            className="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs"
+          />
+          <Button size="sm" className="h-8 text-xs" onClick={handleSave} disabled={saving}>
+            {saving ? <Loader2 size={12} className="animate-spin" /> : "Save"}
           </Button>
-        ) : (
-          <FlagButton transactionId={transaction.id} entityId={entityId} onFlagged={(patch) => onUpdated(transaction.id, patch)} />
-        )}
-        <NoteButton transactionId={transaction.id} entityId={entityId} note={transaction.notes} onSaved={(note) => onUpdated(transaction.id, { notes: note })} />
-        {onDeleted && !transaction.bank_account_id && (
-          <button onClick={() => onDeleted(transaction.id)} className="p-1.5 text-[var(--muted-foreground)] hover:text-red-500">
-            <Trash2 size={14} />
-          </button>
-        )}
+          {onCancel && (
+            <button onClick={onCancel} className="p-1.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" title="Cancel">
+              <X size={14} />
+            </button>
+          )}
+          {showReviewControls ? (
+            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleResolve} disabled={resolving}>
+              {resolving ? <Loader2 size={12} className="animate-spin" /> : "Resolved"}
+            </Button>
+          ) : (
+            <FlagButton transactionId={transaction.id} entityId={entityId} onFlagged={(patch) => onUpdated(transaction.id, patch)} />
+          )}
+          <NoteButton transactionId={transaction.id} entityId={entityId} note={transaction.notes} onSaved={(note) => onUpdated(transaction.id, { notes: note })} />
+          {onDeleted && !transaction.bank_account_id && (
+            <button onClick={() => onDeleted(transaction.id)} className="p-1.5 text-[var(--muted-foreground)] hover:text-red-500">
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

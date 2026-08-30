@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { requireFinanceEntityRole } from "@/lib/access/finance-access";
-import { getBalanceSheet, getIncomeStatement, getProjectProfitability, getMonthlyIncomeExpense, getCashBalanceOverTime } from "@/lib/finance/reports";
+import { getBalanceSheet, getIncomeStatement, getProjectProfitability, getMonthlyIncomeExpense, getCashBalanceOverTime, getAccountTransactions } from "@/lib/finance/reports";
 
 async function requireAuth() {
   const supabase = await createClient();
@@ -58,5 +58,15 @@ export async function fetchCashBalanceOverTime(entityId: string, months = 6) {
     return { data: await getCashBalanceOverTime(supabase, entityId, months) };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Failed to load cash balance trend", data: [] };
+  }
+}
+
+export async function fetchAccountTransactions(entityId: string, accountId: string, startDate: string, endDate: string) {
+  const { supabase, user } = await requireAuth();
+  await requireFinanceEntityRole(supabase, entityId, user.id, "viewer");
+  try {
+    return { transactions: await getAccountTransactions(supabase, entityId, accountId, startDate, endDate) };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to load account transactions", transactions: [] };
   }
 }

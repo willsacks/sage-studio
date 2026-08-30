@@ -213,6 +213,57 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+export type AccountTransaction = {
+  id: string;
+  date: string;
+  payeeName: string;
+  amount: number;
+  splitAmount: number;
+  status: string;
+  isSplit: boolean;
+};
+
+/** Every transaction with a split against a given account within a date
+ * range — backs the Income Statement's "click a row to see what's in it"
+ * drill-down. Returns the transaction's own full amount (for display/sign)
+ * alongside this split's own amount (which can differ from the full amount
+ * when the transaction is split across multiple categories). */
+export async function getAccountTransactions(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: SupabaseClient<Database> | any,
+  entityId: string,
+  accountId: string,
+  startDate: string,
+  endDate: string
+): Promise<AccountTransaction[]> {
+  const { data, error } = await supabase
+    .from("transaction_splits")
+    .select("amount, transactions!inner(id, date, payee_name, amount, status, is_split, entity_id)")
+    .eq("chart_account_id", accountId)
+    .eq("transactions.entity_id", entityId)
+    .neq("transactions.status", "excluded")
+    .gte("transactions.date", startDate)
+    .lte("transactions.date", endDate);
+  if (error) throw new Error(error.message);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = (data ?? []) as any[];
+  return rows
+    .map((r) => {
+      const txn = Array.isArray(r.transactions) ? r.transactions[0] : r.transactions;
+      return {
+        id: txn.id as string,
+        date: txn.date as string,
+        payeeName: txn.payee_name as string,
+        amount: txn.amount as number,
+        splitAmount: round2(r.amount as number),
+        status: txn.status as string,
+        isSplit: txn.is_split as boolean,
+      };
+    })
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+
 /** Income vs. expense per calendar month over a date range — feeds the
  * Reports tab's trend chart. Computed by re-running the income-statement
  * aggregation once per month bucket; fine at this data volume (a handful
