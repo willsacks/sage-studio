@@ -6,75 +6,13 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, Legend, Responsi
 import { fetchBalanceSheet, fetchIncomeStatement, fetchProjectProfitability, fetchMonthlyIncomeExpense, fetchCashBalanceOverTime } from "@/lib/actions/finance-reports";
 import { ExportCpaPackageButton } from "./ExportCpaPackageButton";
 import { AccountTransactionsDialog } from "./AccountTransactionsDialog";
+import { DateRangePicker, startOfYear, today, type DateRange } from "./DateRangePicker";
 import type { FinanceEntity } from "./FinancesApp";
 
 type Report = "pl" | "balance" | "projects" | "trends";
 
 function money(n: number) {
   return n.toLocaleString(undefined, { style: "currency", currency: "USD" });
-}
-
-function startOfYear() {
-  return `${new Date().getFullYear()}-01-01`;
-}
-function startOfMonth() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-}
-function startOfQuarter() {
-  const d = new Date();
-  const qMonth = Math.floor(d.getMonth() / 3) * 3;
-  return `${d.getFullYear()}-${String(qMonth + 1).padStart(2, "0")}-01`;
-}
-function today() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-type DateRange = { startDate: string; endDate: string };
-
-const RANGE_PRESETS: { label: string; range: () => DateRange }[] = [
-  { label: "This month", range: () => ({ startDate: startOfMonth(), endDate: today() }) },
-  { label: "This quarter", range: () => ({ startDate: startOfQuarter(), endDate: today() }) },
-  { label: "This year", range: () => ({ startDate: startOfYear(), endDate: today() }) },
-  { label: "All time", range: () => ({ startDate: "2000-01-01", endDate: today() }) },
-];
-
-/** Shared date-range control for the Income Statement, Balance Sheet
- * (which only uses the end date — a balance sheet is always "as of" a
- * single point in time, not a period), and Project Comparison. Trends has
- * its own "months back" control instead — a rolling window doesn't map
- * cleanly onto a start/end range picker. */
-function DateRangePicker({ range, onChange }: { range: DateRange; onChange: (r: DateRange) => void }) {
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <div className="flex gap-1">
-        {RANGE_PRESETS.map((p) => (
-          <button
-            key={p.label}
-            onClick={() => onChange(p.range())}
-            className="text-xs px-2 py-1 rounded-lg border border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--accent)]"
-          >
-            {p.label}
-          </button>
-        ))}
-      </div>
-      <div className="flex items-center gap-1">
-        <input
-          type="date"
-          value={range.startDate}
-          onChange={(e) => onChange({ ...range, startDate: e.target.value })}
-          className="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs"
-        />
-        <span className="text-xs text-[var(--muted-foreground)]">to</span>
-        <input
-          type="date"
-          value={range.endDate}
-          onChange={(e) => onChange({ ...range, endDate: e.target.value })}
-          className="h-8 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-xs"
-        />
-      </div>
-    </div>
-  );
 }
 
 export function ReportsTab({ entity }: { entity: FinanceEntity }) {

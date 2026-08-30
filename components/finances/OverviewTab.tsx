@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from "recharts";
 import { fetchBalanceSheet, fetchIncomeStatement, fetchProjectProfitability, fetchMonthlyIncomeExpense } from "@/lib/actions/finance-reports";
+import { DateRangePicker, startOfMonth, today, type DateRange } from "./DateRangePicker";
 import { TaxSetAsideCard } from "./TaxSetAsideCard";
 import type { FinanceEntity } from "./FinancesApp";
 
@@ -11,12 +12,11 @@ function money(n: number) {
   return n.toLocaleString(undefined, { style: "currency", currency: "USD" });
 }
 
+const PIE_COLORS = ["#16a34a", "#2563eb", "#f59e0b", "#dc2626", "#8b5cf6", "#0891b2", "#db2777", "#65a30d", "#ea580c", "#4f46e5"];
+
 function currentMonthValue() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-function today() {
-  return new Date().toISOString().slice(0, 10);
 }
 /** "YYYY-MM" -> [first day, last day] — last day capped at today() when the
  * selected month is the current one, so a mid-August summary doesn't imply
@@ -44,6 +44,11 @@ export function OverviewTab({ entity }: { entity: FinanceEntity }) {
   const [trendMonths, setTrendMonths] = useState(12);
   const [trendData, setTrendData] = useState<{ month: string; income: number; expenses: number }[]>([]);
   const [trendLoading, setTrendLoading] = useState(true);
+
+  const [pieRange, setPieRange] = useState<DateRange>({ startDate: startOfMonth(), endDate: today() });
+  const [pieIncome, setPieIncome] = useState<{ name: string; value: number }[]>([]);
+  const [pieExpenses, setPieExpenses] = useState<{ name: string; value: number }[]>([]);
+  const [pieLoading, setPieLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,6 +83,18 @@ export function OverviewTab({ entity }: { entity: FinanceEntity }) {
     });
     return () => { cancelled = true; };
   }, [entity.id, trendMonths]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setPieLoading(true);
+    fetchIncomeStatement(entity.id, pieRange.startDate, pieRange.endDate).then((r) => {
+      if (cancelled) return;
+      setPieIncome((r.report?.income ?? []).flatMap((s) => s.accounts).map((a) => ({ name: a.name, value: a.balance })));
+      setPieExpenses((r.report?.expenses ?? []).flatMap((s) => s.accounts).map((a) => ({ name: a.name, value: a.balance })));
+      setPieLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [entity.id, pieRange.startDate, pieRange.endDate]);
 
   if (loading) return <div className="flex justify-center py-10"><Loader2 size={18} className="animate-spin text-[var(--muted-foreground)]" /></div>;
 
@@ -145,6 +162,68 @@ export function OverviewTab({ entity }: { entity: FinanceEntity }) {
           )}
         </div>
       </div>
+
+      <div>
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-1.5">
+          <p className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wide">Breakdown</p>
+          <DateRangePicker range={pieRange} onChange={setPieRange} />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <PieCard title="Income by category" data={pieIncome} loading={pieLoading} />
+          <PieCard title="Expenses by category" data={pieExpenses} loading={pieLoading} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Builds a CSS conic-gradient string from color-stop percentages — used
+ * instead of Recharts' <Pie> below. Recharts 3.10.1's Pie rendered every
+ * slice bunched into a partial wedge (confirmed by reading the actual SVG
+ * arc paths it emitted) regardless of default or explicit startAngle/
+ * endAngle configuration — not a sizing or layout issue, something in this
+ * version's own angle math. A conic-gradient circle sidesteps the library
+ * entirely for what's a purely visual breakdown anyway (the legend below
+ * already carries the exact values; the wedge just needs to be correct). */
+function conicGradient(data: { value: number }[]): string {
+  const total = data.reduce((sum, d) => sum + d.value, 0);
+  if (total <= 0) return "var(--muted)";
+  let acc = 0;
+  const stops = data.map((d, i) => {
+    const start = (acc / total) * 360;
+    acc += d.value;
+    const end = (acc / total) * 360;
+    return `${PIE_COLORS[i % PIE_COLORS.length]} ${start}deg ${end}deg`;
+  });
+  return `conic-gradient(${stops.join(", ")})`;
+}
+
+function PieCard({ title, data, loading }: { title: string; data: { name: string; value: number }[]; loading: boolean }) {
+  return (
+    <div className="rounded-xl border border-[var(--border)] p-4">
+      <p className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wide mb-2">{title}</p>
+      {loading ? (
+        <div className="flex justify-center items-center h-40"><Loader2 size={16} className="animate-spin text-[var(--muted-foreground)]" /></div>
+      ) : data.length === 0 ? (
+        <div className="flex justify-center items-center h-40 text-sm text-[var(--muted-foreground)]">Nothing for this period</div>
+      ) : (
+        <div className="flex items-center gap-4">
+          <div
+            className="w-32 h-32 rounded-full flex-shrink-0"
+            style={{ background: conicGradient(data) }}
+            title={data.map((d) => `${d.name}: ${money(d.value)}`).join("\n")}
+          />
+          <div className="flex-1 min-w-0 space-y-1 max-h-40 overflow-y-auto">
+            {data.map((d, i) => (
+              <div key={d.name} className="flex items-center gap-1.5 text-xs">
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                <span className="truncate flex-1" title={d.name}>{d.name}</span>
+                <span className="flex-shrink-0 text-[var(--muted-foreground)]">{money(d.value)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
