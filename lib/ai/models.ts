@@ -5,6 +5,8 @@
  * model — just a spread across cost/capability that makes sense for editing a web page.
  */
 
+import { createAdminClient } from "@/lib/supabase/server";
+
 export interface AiModelOption {
   id: string;
   label: string;
@@ -21,3 +23,20 @@ export const AVAILABLE_AI_MODELS: AiModelOption[] = [
 // Matches the model that was hardcoded before this became admin-configurable,
 // so nothing changes in production until an admin actively picks something else.
 export const DEFAULT_AI_MODEL = "claude-sonnet-4-6";
+
+/**
+ * Reads the admin-configured model for an end-user-facing AI route (site
+ * editor, finance categorization assistant). Deliberately NOT
+ * lib/actions/admin.ts's getAiModel() — that Server Action gates on the
+ * *caller* being an admin (it's meant for the /admin settings page to read
+ * its own current value), so calling it from a route a regular member hits
+ * throws "Not authorized" and 500s the whole request. platform_settings has
+ * no RLS policies of its own, so reading it at all still requires the
+ * service-role client — but that's a data-access requirement, not an
+ * authorization check on who's asking, which this function correctly omits. */
+export async function getPlatformAiModel(): Promise<string> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data } = await admin.from("platform_settings").select("ai_model").maybeSingle();
+  return data?.ai_model || DEFAULT_AI_MODEL;
+}

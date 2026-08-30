@@ -233,7 +233,12 @@ export async function getMonthlyIncomeExpense(
     const end = new Date(Date.UTC(bucket.getUTCFullYear(), bucket.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
     const statement = await getIncomeStatement(supabase, entityId, start, end);
     results.push({
-      month: bucket.toLocaleString(undefined, { month: "short", year: "2-digit" }),
+      // The bucket is built from UTC components at midnight — formatting
+      // with the default (local) timezone rolls day 1 back across the month
+      // boundary for any timezone behind UTC (e.g. America/Chicago),
+      // mislabeling every bar one month early. Force UTC so the label
+      // matches the month whose data was actually queried.
+      month: bucket.toLocaleString(undefined, { month: "short", year: "2-digit", timeZone: "UTC" }),
       income: statement.totalIncome,
       expenses: statement.totalExpenses,
     });
@@ -257,7 +262,12 @@ export async function getCashBalanceOverTime(
     const asOf = bucket.toISOString().slice(0, 10);
     const balanceSheet = await getBalanceSheet(supabase, entityId, asOf);
     const cash = balanceSheet.assets.filter((s) => s.subtype === "Cash and Bank").reduce((sum, s) => sum + s.total, 0);
-    results.push({ month: bucket.toLocaleString(undefined, { month: "short", year: "2-digit" }), balance: round2(cash) });
+    // Forced to UTC for the same reason as getMonthlyIncomeExpense above —
+    // this bucket (last day of month at UTC midnight) happens not to cross
+    // a month boundary when shifted to a behind-UTC local timezone, but
+    // that's incidental to which day-of-month it lands on, not a real
+    // guarantee, so it's forced explicit here too rather than left fragile.
+    results.push({ month: bucket.toLocaleString(undefined, { month: "short", year: "2-digit", timeZone: "UTC" }), balance: round2(cash) });
   }
   return results;
 }

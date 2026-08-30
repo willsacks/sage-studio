@@ -45,6 +45,8 @@ export function AiCategorizeAssistant({
   const [isStreaming, setIsStreaming] = useState(false);
   const [stalled, setStalled] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const lastActivityRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -59,6 +61,26 @@ export function AiCategorizeAssistant({
     const timer = setTimeout(() => setStalled(true), 15000);
     return () => clearTimeout(timer);
   }, [isStreaming, messages]);
+
+  // Real recovery, not just the cosmetic "stalled" message above — reported
+  // in production as the assistant "started working, then became
+  // unresponsive to messages" on a phone. A backgrounded mobile tab can
+  // suspend the fetch reader indefinitely with no error ever thrown, which
+  // otherwise leaves isStreaming stuck true forever (input disabled, no way
+  // to recover short of reloading the page). Checked on an interval rather
+  // than a single timeout so it also catches a genuine mid-stream hang, not
+  // just the resume-from-background case — and since browsers throttle
+  // timers in backgrounded tabs, this fires almost immediately on foreground
+  // resume if the backgrounded gap alone already exceeds the threshold.
+  useEffect(() => {
+    if (!isStreaming) return;
+    const watchdog = setInterval(() => {
+      if (Date.now() - lastActivityRef.current > 90000) {
+        abortRef.current?.abort();
+      }
+    }, 5000);
+    return () => clearInterval(watchdog);
+  }, [isStreaming]);
 
   async function handleSubmit(e?: React.FormEvent) {
     e?.preventDefault();
@@ -77,12 +99,16 @@ export function AiCategorizeAssistant({
     }));
 
     let actedAtAll = false;
+    lastActivityRef.current = Date.now();
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     try {
       const res = await fetch("/api/finance/ai-categorize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ entityId, message: text, conversationHistory }),
+        signal: controller.signal,
       });
 
       if (!res.ok) {
@@ -99,6 +125,7 @@ export function AiCategorizeAssistant({
 
       while (true) {
         const { done, value } = await reader.read();
+        lastActivityRef.current = Date.now();
         if (done) break;
         const chunk = decoder.decode(value, { stream: true });
         for (const line of chunk.split("\n")) {
@@ -148,11 +175,24 @@ export function AiCategorizeAssistant({
           }
         }
       }
-    } catch {
+    } catch (err) {
+      const timedOut = err instanceof DOMException && err.name === "AbortError";
       setMessages((prev) => prev.map((m, i) =>
-        i === prev.length - 1 ? { ...m, parts: [...(m.parts ?? []), { type: "text", content: "Network error. Please try again." }], isStreaming: false } : m
+        i === prev.length - 1
+          ? {
+              ...m,
+              parts: [...(m.parts ?? []), {
+                type: "text",
+                content: timedOut
+                  ? "This stopped responding (possibly because the app was backgrounded) and was cancelled automatically. Anything it already did is saved — try again to pick up where it left off."
+                  : "Network error. Please try again.",
+              }],
+              isStreaming: false,
+            }
+          : m
       ));
     } finally {
+      abortRef.current = null;
       setIsStreaming(false);
       if (actedAtAll) onCategorized();
     }

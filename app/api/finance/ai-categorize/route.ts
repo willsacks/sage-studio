@@ -19,7 +19,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { requireFinanceEntityRole } from "@/lib/access/finance-access";
 import { DEFAULT_SYSTEM_FINANCE_ASSISTANT } from "@/lib/ai/prompts";
-import { getAiModel } from "@/lib/actions/admin";
+import { getPlatformAiModel } from "@/lib/ai/models";
 import { FINANCE_TOOLS, financeToolCallLabel } from "@/lib/finance/ai-tools";
 import { listChartOfAccounts, createChartAccount } from "@/lib/actions/finance-accounts";
 import { listFinanceProjects, createFinanceProject } from "@/lib/actions/finance-projects";
@@ -120,8 +120,27 @@ ${rulesList}
 CURRENTLY UNCATEGORIZED TRANSACTIONS (deduped by payee):
 ${payeesList}`;
 
-  const model = await getAiModel();
+  const model = await getPlatformAiModel();
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+
+  // A durable trace of this run, independent of the live NDJSON stream sent
+  // to the browser below — that stream is the only signal that existed
+  // before this, and it disappears the moment the client stops reading it
+  // (backgrounded mobile tab, closed dialog, network drop), leaving no way
+  // to tell afterward whether the assistant hung, errored, or genuinely
+  // finished. Updated as the turn loop progresses so even a run that hangs
+  // mid-turn leaves behind how far it got, not just a final verdict.
+  // Cast to `any` — not yet in the generated Database type, same convention
+  // as admin.ts's form_submissions query.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const runLogTable = supabase as any;
+  const { data: runLog } = await runLogTable
+    .from("finance_ai_categorize_runs")
+    .insert({ entity_id: entityId, user_id: user.id, message })
+    .select("id")
+    .single();
+  const runLogId = runLog?.id as string | undefined;
+  let actionsTaken = 0;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -133,7 +152,13 @@ ${payeesList}`;
           turns++;
           const messageStream = anthropic.messages.stream({
             model,
-            max_tokens: 4096,
+            // A single instruction can reasonably ask for a dozen-plus rules
+            // (e.g. "categorize everything: Acorns is X, Anthropic is Y, ...").
+            // At 4096 this measurably truncated mid-response on a real 17-rule
+            // message — the model spent its whole budget narrating the plan
+            // in prose and hit max_tokens before emitting a single tool_use
+            // block, silently doing nothing (see the max_tokens handling below).
+            max_tokens: 8192,
             system,
             tools: FINANCE_TOOLS,
             messages: conversationMessages,
@@ -146,7 +171,11 @@ ${payeesList}`;
           const responseMessage = await messageStream.finalMessage();
           conversationMessages.push({ role: "assistant", content: responseMessage.content });
 
-          if (responseMessage.stop_reason !== "tool_use") break;
+          if (runLogId) {
+            await runLogTable.from("finance_ai_categorize_runs").update({ turns, stop_reason: responseMessage.stop_reason }).eq("id", runLogId);
+          }
+
+          if (responseMessage.stop_reason !== "tool_use" && responseMessage.stop_reason !== "max_tokens") break;
 
           const toolResults: Anthropic.ToolResultBlockParam[] = [];
           for (const block of responseMessage.content) {
@@ -172,6 +201,7 @@ ${payeesList}`;
                   if (!result.accountId) { resultText = result.error ?? "Failed to create account"; isError = true; break; }
                   knownAccounts.push({ id: result.accountId, name, account_type: accountType });
                   resultText = `Created account "${name}".`;
+                  actionsTaken++;
                   emit(controller, { type: "action_result", label: `Created account "${name}"` });
                   break;
                 }
@@ -186,6 +216,7 @@ ${payeesList}`;
                   if (!result.projectId) { resultText = result.error ?? "Failed to create project"; isError = true; break; }
                   knownProjects.push({ id: result.projectId, name });
                   resultText = `Created project "${name}".`;
+                  actionsTaken++;
                   emit(controller, { type: "action_result", label: `Created project "${name}"` });
                   break;
                 }
@@ -231,6 +262,7 @@ ${payeesList}`;
                     },
                   });
                   resultText = `Rule created (${matchType} "${matchValue}" → ${accountName}). Matched and categorized ${applied.matchedCount} existing transaction${applied.matchedCount === 1 ? "" : "s"}.`;
+                  actionsTaken++;
                   emit(controller, {
                     type: "action_result",
                     label: `Rule: ${matchType} "${matchValue}" → ${accountName} (${applied.matchedCount} categorized)`,
@@ -262,13 +294,36 @@ ${payeesList}`;
             toolResults.push({ type: "tool_result", tool_use_id: block.id, content: resultText, is_error: isError });
           }
 
-          conversationMessages.push({ role: "user", content: toolResults });
+          if (toolResults.length > 0) {
+            conversationMessages.push({ role: "user", content: toolResults });
+          } else {
+            // stop_reason was "max_tokens" with zero completed tool calls —
+            // the model spent its whole budget on prose (e.g. narrating a
+            // long list of rules) before it could act on any of it. An empty
+            // tool_result content array isn't valid to send back, and
+            // silently `break`-ing here (the old behavior) makes a
+            // do-nothing turn look identical to a genuinely finished one —
+            // confirmed against a real 17-instruction message that produced
+            // this exact plan-then-nothing response. Nudge it to just act
+            // instead of re-narrating, rather than surfacing this as a dead
+            // end the user has to notice and recover from themselves.
+            conversationMessages.push({
+              role: "user",
+              content: "Your last response was cut off before you called any tools. Don't re-explain the plan — just start calling create_rule_and_apply (or the other tools) directly for the instruction I gave you.",
+            });
+          }
         }
 
         emit(controller, { type: "done" });
+        if (runLogId) {
+          await runLogTable.from("finance_ai_categorize_runs").update({ status: "completed", finished_at: new Date().toISOString(), actions_taken: actionsTaken }).eq("id", runLogId);
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Unknown error";
         emit(controller, { type: "error", message: msg });
+        if (runLogId) {
+          await runLogTable.from("finance_ai_categorize_runs").update({ status: "error", error: msg, finished_at: new Date().toISOString(), actions_taken: actionsTaken }).eq("id", runLogId);
+        }
       } finally {
         controller.close();
       }

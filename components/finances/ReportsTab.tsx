@@ -171,7 +171,16 @@ function ReportSection({ title, sections, total }: { title: string; sections: { 
                 <span>{money(a.balance)}</span>
               </div>
             ))}
-            {sec.accounts.length > 1 && (
+            {sec.accounts.length !== 1 && (
+              // Not just accounts.length > 1 — the balance sheet's synthetic
+              // "Retained Earnings (YTD)" section has zero individual
+              // accounts but a real nonzero total (current-year net income
+              // rolled into equity), and with only the >1 check that total
+              // never rendered anywhere: the label showed with no number
+              // next to it, looking like a broken/empty section even though
+              // Total Equity below correctly included it. A single-account
+              // section still skips this, since it'd just repeat that one
+              // account's own balance.
               <div className="flex justify-between text-sm font-medium pt-0.5 border-t border-[var(--border)] mt-1">
                 <span>Subtotal</span>
                 <span>{money(sec.total)}</span>

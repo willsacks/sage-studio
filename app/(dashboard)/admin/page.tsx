@@ -194,7 +194,88 @@ function FeedEvent({ event }: { event: ActivityEvent }) {
   );
 }
 
+const RUN_STATUS_STYLES: Record<FinanceAiRun["status"], string> = {
+  completed: "bg-green-500/10 text-green-600",
+  error: "bg-red-500/10 text-red-600",
+  running: "bg-amber-500/10 text-amber-600",
+};
+
+function FinanceAiRunRow({ run }: { run: FinanceAiRun }) {
+  // A "running" row whose start is more than a few minutes old never
+  // reached completed/error — the actual signature of a hung/stalled run
+  // (the thing this log exists to catch), so it's called out distinctly
+  // from a run that's merely in flight right now.
+  const ageMs = Date.now() - new Date(run.started_at).getTime();
+  const likelyStalled = run.status === "running" && ageMs > 5 * 60 * 1000;
+
+  return (
+    <div className="py-3 space-y-1">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${RUN_STATUS_STYLES[run.status]}`}>
+          {likelyStalled ? "stalled" : run.status}
+        </span>
+        <span className="text-sm font-medium">{run.entity_name}</span>
+        <span className="text-xs text-[var(--muted-foreground)]">{run.user_email}</span>
+        <span className="text-xs text-[var(--muted-foreground)] ml-auto">
+          {formatDistanceToNow(new Date(run.started_at), { addSuffix: true })} · {run.turns} turn{run.turns === 1 ? "" : "s"} · {run.actions_taken} action{run.actions_taken === 1 ? "" : "s"}
+          {run.stop_reason && ` · stop: ${run.stop_reason}`}
+        </span>
+      </div>
+      <p className="text-xs text-[var(--muted-foreground)] truncate" title={run.message}>{run.message}</p>
+      {run.error && <p className="text-xs text-red-500">{run.error}</p>}
+    </div>
+  );
+}
+
 // ─── AI access list ──────────────────────────────────────────────────────────
+
+// ─── Finance AI run log ─────────────────────────────────────────────────────
+
+type FinanceAiRun = {
+  id: string;
+  entity_name: string;
+  user_email: string;
+  message: string;
+  started_at: string;
+  finished_at: string | null;
+  turns: number;
+  stop_reason: string | null;
+  status: "running" | "completed" | "error";
+  error: string | null;
+  actions_taken: number;
+};
+
+/** Recent AI categorization assistant runs — the durable trace added
+ * alongside the run-progress fixes, so "it started working then stopped
+ * responding" is diagnosable after the fact instead of only in the moment
+ * (the live NDJSON stream to the browser is the only other record, and it's
+ * gone as soon as the tab backgrounds or closes). A `status: "running"` row
+ * whose `started_at` is more than a few minutes old is itself a signal —
+ * that run never reached a normal completed/error state. */
+async function getFinanceAiRuns(): Promise<FinanceAiRun[]> {
+  const admin = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await (admin as any)
+    .from("finance_ai_categorize_runs")
+    .select("id, message, started_at, finished_at, turns, stop_reason, status, error, actions_taken, finance_entities(name), profiles(username, display_name)")
+    .order("started_at", { ascending: false })
+    .limit(20);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((data ?? []) as any[]).map((r) => ({
+    id: r.id,
+    entity_name: r.finance_entities?.name ?? "Unknown entity",
+    user_email: r.profiles?.display_name ?? r.profiles?.username ?? "Unknown user",
+    message: r.message,
+    started_at: r.started_at,
+    finished_at: r.finished_at,
+    turns: r.turns,
+    stop_reason: r.stop_reason,
+    status: r.status,
+    error: r.error,
+    actions_taken: r.actions_taken,
+  }));
+}
 
 async function getAiAccessUsers(): Promise<UserRow[]> {
   const admin = createAdminClient();
@@ -228,7 +309,7 @@ export default async function AdminPage() {
 
   if (profile?.role !== "admin") redirect("/my-site");
 
-  const [m, feed, aiUsers, aiPrompts, aiModel] = await Promise.all([getMetrics(), getActivityFeed(), getAiAccessUsers(), getAiPrompts(), getAiModel()]);
+  const [m, feed, aiUsers, aiPrompts, aiModel, financeAiRuns] = await Promise.all([getMetrics(), getActivityFeed(), getAiAccessUsers(), getAiPrompts(), getAiModel(), getFinanceAiRuns()]);
 
   return (
     <div className="space-y-8">
@@ -340,6 +421,21 @@ export default async function AdminPage() {
           defaultBlockPrompt={DEFAULT_SYSTEM_BLOCK}
           defaultHtmlPrompt={DEFAULT_SYSTEM_HTML}
         />
+      </section>
+
+      {/* Finance AI runs */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-[var(--muted-foreground)] uppercase tracking-wide">Finance AI Categorization Runs</h2>
+        <p className="text-xs text-[var(--muted-foreground)]">
+          Last 20 runs of the Transactions-tab AI assistant — for tracing a run that stalled or errored (e.g. a stream that stopped responding), independent of what the browser that triggered it saw.
+        </p>
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] divide-y divide-[var(--border)] px-4">
+          {financeAiRuns.length === 0 ? (
+            <p className="py-10 text-center text-sm text-[var(--muted-foreground)]">No runs yet.</p>
+          ) : (
+            financeAiRuns.map((run) => <FinanceAiRunRow key={run.id} run={run} />)
+          )}
+        </div>
       </section>
 
       {/* Activity feed */}

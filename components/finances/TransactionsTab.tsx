@@ -265,16 +265,27 @@ export function TransactionsTab({ entity }: { entity: FinanceEntity }) {
   // dialog included — making a successful import look like the "Import"
   // modal had silently popped back up with no confirmation, when it had
   // actually just been torn down and remounted fresh.
-  const silentRefresh = useCallback(async () => {
+  // Takes the entity id being fetched for, and only commits the result if
+  // that's still the selected entity by the time the request resolves —
+  // switching entities twice in quick succession (e.g. right after creating
+  // a new one) can otherwise let an in-flight fetch for the OLD entity
+  // resolve after the new one's, overwriting its accounts/transactions with
+  // stale data from a different entity (observed while categorizing a
+  // second entity right after creating it — the categorize dialog offered a
+  // stale money account id that then 400'd as "not found on this entity").
+  const silentRefreshFor = useCallback(async (entityId: string) => {
     const [txnResult, accountsResult, projectsResult] = await Promise.all([
-      listTransactions({ entityId: entity.id }),
-      listChartOfAccounts(entity.id),
-      listFinanceProjects(entity.id),
+      listTransactions({ entityId }),
+      listChartOfAccounts(entityId),
+      listFinanceProjects(entityId),
     ]);
+    if (entityId !== entity.id) return;
     setTransactions((txnResult.transactions ?? []) as Transaction[]);
     setAccounts((accountsResult.accounts ?? []) as Account[]);
     setProjects((projectsResult.projects ?? []) as Project[]);
   }, [entity.id]);
+
+  const silentRefresh = useCallback(() => silentRefreshFor(entity.id), [silentRefreshFor, entity.id]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
