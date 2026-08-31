@@ -18,6 +18,9 @@ const ACTION_LABELS: Record<string, string> = {
   "account.reactivated": "Reactivated an account",
   "books.closed": "Closed the books",
   "books.reopened": "Reopened the books",
+  "bill.created": "Created a bill",
+  "bill.voided": "Voided a bill",
+  "bill.payment_recorded": "Recorded a bill payment",
 };
 
 function formatDate(iso: string) {

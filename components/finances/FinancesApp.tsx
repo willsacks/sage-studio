@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutGrid, FolderKanban, ArrowLeftRight, BarChart3, BookOpen, Landmark, FileText, Users, Settings, History } from "lucide-react";
+import { LayoutGrid, FolderKanban, ArrowLeftRight, BarChart3, BookOpen, Landmark, FileText, Users, Settings, History, Receipt } from "lucide-react";
 import { EntitySwitcher } from "./EntitySwitcher";
 import { CreateEntityForm } from "./CreateEntityForm";
 import { EntitySettingsDialog } from "./EntitySettingsDialog";
@@ -15,6 +15,7 @@ import { BankTab } from "./BankTab";
 import { InvoicesTab } from "./InvoicesTab";
 import { CollaboratorsDialog } from "./CollaboratorsDialog";
 import { ActivityLogTab } from "./ActivityLogTab";
+import { BillsTab } from "./BillsTab";
 
 export type FinanceEntity = {
   id: string;
@@ -25,13 +26,14 @@ export type FinanceEntity = {
   is_owner?: boolean;
 };
 
-type Tab = "overview" | "projects" | "transactions" | "invoices" | "bank" | "reports" | "accounts" | "activity";
+type Tab = "overview" | "projects" | "transactions" | "invoices" | "bills" | "bank" | "reports" | "accounts" | "activity";
 
 const TABS: { id: Tab; label: string; icon: typeof LayoutGrid }[] = [
   { id: "overview", label: "Overview", icon: LayoutGrid },
   { id: "projects", label: "Projects", icon: FolderKanban },
   { id: "transactions", label: "Transactions", icon: ArrowLeftRight },
   { id: "invoices", label: "Invoices", icon: FileText },
+  { id: "bills", label: "Bills", icon: Receipt },
   { id: "bank", label: "Bank Accounts", icon: Landmark },
   { id: "reports", label: "Reports", icon: BarChart3 },
   { id: "accounts", label: "Chart of Accounts", icon: BookOpen },
@@ -139,6 +141,7 @@ export function FinancesApp({ initialEntities, initialEntityId }: { initialEntit
       {tab === "projects" && <ProjectsTab entity={currentEntity} />}
       {tab === "transactions" && <TransactionsTab entity={currentEntity} />}
       {tab === "invoices" && <InvoicesTab entity={currentEntity} />}
+      {tab === "bills" && <BillsTab entity={currentEntity} />}
       {tab === "bank" && <BankTab entity={currentEntity} />}
       {tab === "reports" && <ReportsTab entity={currentEntity} />}
       {tab === "accounts" && <ChartOfAccountsTab entity={currentEntity} />}

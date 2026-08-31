@@ -1218,6 +1218,114 @@ export type Database = {
         };
         Relationships: [];
       };
+      bills: {
+        Row: {
+          id: string;
+          entity_id: string;
+          project_id: string | null;
+          vendor_name: string;
+          bill_number: string;
+          bill_date: string;
+          due_date: string | null;
+          status: "open" | "partial" | "paid" | "void";
+          subtotal: number;
+          total: number;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          entity_id: string;
+          project_id?: string | null;
+          vendor_name: string;
+          bill_number: string;
+          bill_date: string;
+          due_date?: string | null;
+          status?: "open" | "partial" | "paid" | "void";
+          subtotal?: number;
+          total?: number;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          entity_id?: string;
+          project_id?: string | null;
+          vendor_name?: string;
+          bill_number?: string;
+          bill_date?: string;
+          due_date?: string | null;
+          status?: "open" | "partial" | "paid" | "void";
+          subtotal?: number;
+          total?: number;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      bill_line_items: {
+        Row: {
+          id: string;
+          bill_id: string;
+          description: string;
+          account_id: string;
+          amount: number;
+          display_order: number;
+        };
+        Insert: {
+          id?: string;
+          bill_id: string;
+          description: string;
+          account_id: string;
+          amount?: number;
+          display_order?: number;
+        };
+        Update: {
+          id?: string;
+          bill_id?: string;
+          description?: string;
+          account_id?: string;
+          amount?: number;
+          display_order?: number;
+        };
+        Relationships: [];
+      };
+      bill_payments: {
+        Row: {
+          id: string;
+          bill_id: string;
+          amount: number;
+          paid_date: string;
+          method: string | null;
+          matched_transaction_id: string | null;
+          journal_entry_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          bill_id: string;
+          amount: number;
+          paid_date: string;
+          method?: string | null;
+          matched_transaction_id?: string | null;
+          journal_entry_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          bill_id?: string;
+          amount?: number;
+          paid_date?: string;
+          method?: string | null;
+          matched_transaction_id?: string | null;
+          journal_entry_id?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       finance_tax_settings: {
         Row: {
           entity_id: string;
