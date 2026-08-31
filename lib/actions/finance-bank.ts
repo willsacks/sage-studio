@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireFinanceEntityRole } from "@/lib/access/finance-access";
 import { getPlaidClient } from "@/lib/finance/plaid-client";
 import { encryptPlaidToken } from "@/lib/crypto";
+import { normalBalanceForType } from "@/lib/finance/default-accounts";
 
 async function requireAuth() {
   const supabase = await createClient();
@@ -89,6 +90,76 @@ export async function exchangePlaidPublicToken(params: { entityId: string; publi
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Failed to connect bank account" };
   }
+}
+
+/** Adds a money account that isn't Plaid-connected (cash, a bank that
+ * isn't supported, a manual ledger someone keeps by hand) — and, unlike the
+ * plain chart-of-accounts-only "add manually" path this replaces, also
+ * creates the bank_accounts row reconciliation depends on. Without this,
+ * reconciliation (lib/actions/finance-reconciliation.ts) was only reachable
+ * for Plaid-linked accounts, since the Reconcile button only ever appears
+ * next to a bank_accounts row — a real gap for anyone not using Plaid at
+ * all. The paired bank_connections row is a placeholder (institution_name
+ * "Manual entry", a non-functional token) purely to satisfy the NOT NULL
+ * schema built around Plaid; the UI hides the Sync button for it since
+ * there's nothing to sync. */
+export async function createManualMoneyAccount(params: {
+  entityId: string;
+  name: string;
+  accountSubtype: "Cash and Bank" | "Credit Card" | "Investment";
+}) {
+  const { supabase, user } = await requireAuth();
+  await requireFinanceEntityRole(supabase, params.entityId, user.id, "editor");
+
+  const name = params.name.trim();
+  if (!name) return { error: "A name is required" };
+  const accountType = params.accountSubtype === "Credit Card" ? "liability" : "asset";
+
+  const { data: chartAccount, error: chartError } = await supabase
+    .from("chart_of_accounts")
+    .insert({
+      entity_id: params.entityId,
+      name,
+      account_type: accountType,
+      account_subtype: params.accountSubtype,
+      normal_balance: normalBalanceForType(accountType),
+    })
+    .select("id")
+    .single();
+  if (chartError || !chartAccount) return { error: chartError?.message ?? "Failed to create account" };
+
+  const placeholderId = crypto.randomUUID();
+  const { data: connection, error: connectionError } = await supabase
+    .from("bank_connections")
+    .insert({
+      owner_id: user.id,
+      plaid_item_id: `manual-${placeholderId}`,
+      plaid_access_token_encrypted: "manual-account-no-token",
+      institution_name: "Manual entry",
+      status: "active",
+    })
+    .select("id")
+    .single();
+  if (connectionError || !connection) {
+    await supabase.from("chart_of_accounts").delete().eq("id", chartAccount.id);
+    return { error: connectionError?.message ?? "Failed to create account" };
+  }
+
+  const { error: bankAccountError } = await supabase.from("bank_accounts").insert({
+    bank_connection_id: connection.id,
+    entity_id: params.entityId,
+    chart_account_id: chartAccount.id,
+    plaid_account_id: `manual-${placeholderId}`,
+    name,
+  });
+  if (bankAccountError) {
+    await supabase.from("bank_connections").delete().eq("id", connection.id);
+    await supabase.from("chart_of_accounts").delete().eq("id", chartAccount.id);
+    return { error: bankAccountError.message };
+  }
+
+  revalidatePath("/finances");
+  return { accountId: chartAccount.id as string };
 }
 
 export async function listBankConnections(entityId: string) {

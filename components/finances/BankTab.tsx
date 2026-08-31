@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConnectBankButton } from "./ConnectBankButton";
 import { ReconciliationView } from "./ReconciliationView";
-import { listBankConnections, mapBankAccountToChartAccount, unlinkBankAccount } from "@/lib/actions/finance-bank";
-import { listChartOfAccounts, createChartAccount, setChartAccountActive } from "@/lib/actions/finance-accounts";
+import { listBankConnections, mapBankAccountToChartAccount, unlinkBankAccount, createManualMoneyAccount } from "@/lib/actions/finance-bank";
+import { listChartOfAccounts, setChartAccountActive } from "@/lib/actions/finance-accounts";
 import { listFinanceProjects } from "@/lib/actions/finance-projects";
 import { listCategorizationRules, createCategorizationRule, deleteCategorizationRule, applyRulesToExistingTransactions } from "@/lib/actions/finance-rules";
 import type { FinanceEntity } from "./FinancesApp";
@@ -87,14 +87,16 @@ export function BankTab({ entity }: { entity: FinanceEntity }) {
   async function handleCreateAccount() {
     if (!newName.trim()) return;
     setCreatingAccount(true);
-    const result = await createChartAccount({
+    // Also creates a placeholder bank_accounts row (not just the chart
+    // account) so this account gets a Reconcile button like a Plaid-linked
+    // one would — a brokerage/retirement/robo-advisor account (e.g. Acorns)
+    // needs to exist as a real account so a transfer into it has somewhere
+    // to land, and any manual account should still be reconcilable against
+    // a real statement.
+    const result = await createManualMoneyAccount({
       entityId: entity.id,
       name: newName.trim(),
-      accountType: newSubtype === "Credit Card" ? "liability" : "asset",
       accountSubtype: newSubtype,
-      // A brokerage/retirement/robo-advisor account (e.g. Acorns) needs to
-      // exist as a real account so a transfer into it has somewhere to
-      // land — not just a category, since its own balance changes too.
     });
     setCreatingAccount(false);
     if ("error" in result) {
@@ -183,13 +185,15 @@ export function BankTab({ entity }: { entity: FinanceEntity }) {
                 <div className="flex items-center gap-2 flex-none">
                   {ba ? (
                     <>
-                      <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => handleSync(ba.bank_connection_id)} disabled={syncingId === ba.bank_connection_id}>
-                        {syncingId === ba.bank_connection_id ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-                      </Button>
+                      {connection?.institution_name !== "Manual entry" && (
+                        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => handleSync(ba.bank_connection_id)} disabled={syncingId === ba.bank_connection_id}>
+                          {syncingId === ba.bank_connection_id ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                        </Button>
+                      )}
                       <button onClick={() => setReconcilingAccount(ba)} className="p-1.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" title="Reconcile">
                         <ListChecks size={14} />
                       </button>
-                      <button onClick={() => handleUnlink(ba.id)} className="p-1.5 text-[var(--muted-foreground)] hover:text-red-500" title="Unlink from Plaid">
+                      <button onClick={() => handleUnlink(ba.id)} className="p-1.5 text-[var(--muted-foreground)] hover:text-red-500" title={connection?.institution_name === "Manual entry" ? "Remove account" : "Unlink from Plaid"}>
                         <Unlink size={14} />
                       </button>
                     </>
