@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireFinanceEntityRole } from "@/lib/access/finance-access";
 import { postJournalEntry, reverseJournalEntry } from "@/lib/finance/ledger";
+import { logFinanceAudit } from "@/lib/finance/audit";
 
 async function requireAuth() {
   const supabase = await createClient();
@@ -49,6 +50,15 @@ export async function createJournalEntry(params: {
   });
   if ("error" in posted) return { error: posted.error };
 
+  await logFinanceAudit(supabase, {
+    entityId: params.entityId,
+    actorId: user.id,
+    action: "journal_entry.created",
+    targetTable: "journal_entries",
+    targetId: posted.journalEntryId,
+    diff: { date: params.date, memo: params.memo, lines: nonZeroLines },
+  });
+
   revalidatePath("/finances");
   return { journalEntryId: posted.journalEntryId };
 }
@@ -75,6 +85,16 @@ export async function deleteJournalEntry(journalEntryId: string, entityId: strin
 
   const reversed = await reverseJournalEntry(supabase, journalEntryId, user.id);
   if ("error" in reversed) return { error: reversed.error };
+
+  await logFinanceAudit(supabase, {
+    entityId,
+    actorId: user.id,
+    action: "journal_entry.deleted",
+    targetTable: "journal_entries",
+    targetId: journalEntryId,
+    diff: { reversalEntryId: reversed.journalEntryId },
+  });
+
   revalidatePath("/finances");
   return { success: true };
 }

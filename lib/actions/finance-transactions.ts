@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireFinanceEntityRole } from "@/lib/access/finance-access";
 import { postJournalEntry, reverseJournalEntry } from "@/lib/finance/ledger";
 import { buildJournalLines, validateSplits, type SplitInput } from "@/lib/finance/categorize";
+import { logFinanceAudit } from "@/lib/finance/audit";
 
 async function requireAuth() {
   const supabase = await createClient();
@@ -75,6 +76,15 @@ export async function createManualTransaction(params: {
   if (splitsError) return { error: splitsError.message };
 
   await supabase.from("transactions").update({ journal_entry_id: posted.journalEntryId }).eq("id", txn.id);
+
+  await logFinanceAudit(supabase, {
+    entityId: params.entityId,
+    actorId: user.id,
+    action: "transaction.created",
+    targetTable: "transactions",
+    targetId: txn.id,
+    diff: { payeeName: params.payeeName.trim(), amount: params.amount, splits: params.splits },
+  });
 
   revalidatePath("/finances");
   return { transactionId: txn.id as string };
@@ -148,6 +158,15 @@ export async function categorizeTransaction(transactionId: string, entityId: str
     .eq("id", transactionId);
   if (updateError) return { error: updateError.message };
 
+  await logFinanceAudit(supabase, {
+    entityId,
+    actorId: user.id,
+    action: "transaction.categorized",
+    targetTable: "transactions",
+    targetId: transactionId,
+    diff: { splits },
+  });
+
   revalidatePath("/finances");
   return { success: true };
 }
@@ -207,6 +226,7 @@ export async function excludeTransaction(transactionId: string, entityId: string
 
   const { error } = await supabase.from("transactions").update({ status: "excluded" }).eq("id", transactionId).eq("entity_id", entityId);
   if (error) return { error: error.message };
+  await logFinanceAudit(supabase, { entityId, actorId: user.id, action: "transaction.excluded", targetTable: "transactions", targetId: transactionId });
   revalidatePath("/finances");
   return { success: true };
 }
@@ -231,6 +251,7 @@ export async function deleteManualTransaction(transactionId: string, entityId: s
 
   const { error } = await supabase.from("transactions").delete().eq("id", transactionId).eq("entity_id", entityId);
   if (error) return { error: error.message };
+  await logFinanceAudit(supabase, { entityId, actorId: user.id, action: "transaction.deleted", targetTable: "transactions", targetId: transactionId });
   revalidatePath("/finances");
   return { success: true };
 }

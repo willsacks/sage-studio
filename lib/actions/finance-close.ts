@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireFinanceEntityRole } from "@/lib/access/finance-access";
+import { logFinanceAudit } from "@/lib/finance/audit";
 
 async function requireAuth() {
   const supabase = await createClient();
@@ -21,6 +22,7 @@ export async function closeBooksThrough(entityId: string, date: string) {
 
   const { error } = await supabase.from("finance_entities").update({ locked_through_date: date }).eq("id", entityId);
   if (error) return { error: error.message };
+  await logFinanceAudit(supabase, { entityId, actorId: user.id, action: "books.closed", targetTable: "finance_entities", targetId: entityId, diff: { lockedThroughDate: date } });
   revalidatePath("/finances");
   return { success: true };
 }
@@ -34,6 +36,7 @@ export async function reopenBooks(entityId: string) {
 
   const { error } = await supabase.from("finance_entities").update({ locked_through_date: null }).eq("id", entityId);
   if (error) return { error: error.message };
+  await logFinanceAudit(supabase, { entityId, actorId: user.id, action: "books.reopened", targetTable: "finance_entities", targetId: entityId });
   revalidatePath("/finances");
   return { success: true };
 }

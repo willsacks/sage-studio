@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutGrid, FolderKanban, ArrowLeftRight, BarChart3, BookOpen, Landmark, FileText, Users, Settings } from "lucide-react";
+import { LayoutGrid, FolderKanban, ArrowLeftRight, BarChart3, BookOpen, Landmark, FileText, Users, Settings, History } from "lucide-react";
 import { EntitySwitcher } from "./EntitySwitcher";
 import { CreateEntityForm } from "./CreateEntityForm";
 import { EntitySettingsDialog } from "./EntitySettingsDialog";
@@ -14,6 +14,7 @@ import { ChartOfAccountsTab } from "./ChartOfAccountsTab";
 import { BankTab } from "./BankTab";
 import { InvoicesTab } from "./InvoicesTab";
 import { CollaboratorsDialog } from "./CollaboratorsDialog";
+import { ActivityLogTab } from "./ActivityLogTab";
 
 export type FinanceEntity = {
   id: string;
@@ -24,7 +25,7 @@ export type FinanceEntity = {
   is_owner?: boolean;
 };
 
-type Tab = "overview" | "projects" | "transactions" | "invoices" | "bank" | "reports" | "accounts";
+type Tab = "overview" | "projects" | "transactions" | "invoices" | "bank" | "reports" | "accounts" | "activity";
 
 const TABS: { id: Tab; label: string; icon: typeof LayoutGrid }[] = [
   { id: "overview", label: "Overview", icon: LayoutGrid },
@@ -34,6 +35,7 @@ const TABS: { id: Tab; label: string; icon: typeof LayoutGrid }[] = [
   { id: "bank", label: "Bank Accounts", icon: Landmark },
   { id: "reports", label: "Reports", icon: BarChart3 },
   { id: "accounts", label: "Chart of Accounts", icon: BookOpen },
+  { id: "activity", label: "Activity", icon: History },
 ];
 
 export function FinancesApp({ initialEntities, initialEntityId }: { initialEntities: FinanceEntity[]; initialEntityId?: string }) {
@@ -140,6 +142,7 @@ export function FinancesApp({ initialEntities, initialEntityId }: { initialEntit
       {tab === "bank" && <BankTab entity={currentEntity} />}
       {tab === "reports" && <ReportsTab entity={currentEntity} />}
       {tab === "accounts" && <ChartOfAccountsTab entity={currentEntity} />}
+      {tab === "activity" && <ActivityLogTab entity={currentEntity} />}
 
       {sharing && (
         <CollaboratorsDialog entityId={currentEntity.id} entityName={currentEntity.name} onClose={() => setSharing(false)} />
