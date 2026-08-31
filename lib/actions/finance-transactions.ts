@@ -39,6 +39,7 @@ export async function createManualTransaction(params: {
     .from("transactions")
     .insert({
       entity_id: params.entityId,
+      money_account_id: params.moneyAccountId,
       date: params.date,
       payee_name: params.payeeName.trim(),
       amount: params.amount,

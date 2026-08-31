@@ -164,6 +164,7 @@ export async function recordBillPayment(params: {
     .from("transactions")
     .insert({
       entity_id: params.entityId,
+      money_account_id: params.moneyAccountId,
       date: params.paidDate,
       payee_name: `${bill.bill_number} — ${bill.vendor_name}`,
       amount: -params.amount,

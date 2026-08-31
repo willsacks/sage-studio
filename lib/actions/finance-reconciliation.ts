@@ -88,7 +88,7 @@ export async function getReconciliationCandidates(reconciliationId: string, enti
 
   const { data: reconciliation, error: reconError } = await supabase
     .from("reconciliations")
-    .select("*, bank_accounts!inner(entity_id)")
+    .select("*, bank_accounts!inner(entity_id, chart_account_id)")
     .eq("id", reconciliationId)
     .single();
   if (reconError || !reconciliation) return { error: "Reconciliation not found" };
@@ -96,13 +96,21 @@ export async function getReconciliationCandidates(reconciliationId: string, enti
   const bankAccount = (reconciliation as any).bank_accounts;
   if (bankAccount.entity_id !== entityId) return { error: "Not authorized" };
 
-  const { data: transactions, error: txnError } = await supabase
+  // A transaction ties to this money account one of two ways depending on
+  // how it was created: bank_account_id for Plaid-synced transactions, or
+  // money_account_id for everything else (manual entries, CSV/QBO/Wave
+  // imports, bill/invoice payments) — matching only bank_account_id here
+  // silently hid every non-Plaid transaction from reconciliation entirely.
+  let query = supabase
     .from("transactions")
     .select("id, date, payee_name, amount, cleared_at, reconciliation_id")
-    .eq("bank_account_id", reconciliation.bank_account_id)
     .lte("date", reconciliation.statement_end_date)
     .or(`reconciliation_id.eq.${reconciliationId},reconciliation_id.is.null`)
     .order("date", { ascending: true });
+  query = bankAccount.chart_account_id
+    ? query.or(`bank_account_id.eq.${reconciliation.bank_account_id},money_account_id.eq.${bankAccount.chart_account_id}`)
+    : query.eq("bank_account_id", reconciliation.bank_account_id);
+  const { data: transactions, error: txnError } = await query;
   if (txnError) return { error: txnError.message };
 
   return { reconciliation, transactions: transactions ?? [] };

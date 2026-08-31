@@ -137,6 +137,7 @@ export async function recordInvoicePayment(params: {
     .from("transactions")
     .insert({
       entity_id: params.entityId,
+      money_account_id: params.moneyAccountId,
       date: params.paidDate,
       payee_name: `${invoice.invoice_number} — ${invoice.client_name}`,
       amount: params.amount,
