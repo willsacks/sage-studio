@@ -21,6 +21,10 @@ const ACTION_LABELS: Record<string, string> = {
   "bill.created": "Created a bill",
   "bill.voided": "Voided a bill",
   "bill.payment_recorded": "Recorded a bill payment",
+  "invoice.created": "Created an invoice",
+  "invoice.sent": "Marked an invoice as sent",
+  "invoice.voided": "Voided an invoice",
+  "invoice.payment_recorded": "Recorded an invoice payment",
 };
 
 function formatDate(iso: string) {

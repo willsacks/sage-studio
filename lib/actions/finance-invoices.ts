@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireFinanceEntityRole } from "@/lib/access/finance-access";
 import { postJournalEntry } from "@/lib/finance/ledger";
 import { buildJournalLines } from "@/lib/finance/categorize";
+import { logFinanceAudit } from "@/lib/finance/audit";
 
 async function requireAuth() {
   const supabase = await createClient();
@@ -91,6 +92,15 @@ export async function createInvoice(params: {
   );
   if (lineItemsError) return { error: lineItemsError.message };
 
+  await logFinanceAudit(supabase, {
+    entityId: params.entityId,
+    actorId: user.id,
+    action: "invoice.created",
+    targetTable: "invoices",
+    targetId: invoice.id as string,
+    diff: { clientName: params.clientName.trim(), total, lineItems: params.lineItems },
+  });
+
   revalidatePath("/finances");
   return { invoiceId: invoice.id as string };
 }
@@ -101,6 +111,7 @@ export async function setInvoiceStatus(invoiceId: string, entityId: string, stat
 
   const { error } = await supabase.from("invoices").update({ status }).eq("id", invoiceId).eq("entity_id", entityId);
   if (error) return { error: error.message };
+  await logFinanceAudit(supabase, { entityId, actorId: user.id, action: status === "void" ? "invoice.voided" : "invoice.sent", targetTable: "invoices", targetId: invoiceId });
   revalidatePath("/finances");
   return { success: true };
 }
@@ -183,6 +194,15 @@ export async function recordInvoicePayment(params: {
   const totalPaid = round2((payments ?? []).reduce((sum, p) => sum + p.amount, 0));
   const newStatus = totalPaid >= invoice.total ? "paid" : "partial";
   await supabase.from("invoices").update({ status: newStatus }).eq("id", params.invoiceId);
+
+  await logFinanceAudit(supabase, {
+    entityId: params.entityId,
+    actorId: user.id,
+    action: "invoice.payment_recorded",
+    targetTable: "invoices",
+    targetId: params.invoiceId,
+    diff: { amount: params.amount, paidDate: params.paidDate, newStatus },
+  });
 
   revalidatePath("/finances");
   return { success: true, status: newStatus };

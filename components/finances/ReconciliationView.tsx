@@ -25,7 +25,11 @@ type Reconciliation = {
 type CandidateTxn = { id: string; date: string; payee_name: string; amount: number; cleared_at: string | null };
 
 function money(n: number) {
-  return n.toLocaleString(undefined, { style: "currency", currency: "USD" });
+  // Normalizes -0 (e.g. a perfectly balanced difference computed as a
+  // subtraction that lands on negative zero) to plain 0 — otherwise
+  // toLocaleString renders "-$0.00", which reads as "still off by a hair"
+  // to a bookkeeper checking exactly this number for a true zero.
+  return (n + 0).toLocaleString(undefined, { style: "currency", currency: "USD" });
 }
 
 export function ReconciliationView({
