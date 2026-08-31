@@ -28,6 +28,13 @@ function round2(n: number): number {
  * goes through. Validates the balance invariant server-side even though the
  * DB also has a trigger backstop — Server Action arguments are
  * attacker-controlled input, not trusted just because the UI validated them.
+ *
+ * Also the single chokepoint for period locking (lib/actions/finance-close.ts):
+ * every write to the ledger — manual entries, categorizing, deleting (via
+ * reverseJournalEntry, which posts at the *original* entry's date), imports,
+ * invoice payments — passes through here, so checking
+ * finance_entities.locked_through_date once in this one place is enough to
+ * cover all of them without special-casing each caller.
  */
 export async function postJournalEntry(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -35,6 +42,15 @@ export async function postJournalEntry(
   input: PostJournalEntryInput
 ): Promise<{ journalEntryId: string } | { error: string }> {
   if (input.lines.length < 2) return { error: "A journal entry needs at least two lines" };
+
+  const { data: entity } = await supabase
+    .from("finance_entities")
+    .select("locked_through_date")
+    .eq("id", input.entityId)
+    .single();
+  if (entity?.locked_through_date && input.entryDate <= entity.locked_through_date) {
+    return { error: `The books are closed through ${entity.locked_through_date}. Reopen this period to make changes.` };
+  }
 
   const totalDebit = round2(input.lines.reduce((sum, l) => sum + (l.debit ?? 0), 0));
   const totalCredit = round2(input.lines.reduce((sum, l) => sum + (l.credit ?? 0), 0));

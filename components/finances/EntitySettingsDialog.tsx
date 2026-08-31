@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, TriangleAlert, Landmark } from "lucide-react";
+import { Loader2, TriangleAlert, Landmark, Lock, LockOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { renameFinanceEntity, deleteFinanceEntity } from "@/lib/actions/finance-entities";
 import { getQboConnectionStatus, buildQboReconnectAuthUrl } from "@/lib/actions/finance-qbo";
+import { getBooksLockStatus, closeBooksThrough, reopenBooks } from "@/lib/actions/finance-close";
+import { today } from "./DateRangePicker";
 import type { FinanceEntity } from "./FinancesApp";
 
 type QboConnection = { status: "active" | "error" | "revoked"; environment: "sandbox" | "production" };
@@ -34,11 +36,41 @@ export function EntitySettingsDialog({
   const [reconnecting, setReconnecting] = useState(false);
   const [reconnectError, setReconnectError] = useState<string | null>(null);
 
+  const [lockedThroughDate, setLockedThroughDate] = useState<string | null | undefined>(undefined);
+  const [closeDate, setCloseDate] = useState(today());
+  const [closingBooks, setClosingBooks] = useState(false);
+  const [closeError, setCloseError] = useState<string | null>(null);
+
   useEffect(() => {
     getQboConnectionStatus(entity.id).then((result) => {
       if (result.connection) setQboConnection(result.connection as QboConnection);
     });
+    getBooksLockStatus(entity.id).then((result) => setLockedThroughDate(result.lockedThroughDate ?? null));
   }, [entity.id]);
+
+  async function handleCloseBooks() {
+    setClosingBooks(true);
+    setCloseError(null);
+    const result = await closeBooksThrough(entity.id, closeDate);
+    setClosingBooks(false);
+    if (result.error) {
+      setCloseError(result.error);
+      return;
+    }
+    setLockedThroughDate(closeDate);
+  }
+
+  async function handleReopenBooks() {
+    setClosingBooks(true);
+    setCloseError(null);
+    const result = await reopenBooks(entity.id);
+    setClosingBooks(false);
+    if (result.error) {
+      setCloseError(result.error);
+      return;
+    }
+    setLockedThroughDate(null);
+  }
 
   async function handleReconnect() {
     setReconnecting(true);
@@ -95,6 +127,45 @@ export function EntitySettingsDialog({
           </div>
           {renameError && <p className="text-sm text-red-500">{renameError}</p>}
         </div>
+
+        {lockedThroughDate !== undefined && (
+          <div className="rounded-xl border border-[var(--border)] p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              {lockedThroughDate ? <Lock size={15} className="text-[var(--muted-foreground)]" /> : <LockOpen size={15} className="text-[var(--muted-foreground)]" />}
+              <p className="text-sm font-medium">Close the books</p>
+            </div>
+            {lockedThroughDate ? (
+              <>
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  Closed through <strong className="text-[var(--foreground)]">{lockedThroughDate}</strong> — no transaction or journal entry dated on or before this date can be added, edited, or deleted.
+                </p>
+                <Button size="sm" variant="outline" onClick={handleReopenBooks} disabled={closingBooks}>
+                  {closingBooks ? <Loader2 size={13} className="animate-spin mr-1" /> : null}
+                  Reopen books
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  Once a month is signed off, close it through that date so it can&apos;t change later without deliberately reopening it.
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={closeDate}
+                    onChange={(e) => setCloseDate(e.target.value)}
+                    className="h-9 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-sm"
+                  />
+                  <Button size="sm" onClick={handleCloseBooks} disabled={closingBooks || !closeDate}>
+                    {closingBooks ? <Loader2 size={13} className="animate-spin mr-1" /> : null}
+                    Close through this date
+                  </Button>
+                </div>
+              </>
+            )}
+            {closeError && <p className="text-xs text-red-500">{closeError}</p>}
+          </div>
+        )}
 
         {qboConnection && (
           <div className={`rounded-xl border p-4 space-y-2 ${qboConnection.status === "active" ? "border-[var(--border)]" : "border-amber-500/30 bg-amber-500/5"}`}>

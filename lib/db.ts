@@ -464,6 +464,7 @@ export type Database = {
           entity_type: "personal" | "business";
           currency: string;
           fiscal_year_start_month: number;
+          locked_through_date: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -474,6 +475,7 @@ export type Database = {
           entity_type: "personal" | "business";
           currency?: string;
           fiscal_year_start_month?: number;
+          locked_through_date?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -484,6 +486,7 @@ export type Database = {
           entity_type?: "personal" | "business";
           currency?: string;
           fiscal_year_start_month?: number;
+          locked_through_date?: string | null;
           created_at?: string;
           updated_at?: string;
         };
