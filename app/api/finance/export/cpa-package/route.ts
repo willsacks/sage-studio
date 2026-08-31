@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 const archiver = createRequire(import.meta.url)("archiver") as (format: "zip", options?: { zlib?: { level: number } }) => import("archiver").Archiver;
 import { createClient } from "@/lib/supabase/server";
 import { requireFinanceEntityRole } from "@/lib/access/finance-access";
-import { getBalanceSheet, getIncomeStatement, getProjectProfitability } from "@/lib/finance/reports";
+import { getBalanceSheet, getIncomeStatement, getProjectProfitability, getTrialBalance, getJournalRegister } from "@/lib/finance/reports";
 
 function csvEscape(value: unknown): string {
   const str = String(value ?? "");
@@ -40,10 +40,12 @@ export async function GET(request: NextRequest) {
   const startDate = `${year}-01-01`;
   const endDate = `${year}-12-31`;
 
-  const [balanceSheet, incomeStatement, profitability, accountsResult, transactionsResult] = await Promise.all([
+  const [balanceSheet, incomeStatement, profitability, trialBalance, journalRegister, accountsResult, transactionsResult] = await Promise.all([
     getBalanceSheet(supabase, entityId, endDate),
     getIncomeStatement(supabase, entityId, startDate, endDate),
     getProjectProfitability(supabase, entityId, startDate, endDate),
+    getTrialBalance(supabase, entityId, endDate),
+    getJournalRegister(supabase, entityId, startDate, endDate),
     supabase.from("chart_of_accounts").select("name, account_type, account_subtype, is_active").eq("entity_id", entityId),
     supabase
       .from("transactions")
@@ -92,6 +94,17 @@ export async function GET(request: NextRequest) {
   });
   const transactionsCsv = toCsv([["Date", "Payee", "Amount", "Status", "Categories", "Projects"], ...transactionRows]);
 
+  const trialBalanceCsv = toCsv([
+    ["Account", "Type", "Debit", "Credit"],
+    ...trialBalance.rows.map((r) => [r.name, r.accountType, r.debit, r.credit]),
+    ["", "Total", trialBalance.totalDebit, trialBalance.totalCredit],
+  ]);
+
+  const journalRegisterCsv = toCsv([
+    ["Date", "Entry ID", "Source", "Description", "Account", "Debit", "Credit", "Memo"],
+    ...journalRegister.map((r) => [r.date, r.entryId, r.sourceType, r.description ?? "", r.accountName, r.debit, r.credit, r.memo ?? ""]),
+  ]);
+
   const archive = archiver("zip", { zlib: { level: 9 } });
   const passThrough = new PassThrough();
   const chunks: Buffer[] = [];
@@ -105,6 +118,8 @@ export async function GET(request: NextRequest) {
   archive.append(coaCsv, { name: "chart-of-accounts.csv" });
   archive.append(plCsv, { name: "income-statement.csv" });
   archive.append(bsCsv, { name: "balance-sheet.csv" });
+  archive.append(trialBalanceCsv, { name: "trial-balance.csv" });
+  archive.append(journalRegisterCsv, { name: "journal-register.csv" });
   archive.append(projectsCsv, { name: "project-profitability.csv" });
   archive.append(transactionsCsv, { name: "transactions.csv" });
   await archive.finalize();
