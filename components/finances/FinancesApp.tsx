@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutGrid, FolderKanban, ArrowLeftRight, BarChart3, BookOpen, Landmark, FileText, Users, Settings, History, Receipt } from "lucide-react";
+import { LayoutGrid, FolderKanban, ArrowLeftRight, BarChart3, BookOpen, Landmark, FileText, Users, Settings, History, Receipt, Lightbulb } from "lucide-react";
+import { HowThisWorksPanel } from "./HowThisWorksPanel";
+import type { HelpKey } from "@/lib/finance/help-content";
 import { EntitySwitcher } from "./EntitySwitcher";
 import { CreateEntityForm } from "./CreateEntityForm";
 import { EntitySettingsDialog } from "./EntitySettingsDialog";
@@ -49,6 +51,8 @@ export function FinancesApp({ initialEntities, initialEntityId }: { initialEntit
   const [tab, setTab] = useState<Tab>("overview");
   const [sharing, setSharing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [helpKey, setHelpKey] = useState<HelpKey>("overview");
   const tabBarRef = useRef<HTMLDivElement>(null);
   const [tabBarOverflowsRight, setTabBarOverflowsRight] = useState(false);
 
@@ -124,56 +128,90 @@ export function FinancesApp({ initialEntities, initialEntityId }: { initialEntit
         />
         <div className="flex items-center gap-1">
           <button
-            onClick={() => setSharing(true)}
+            onClick={() => {
+              setSharing(true);
+              setHelpKey("collaborators");
+            }}
             className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] px-2 py-1.5"
           >
             <Users size={14} /> Share access
           </button>
           {currentEntity.is_owner && (
             <button
-              onClick={() => setSettingsOpen(true)}
+              onClick={() => {
+                setSettingsOpen(true);
+                setHelpKey("period-close");
+              }}
               className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] px-2 py-1.5"
             >
               <Settings size={14} /> Settings
             </button>
           )}
+          <button
+            onClick={() => setHelpOpen((v) => !v)}
+            className={`flex items-center gap-1.5 text-sm px-2 py-1.5 ${helpOpen ? "text-[var(--primary)]" : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"}`}
+          >
+            <Lightbulb size={14} /> How This Works
+          </button>
         </div>
       </div>
 
-      <div className="relative">
-        <div
-          ref={tabBarRef}
-          onScroll={updateTabBarFade}
-          className="flex gap-1 border-b border-[var(--border)] overflow-x-auto"
-        >
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors ${
-                tab === t.id
-                  ? "border-[var(--primary)] text-[var(--foreground)]"
-                  : "border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-              }`}
+      <div className="flex gap-4 items-start">
+        <div className="flex-1 min-w-0 space-y-4">
+          <div className="relative">
+            <div
+              ref={tabBarRef}
+              onScroll={updateTabBarFade}
+              className="flex gap-1 border-b border-[var(--border)] overflow-x-auto"
             >
-              <t.icon size={14} /> {t.label}
-            </button>
-          ))}
+              {TABS.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => {
+                    setTab(t.id);
+                    setHelpKey(t.id as HelpKey);
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors ${
+                    tab === t.id
+                      ? "border-[var(--primary)] text-[var(--foreground)]"
+                      : "border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                  }`}
+                >
+                  <t.icon size={14} /> {t.label}
+                </button>
+              ))}
+            </div>
+            {tabBarOverflowsRight && (
+              <div className="pointer-events-none absolute right-0 top-0 bottom-1 w-8 bg-gradient-to-l from-[var(--background)] to-transparent" />
+            )}
+          </div>
+
+          {tab === "overview" && <OverviewTab entity={currentEntity} />}
+          {tab === "projects" && <ProjectsTab entity={currentEntity} />}
+          {tab === "transactions" && <TransactionsTab entity={currentEntity} />}
+          {tab === "invoices" && <InvoicesTab entity={currentEntity} />}
+          {tab === "bills" && <BillsTab entity={currentEntity} />}
+          {tab === "bank" && <BankTab entity={currentEntity} onHelpKeyChange={setHelpKey} />}
+          {tab === "reports" && <ReportsTab entity={currentEntity} onHelpKeyChange={setHelpKey} />}
+          {tab === "accounts" && <ChartOfAccountsTab entity={currentEntity} />}
+          {tab === "activity" && <ActivityLogTab entity={currentEntity} />}
         </div>
-        {tabBarOverflowsRight && (
-          <div className="pointer-events-none absolute right-0 top-0 bottom-1 w-8 bg-gradient-to-l from-[var(--background)] to-transparent" />
+
+        {helpOpen && (
+          <div className="hidden lg:flex w-80 flex-shrink-0 border border-[var(--border)] rounded-xl overflow-hidden sticky top-4 max-h-[calc(100vh-2rem)]">
+            <HowThisWorksPanel helpKey={helpKey} onClose={() => setHelpOpen(false)} />
+          </div>
         )}
       </div>
 
-      {tab === "overview" && <OverviewTab entity={currentEntity} />}
-      {tab === "projects" && <ProjectsTab entity={currentEntity} />}
-      {tab === "transactions" && <TransactionsTab entity={currentEntity} />}
-      {tab === "invoices" && <InvoicesTab entity={currentEntity} />}
-      {tab === "bills" && <BillsTab entity={currentEntity} />}
-      {tab === "bank" && <BankTab entity={currentEntity} />}
-      {tab === "reports" && <ReportsTab entity={currentEntity} />}
-      {tab === "accounts" && <ChartOfAccountsTab entity={currentEntity} />}
-      {tab === "activity" && <ActivityLogTab entity={currentEntity} />}
+      {helpOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setHelpOpen(false)} />
+          <div className="absolute inset-y-0 right-0 w-80 max-w-[85vw] bg-[var(--background)] border-l border-[var(--border)] shadow-lg">
+            <HowThisWorksPanel helpKey={helpKey} onClose={() => setHelpOpen(false)} />
+          </div>
+        </div>
+      )}
 
       {sharing && (
         <CollaboratorsDialog entityId={currentEntity.id} entityName={currentEntity.name} onClose={() => setSharing(false)} />

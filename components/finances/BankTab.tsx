@@ -12,6 +12,7 @@ import { listFinanceProjects } from "@/lib/actions/finance-projects";
 import { listCategorizationRules, createCategorizationRule, deleteCategorizationRule, applyRulesToExistingTransactions } from "@/lib/actions/finance-rules";
 import type { FinanceEntity } from "./FinancesApp";
 import { MONEY_ACCOUNT_SUBTYPES } from "@/lib/finance/default-accounts";
+import type { HelpKey } from "@/lib/finance/help-content";
 
 type BankAccount = {
   id: string;
@@ -27,7 +28,7 @@ type Rule = { id: string; match_type: string; match_value: string; chart_account
 
 const MONEY_SUBTYPES = MONEY_ACCOUNT_SUBTYPES;
 
-export function BankTab({ entity }: { entity: FinanceEntity }) {
+export function BankTab({ entity, onHelpKeyChange }: { entity: FinanceEntity; onHelpKeyChange?: (key: HelpKey) => void }) {
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -190,7 +191,14 @@ export function BankTab({ entity }: { entity: FinanceEntity }) {
                           {syncingId === ba.bank_connection_id ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
                         </Button>
                       )}
-                      <button onClick={() => setReconcilingAccount(ba)} className="p-1.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" title="Reconcile">
+                      <button
+                        onClick={() => {
+                          setReconcilingAccount(ba);
+                          onHelpKeyChange?.("reconciliation");
+                        }}
+                        className="p-1.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                        title="Reconcile"
+                      >
                         <ListChecks size={14} />
                       </button>
                       <button onClick={() => handleUnlink(ba.id)} className="p-1.5 text-[var(--muted-foreground)] hover:text-red-500" title={connection?.institution_name === "Manual entry" ? "Remove account" : "Unlink from Plaid"}>

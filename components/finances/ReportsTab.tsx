@@ -10,6 +10,7 @@ import { JournalEntryDialog } from "./JournalEntryDialog";
 import { Button } from "@/components/ui/button";
 import { DateRangePicker, startOfYear, today, type DateRange } from "./DateRangePicker";
 import type { FinanceEntity } from "./FinancesApp";
+import type { HelpKey } from "@/lib/finance/help-content";
 
 type Report = "pl" | "balance" | "projects" | "trends";
 
@@ -17,7 +18,7 @@ function money(n: number) {
   return n.toLocaleString(undefined, { style: "currency", currency: "USD" });
 }
 
-export function ReportsTab({ entity }: { entity: FinanceEntity }) {
+export function ReportsTab({ entity, onHelpKeyChange }: { entity: FinanceEntity; onHelpKeyChange?: (key: HelpKey) => void }) {
   const [report, setReport] = useState<Report>("pl");
   const [range, setRange] = useState<DateRange>({ startDate: startOfYear(), endDate: today() });
   const [showJournalDialog, setShowJournalDialog] = useState(false);
@@ -43,7 +44,15 @@ export function ReportsTab({ entity }: { entity: FinanceEntity }) {
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setShowJournalDialog(true)}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs"
+            onClick={() => {
+              setShowJournalDialog(true);
+              onHelpKeyChange?.("journal-entry");
+            }}
+          >
             New journal entry
           </Button>
           <ExportCpaPackageButton entityId={entity.id} />
