@@ -221,13 +221,24 @@ export type AccountTransaction = {
   splitAmount: number;
   status: string;
   isSplit: boolean;
+  isManualEntry?: boolean;
+  journalEntryId?: string;
+  debit?: number;
+  credit?: number;
+  memo?: string | null;
 };
 
 /** Every transaction with a split against a given account within a date
- * range — backs the Income Statement's "click a row to see what's in it"
+ * range, plus any free-standing manual journal entries (posted via
+ * createJournalEntry, lib/actions/finance-journal.ts) that hit this account
+ * — backs the Income Statement's "click a row to see what's in it"
  * drill-down. Returns the transaction's own full amount (for display/sign)
  * alongside this split's own amount (which can differ from the full amount
- * when the transaction is split across multiple categories). */
+ * when the transaction is split across multiple categories). Manual journal
+ * lines are distinguished by source_transaction_id being null — a manual
+ * *transaction* (createManualTransaction) also uses source_type "manual"
+ * but always carries a source_transaction_id, so filtering on that (not
+ * source_type alone) is what keeps the two from being conflated here. */
 export async function getAccountTransactions(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: SupabaseClient<Database> | any,
@@ -236,32 +247,65 @@ export async function getAccountTransactions(
   startDate: string,
   endDate: string
 ): Promise<AccountTransaction[]> {
-  const { data, error } = await supabase
-    .from("transaction_splits")
-    .select("amount, transactions!inner(id, date, payee_name, amount, status, is_split, entity_id)")
-    .eq("chart_account_id", accountId)
-    .eq("transactions.entity_id", entityId)
-    .neq("transactions.status", "excluded")
-    .gte("transactions.date", startDate)
-    .lte("transactions.date", endDate);
-  if (error) throw new Error(error.message);
+  const [splitsResult, journalResult] = await Promise.all([
+    supabase
+      .from("transaction_splits")
+      .select("amount, transactions!inner(id, date, payee_name, amount, status, is_split, entity_id)")
+      .eq("chart_account_id", accountId)
+      .eq("transactions.entity_id", entityId)
+      .neq("transactions.status", "excluded")
+      .gte("transactions.date", startDate)
+      .lte("transactions.date", endDate),
+    supabase
+      .from("journal_entry_lines")
+      .select("debit, credit, memo, journal_entries!inner(id, entity_id, entry_date, description, source_transaction_id)")
+      .eq("account_id", accountId)
+      .eq("journal_entries.entity_id", entityId)
+      .is("journal_entries.source_transaction_id", null)
+      .gte("journal_entries.entry_date", startDate)
+      .lte("journal_entries.entry_date", endDate),
+  ]);
+  if (splitsResult.error) throw new Error(splitsResult.error.message);
+  if (journalResult.error) throw new Error(journalResult.error.message);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rows = (data ?? []) as any[];
-  return rows
-    .map((r) => {
-      const txn = Array.isArray(r.transactions) ? r.transactions[0] : r.transactions;
-      return {
-        id: txn.id as string,
-        date: txn.date as string,
-        payeeName: txn.payee_name as string,
-        amount: txn.amount as number,
-        splitAmount: round2(r.amount as number),
-        status: txn.status as string,
-        isSplit: txn.is_split as boolean,
-      };
-    })
-    .sort((a, b) => b.date.localeCompare(a.date));
+  const splitRows = (splitsResult.data ?? []) as any[];
+  const fromSplits: AccountTransaction[] = splitRows.map((r) => {
+    const txn = Array.isArray(r.transactions) ? r.transactions[0] : r.transactions;
+    return {
+      id: txn.id as string,
+      date: txn.date as string,
+      payeeName: txn.payee_name as string,
+      amount: txn.amount as number,
+      splitAmount: round2(r.amount as number),
+      status: txn.status as string,
+      isSplit: txn.is_split as boolean,
+    };
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const journalRows = (journalResult.data ?? []) as any[];
+  const fromJournal: AccountTransaction[] = journalRows.map((r) => {
+    const entry = Array.isArray(r.journal_entries) ? r.journal_entries[0] : r.journal_entries;
+    const debit = round2((r.debit as number) ?? 0);
+    const credit = round2((r.credit as number) ?? 0);
+    return {
+      id: `je-${entry.id}`,
+      date: entry.entry_date as string,
+      payeeName: (entry.description as string | null) || "Journal entry",
+      amount: debit - credit,
+      splitAmount: debit - credit,
+      status: "categorized",
+      isSplit: false,
+      isManualEntry: true,
+      journalEntryId: entry.id as string,
+      debit,
+      credit,
+      memo: r.memo as string | null,
+    };
+  });
+
+  return [...fromSplits, ...fromJournal].sort((a, b) => b.date.localeCompare(a.date));
 }
 
 /** Income vs. expense per calendar month over a date range — feeds the

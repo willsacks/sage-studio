@@ -6,6 +6,8 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, Legend, Responsi
 import { fetchBalanceSheet, fetchIncomeStatement, fetchProjectProfitability, fetchMonthlyIncomeExpense, fetchCashBalanceOverTime } from "@/lib/actions/finance-reports";
 import { ExportCpaPackageButton } from "./ExportCpaPackageButton";
 import { AccountTransactionsDialog } from "./AccountTransactionsDialog";
+import { JournalEntryDialog } from "./JournalEntryDialog";
+import { Button } from "@/components/ui/button";
 import { DateRangePicker, startOfYear, today, type DateRange } from "./DateRangePicker";
 import type { FinanceEntity } from "./FinancesApp";
 
@@ -18,6 +20,8 @@ function money(n: number) {
 export function ReportsTab({ entity }: { entity: FinanceEntity }) {
   const [report, setReport] = useState<Report>("pl");
   const [range, setRange] = useState<DateRange>({ startDate: startOfYear(), endDate: today() });
+  const [showJournalDialog, setShowJournalDialog] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   return (
     <div className="space-y-4">
@@ -38,15 +42,28 @@ export function ReportsTab({ entity }: { entity: FinanceEntity }) {
             </button>
           ))}
         </div>
-        <ExportCpaPackageButton entityId={entity.id} />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setShowJournalDialog(true)}>
+            New journal entry
+          </Button>
+          <ExportCpaPackageButton entityId={entity.id} />
+        </div>
       </div>
 
       {report !== "trends" && <DateRangePicker range={range} onChange={setRange} />}
 
-      {report === "pl" && <IncomeStatementReport entity={entity} range={range} />}
-      {report === "balance" && <BalanceSheetReport entity={entity} asOfDate={range.endDate} />}
-      {report === "projects" && <ProjectComparisonReport entity={entity} range={range} />}
-      {report === "trends" && <TrendsReport entity={entity} />}
+      {report === "pl" && <IncomeStatementReport key={refreshKey} entity={entity} range={range} />}
+      {report === "balance" && <BalanceSheetReport key={refreshKey} entity={entity} asOfDate={range.endDate} />}
+      {report === "projects" && <ProjectComparisonReport key={refreshKey} entity={entity} range={range} />}
+      {report === "trends" && <TrendsReport key={refreshKey} entity={entity} />}
+
+      {showJournalDialog && (
+        <JournalEntryDialog
+          entityId={entity.id}
+          onClose={() => setShowJournalDialog(false)}
+          onPosted={() => setRefreshKey((k) => k + 1)}
+        />
+      )}
     </div>
   );
 }

@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Check } from "lucide-react";
+import { Loader2, Check, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { fetchAccountTransactions } from "@/lib/actions/finance-reports";
 import type { AccountTransaction } from "@/lib/finance/reports";
 import { listChartOfAccounts } from "@/lib/actions/finance-accounts";
 import { categorizeTransaction } from "@/lib/actions/finance-transactions";
+import { deleteJournalEntry } from "@/lib/actions/finance-journal";
 
 type Account = { id: string; name: string; account_type: string; is_active: boolean };
 
@@ -43,6 +44,7 @@ export function AccountTransactionsDialog({
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [newAccountId, setNewAccountId] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,6 +93,21 @@ export function AccountTransactionsDialog({
     onChanged();
   }
 
+  async function handleDeleteJournalEntry(t: AccountTransaction) {
+    if (!t.journalEntryId) return;
+    setDeletingId(t.id);
+    setError(null);
+    const result = await deleteJournalEntry(t.journalEntryId, entityId);
+    setDeletingId(null);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    setTransactions((prev) => prev.filter((x) => x.id !== t.id));
+    setChangedAny(true);
+    onChanged();
+  }
+
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-lg max-h-[32rem] flex flex-col p-0 gap-0">
@@ -102,6 +119,7 @@ export function AccountTransactionsDialog({
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto">
+          {error && !editingId && <p className="text-xs text-red-500 px-4 pt-2">{error}</p>}
           {loading ? (
             <div className="flex justify-center py-10"><Loader2 size={18} className="animate-spin text-[var(--muted-foreground)]" /></div>
           ) : transactions.length === 0 ? (
@@ -112,14 +130,28 @@ export function AccountTransactionsDialog({
             <div className="divide-y divide-[var(--border)]">
               {transactions.map((t) => (
                 <div key={t.id} className="px-4 py-2.5">
-                  <p className="text-sm font-medium">{t.payeeName}</p>
+                  <p className="text-sm font-medium">{t.payeeName}{t.isManualEntry && <span className="ml-1.5 text-xs font-normal text-[var(--muted-foreground)]">(journal entry)</span>}</p>
                   <div className="flex items-center justify-between gap-3 mt-0.5">
                     <p className="text-xs text-[var(--muted-foreground)]">
-                      {t.date}{t.isSplit ? " · split transaction" : ""}
+                      {t.date}
+                      {t.isSplit ? " · split transaction" : ""}
+                      {t.memo ? ` · ${t.memo}` : ""}
                     </p>
-                    <span className="text-sm font-medium flex-none">{money(t.splitAmount)}</span>
+                    <span className="text-sm font-medium flex-none">
+                      {t.isManualEntry
+                        ? t.debit! > 0 ? `Dr ${money(t.debit!)}` : `Cr ${money(t.credit!)}`
+                        : money(t.splitAmount)}
+                    </span>
                   </div>
-                  {editingId === t.id ? (
+                  {t.isManualEntry ? (
+                    <button
+                      onClick={() => handleDeleteJournalEntry(t)}
+                      disabled={deletingId === t.id}
+                      className="text-xs text-red-500 mt-1 hover:underline inline-flex items-center gap-1 disabled:opacity-50"
+                    >
+                      {deletingId === t.id ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />} Delete entry
+                    </button>
+                  ) : editingId === t.id ? (
                     <div className="flex items-center gap-2 mt-2">
                       <select
                         value={newAccountId}
