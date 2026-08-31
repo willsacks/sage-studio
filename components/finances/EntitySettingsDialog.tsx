@@ -149,12 +149,12 @@ export function EntitySettingsDialog({
                 <p className="text-xs text-[var(--muted-foreground)]">
                   Once a month is signed off, close it through that date so it can&apos;t change later without deliberately reopening it.
                 </p>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <input
                     type="date"
                     value={closeDate}
                     onChange={(e) => setCloseDate(e.target.value)}
-                    className="h-9 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-sm"
+                    className="h-9 px-2 rounded-lg border border-[var(--border)] bg-[var(--background)] text-sm min-w-0"
                   />
                   <Button size="sm" onClick={handleCloseBooks} disabled={closingBooks || !closeDate}>
                     {closingBooks ? <Loader2 size={13} className="animate-spin mr-1" /> : null}

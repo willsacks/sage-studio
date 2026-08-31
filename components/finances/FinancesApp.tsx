@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LayoutGrid, FolderKanban, ArrowLeftRight, BarChart3, BookOpen, Landmark, FileText, Users, Settings, History, Receipt } from "lucide-react";
 import { EntitySwitcher } from "./EntitySwitcher";
@@ -49,6 +49,25 @@ export function FinancesApp({ initialEntities, initialEntityId }: { initialEntit
   const [tab, setTab] = useState<Tab>("overview");
   const [sharing, setSharing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const tabBarRef = useRef<HTMLDivElement>(null);
+  const [tabBarOverflowsRight, setTabBarOverflowsRight] = useState(false);
+
+  // On narrow (mobile) viewports the tab row scrolls horizontally rather
+  // than wrapping — Bills/Reports/Chart of Accounts/Activity are all
+  // reachable, but nothing hinted that without this fade there was more
+  // to scroll to, so the tabs past whatever fit on screen were effectively
+  // undiscoverable.
+  const updateTabBarFade = useCallback(() => {
+    const el = tabBarRef.current;
+    if (!el) return;
+    setTabBarOverflowsRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+  }, []);
+
+  useEffect(() => {
+    updateTabBarFade();
+    window.addEventListener("resize", updateTabBarFade);
+    return () => window.removeEventListener("resize", updateTabBarFade);
+  }, [updateTabBarFade]);
 
   // Keeps ?entity= in the URL in sync with whichever entity is actually
   // selected — the page's server component only knows which entity to
@@ -121,20 +140,29 @@ export function FinancesApp({ initialEntities, initialEntityId }: { initialEntit
         </div>
       </div>
 
-      <div className="flex gap-1 border-b border-[var(--border)] overflow-x-auto">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors ${
-              tab === t.id
-                ? "border-[var(--primary)] text-[var(--foreground)]"
-                : "border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-            }`}
-          >
-            <t.icon size={14} /> {t.label}
-          </button>
-        ))}
+      <div className="relative">
+        <div
+          ref={tabBarRef}
+          onScroll={updateTabBarFade}
+          className="flex gap-1 border-b border-[var(--border)] overflow-x-auto"
+        >
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors ${
+                tab === t.id
+                  ? "border-[var(--primary)] text-[var(--foreground)]"
+                  : "border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              }`}
+            >
+              <t.icon size={14} /> {t.label}
+            </button>
+          ))}
+        </div>
+        {tabBarOverflowsRight && (
+          <div className="pointer-events-none absolute right-0 top-0 bottom-1 w-8 bg-gradient-to-l from-[var(--background)] to-transparent" />
+        )}
       </div>
 
       {tab === "overview" && <OverviewTab entity={currentEntity} />}
