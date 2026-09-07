@@ -96,7 +96,7 @@ export default async function ClientPage({
   const chartBuckets: { label: string; seconds: number }[] = [];
 
   if (granularity === "day") {
-    const days = Math.max(spanDays, 1);
+    const days = Math.max(spanDays + 1, 1); // +1: include both start and end day
     for (let i = 0; i < days; i++) {
       const day = startOfDay(addDays(chartStart, i));
       const next = addDays(day, 1);
