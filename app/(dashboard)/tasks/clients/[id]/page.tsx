@@ -1,7 +1,10 @@
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
-import { format, startOfWeek, addWeeks } from "date-fns";
+import {
+  format, startOfWeek, addWeeks, addDays, addMonths,
+  startOfDay, startOfMonth, differenceInDays,
+} from "date-fns";
 import { Building2, Clock, Calendar, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { DateRangePicker } from "@/components/tasks/DateRangePicker";
@@ -76,21 +79,56 @@ export default async function ClientPage({
   const totalSecs = entries.reduce((s, e) => s + (e.duration_seconds ?? 0), 0);
   const sessionCount = entries.length;
 
-  // Weekly bar chart: last 8 weeks (always full-range for context)
-  const weeklyTotals: { label: string; seconds: number }[] = [];
+  // Adaptive chart: pick granularity based on the selected date range
   const now = new Date();
-  for (let i = 7; i >= 0; i--) {
-    const weekStart = startOfWeek(addWeeks(now, -i), { weekStartsOn: 1 });
-    const weekEnd = addWeeks(weekStart, 1);
-    const secs = entries
-      .filter((e) => {
-        const d = new Date(e.started_at);
-        return d >= weekStart && d < weekEnd;
-      })
-      .reduce((s, e) => s + (e.duration_seconds ?? 0), 0);
-    weeklyTotals.push({ label: format(weekStart, "MMM d"), seconds: secs });
+  const chartEnd = to ? new Date(`${to}T23:59:59`) : now;
+  const chartStart = from
+    ? new Date(`${from}T00:00:00`)
+    : entries.length > 0
+      ? startOfDay(new Date(entries[entries.length - 1].started_at))
+      : addMonths(now, -3);
+
+  const spanDays = differenceInDays(chartEnd, chartStart);
+  type Granularity = "day" | "week" | "month";
+  const granularity: Granularity =
+    spanDays <= 14 ? "day" : spanDays <= 90 ? "week" : "month";
+
+  const chartBuckets: { label: string; seconds: number }[] = [];
+
+  if (granularity === "day") {
+    const days = Math.max(spanDays, 1);
+    for (let i = 0; i < days; i++) {
+      const day = startOfDay(addDays(chartStart, i));
+      const next = addDays(day, 1);
+      const secs = entries
+        .filter((e) => { const d = new Date(e.started_at); return d >= day && d < next; })
+        .reduce((s, e) => s + (e.duration_seconds ?? 0), 0);
+      chartBuckets.push({ label: format(day, "MMM d"), seconds: secs });
+    }
+  } else if (granularity === "week") {
+    let cursor = startOfWeek(chartStart, { weekStartsOn: 1 });
+    while (cursor <= chartEnd) {
+      const next = addWeeks(cursor, 1);
+      const secs = entries
+        .filter((e) => { const d = new Date(e.started_at); return d >= cursor && d < next; })
+        .reduce((s, e) => s + (e.duration_seconds ?? 0), 0);
+      chartBuckets.push({ label: format(cursor, "MMM d"), seconds: secs });
+      cursor = next;
+    }
+  } else {
+    let cursor = startOfMonth(chartStart);
+    while (cursor <= chartEnd) {
+      const next = addMonths(cursor, 1);
+      const secs = entries
+        .filter((e) => { const d = new Date(e.started_at); return d >= cursor && d < next; })
+        .reduce((s, e) => s + (e.duration_seconds ?? 0), 0);
+      chartBuckets.push({ label: format(cursor, "MMM ''yy"), seconds: secs });
+      cursor = next;
+    }
   }
-  const maxWeekSecs = Math.max(...weeklyTotals.map((w) => w.seconds), 1);
+
+  const maxBucketSecs = Math.max(...chartBuckets.map((b) => b.seconds), 1);
+  const chartLabel = granularity === "day" ? "Daily" : granularity === "week" ? "Weekly" : "Monthly";
 
   const printUrl = `sage.studio/tasks/clients/${id}`;
 
@@ -99,16 +137,16 @@ export default async function ClientPage({
       {/* Print-only global styles */}
       <style>{`
         @media print {
-          /* Hide everything outside the report */
-          body > * { display: none !important; }
-          #client-report { display: block !important; }
-
-          #client-report .print\\:hidden { display: none !important; }
+          /* visibility:hidden on all body children, then selectively reveal the report */
+          body * { visibility: hidden; }
+          #client-report, #client-report * { visibility: visible; }
+          .print-hidden { visibility: hidden !important; }
 
           #client-report {
-            position: fixed;
+            position: absolute;
             inset: 0;
             padding: 32px 40px;
+            max-width: 100%;
             font-family: system-ui, sans-serif;
             color: #111;
             background: #fff;
@@ -120,6 +158,7 @@ export default async function ClientPage({
             left: 40px;
             right: 40px;
             display: flex !important;
+            visibility: visible !important;
             align-items: center;
             justify-content: space-between;
             border-top: 1px solid #e5e7eb;
@@ -138,7 +177,6 @@ export default async function ClientPage({
 
         @media screen {
           .print-footer { display: none; }
-          #client-report { display: block; }
         }
       `}</style>
 
@@ -148,7 +186,7 @@ export default async function ClientPage({
           <div className="flex items-center gap-3">
             <Link
               href="/tasks"
-              className="p-2 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors print:hidden"
+              className="p-2 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors print-hidden"
             >
               <ArrowLeft size={16} />
             </Link>
@@ -166,7 +204,7 @@ export default async function ClientPage({
         </div>
 
         {/* Date range picker */}
-        <div className="print:hidden">
+        <div className="print-hidden">
           <Suspense>
             <DateRangePicker from={from} to={to} />
           </Suspense>
@@ -196,20 +234,20 @@ export default async function ClientPage({
           )}
         </div>
 
-        {/* Weekly chart */}
+        {/* Adaptive activity chart */}
         {totalSecs > 0 && (
           <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5">
-            <h2 className="text-sm font-semibold mb-4">Weekly activity</h2>
-            <div className="flex items-end gap-2 h-24">
-              {weeklyTotals.map((w) => (
-                <div key={w.label} className="flex-1 flex flex-col items-center gap-1">
+            <h2 className="text-sm font-semibold mb-4">{chartLabel} activity</h2>
+            <div className="flex items-end gap-1 overflow-x-auto">
+              {chartBuckets.map((b, i) => (
+                <div key={i} className="flex-1 min-w-[20px] flex flex-col items-center gap-1">
                   <div className="w-full flex items-end justify-center" style={{ height: "72px" }}>
                     <div
                       className="w-full bg-[var(--primary)] rounded-t-sm transition-all"
-                      style={{ height: `${Math.round((w.seconds / maxWeekSecs) * 72)}px`, minHeight: w.seconds > 0 ? "2px" : "0" }}
+                      style={{ height: `${Math.round((b.seconds / maxBucketSecs) * 72)}px`, minHeight: b.seconds > 0 ? "2px" : "0" }}
                     />
                   </div>
-                  <span className="text-[9px] text-[var(--muted-foreground)] text-center leading-tight">{w.label}</span>
+                  <span className="text-[9px] text-[var(--muted-foreground)] text-center leading-tight whitespace-nowrap">{b.label}</span>
                 </div>
               ))}
             </div>

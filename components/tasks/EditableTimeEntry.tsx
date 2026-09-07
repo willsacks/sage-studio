@@ -45,6 +45,7 @@ function toDatetimeLocal(iso: string) {
 
 export function EditableTimeEntry({ entry, clients, onClientCreated, onMutated }: EditableTimeEntryProps) {
   const [editing, setEditing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [description, setDescription] = useState(entry.description);
   const [startedAt, setStartedAt] = useState(toDatetimeLocal(entry.started_at));
   const [stoppedAt, setStoppedAt] = useState(toDatetimeLocal(entry.stopped_at));
@@ -78,6 +79,7 @@ export function EditableTimeEntry({ entry, clients, onClientCreated, onMutated }
   }
 
   function handleDelete() {
+    if (!confirmDelete) { setConfirmDelete(true); return; }
     startTransition(async () => {
       await deleteTimeEntry(entry.id);
       onMutated();
@@ -170,21 +172,43 @@ export function EditableTimeEntry({ entry, clients, onClientCreated, onMutated }
       </span>
 
       <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button
-          onClick={() => setEditing(true)}
-          className="p-1.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors"
-          title="Edit entry"
-        >
-          <Pencil size={13} />
-        </button>
-        <button
-          onClick={handleDelete}
-          disabled={pending}
-          className="p-1.5 rounded text-[var(--muted-foreground)] hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
-          title="Delete entry"
-        >
-          <Trash2 size={13} />
-        </button>
+        {confirmDelete ? (
+          <>
+            <span className="text-xs text-red-500 font-medium mr-1">Delete?</span>
+            <button
+              onClick={handleDelete}
+              disabled={pending}
+              className="px-2 py-1 rounded text-xs font-medium bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50"
+            >
+              Yes
+            </button>
+            <button
+              onClick={() => setConfirmDelete(false)}
+              disabled={pending}
+              className="px-2 py-1 rounded text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors"
+            >
+              No
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={() => setEditing(true)}
+              className="p-1.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors"
+              title="Edit entry"
+            >
+              <Pencil size={13} />
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={pending}
+              className="p-1.5 rounded text-[var(--muted-foreground)] hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+              title="Delete entry"
+            >
+              <Trash2 size={13} />
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

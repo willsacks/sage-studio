@@ -50,7 +50,7 @@ export function CategoryPicker({ value, onChange, clients = [], onClientCreated 
 
   const selectedClient = value.client_id ? clients.find((c) => c.id === value.client_id) : null;
   const hasValue = !!value.category || !!value.client_id;
-  const label = selectedClient ? selectedClient.name : (value.category ?? "Add category");
+  const label = selectedClient ? selectedClient.name : (value.category ?? "Add tag");
 
   function selectCategory(cat: string) {
     onChange({ category: cat, client_id: null });
