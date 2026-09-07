@@ -191,19 +191,18 @@ export default async function ClientPage({
               <ArrowLeft size={16} />
             </Link>
             <div>
-              <div className="flex items-center gap-2">
-                <Building2 size={20} className="text-[var(--primary)]" />
-                <h1 className="text-2xl font-bold">{clientData.name}</h1>
+              <h1 className="text-2xl font-bold">Time Report</h1>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <Building2 size={13} className="text-[var(--muted-foreground)]" />
+                <p className="text-[var(--muted-foreground)] text-sm font-medium">{clientData.name}</p>
               </div>
-              <p className="text-[var(--muted-foreground)] text-sm mt-0.5">
-                {rangeLabel(from, to)}
-              </p>
+              <p className="text-[var(--muted-foreground)] text-xs mt-0.5">{rangeLabel(from, to)}</p>
             </div>
           </div>
           <PrintButton />
         </div>
 
-        {/* Date range picker */}
+        {/* Date range picker — screen only */}
         <div className="print-hidden">
           <Suspense>
             <DateRangePicker from={from} to={to} />
