@@ -266,7 +266,7 @@ export default async function ClientPage({
             </div>
             <div className="divide-y divide-[var(--border)]">
               {entries.map((entry) => (
-                <div key={entry.id} className="flex items-center gap-4 px-5 py-3">
+                <div key={entry.id} className="flex items-center gap-3 px-4 sm:px-5 py-3">
                   <div className="flex-1 min-w-0">
                     <p className={`text-sm truncate ${
                       entry.description ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)] italic"
@@ -277,7 +277,7 @@ export default async function ClientPage({
                       {format(new Date(entry.started_at), "EEE, MMM d")} · {formatTime(entry.started_at)} – {formatTime(entry.stopped_at)}
                     </p>
                   </div>
-                  <span className="font-mono text-sm font-medium text-[var(--foreground)] flex-shrink-0">
+                  <span className="font-mono text-sm font-medium text-[var(--foreground)] flex-shrink-0 tabular-nums">
                     {entry.duration_seconds != null ? formatDuration(entry.duration_seconds) : "—"}
                   </span>
                 </div>

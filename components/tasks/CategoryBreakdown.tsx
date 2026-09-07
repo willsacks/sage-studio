@@ -137,8 +137,8 @@ export function CategoryBreakdown({ entries }: CategoryBreakdownProps) {
           const pct = Math.round((cat.seconds / totalAll) * 100);
           const barWidth = Math.round((cat.seconds / maxSeconds) * 100);
           return (
-            <div key={cat.label + (cat.clientId ?? "")} className="flex items-center gap-3">
-              <div className="w-32 flex-shrink-0">
+            <div key={cat.label + (cat.clientId ?? "")} className="flex items-center gap-2 sm:gap-3">
+              <div className="w-24 sm:w-32 flex-shrink-0">
                 {cat.clientId ? (
                   <Link
                     href={`/tasks/clients/${cat.clientId}`}
@@ -148,7 +148,7 @@ export function CategoryBreakdown({ entries }: CategoryBreakdownProps) {
                     {cat.label}
                   </Link>
                 ) : (
-                  <span className="text-xs text-[var(--foreground)] truncate">{cat.label}</span>
+                  <span className="text-xs text-[var(--foreground)] truncate block">{cat.label}</span>
                 )}
               </div>
               <div className="flex-1 h-2 bg-[var(--muted)] rounded-full overflow-hidden">
@@ -157,10 +157,10 @@ export function CategoryBreakdown({ entries }: CategoryBreakdownProps) {
                   style={{ width: `${barWidth}%` }}
                 />
               </div>
-              <span className="text-xs font-mono text-[var(--muted-foreground)] w-16 text-right flex-shrink-0">
+              <span className="text-xs font-mono text-[var(--muted-foreground)] w-14 sm:w-16 text-right flex-shrink-0">
                 {formatDuration(cat.seconds)}
               </span>
-              <span className="text-xs text-[var(--muted-foreground)] w-8 text-right flex-shrink-0">
+              <span className="hidden sm:block text-xs text-[var(--muted-foreground)] w-8 text-right flex-shrink-0">
                 {pct}%
               </span>
             </div>

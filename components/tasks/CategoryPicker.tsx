@@ -109,17 +109,17 @@ export function CategoryPicker({ value, onChange, clients = [], onClientCreated 
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-1 w-52 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-lg z-50 overflow-hidden">
+        <div className="absolute left-0 top-full mt-1 w-52 max-w-[calc(100vw-2rem)] bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-lg z-50 overflow-hidden">
           {/* Clients section */}
           <div className="px-3 py-1.5 text-[10px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wide border-b border-[var(--border)] flex items-center justify-between">
             <span>Clients</span>
             <button
               type="button"
               onClick={() => setAddingClient((a) => !a)}
-              className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+              className="p-1 -m-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
               title="New client"
             >
-              <Plus size={11} />
+              <Plus size={13} />
             </button>
           </div>
 

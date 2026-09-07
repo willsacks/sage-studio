@@ -103,31 +103,33 @@ export function EditableTimeEntry({ entry, clients, onClientCreated, onMutated }
           autoFocus
           className="w-full bg-transparent text-sm focus:outline-none border-b border-[var(--border)] pb-1 text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]"
         />
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-[auto_auto_1fr] items-center gap-2">
           <div className="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
-            <span>Start</span>
+            <span className="w-8 flex-shrink-0">Start</span>
             <input
               type="datetime-local"
               value={startedAt}
               onChange={(e) => setStartedAt(e.target.value)}
-              className="bg-[var(--card)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none focus:border-[var(--primary)]"
+              className="flex-1 bg-[var(--card)] border border-[var(--border)] rounded-lg px-2 py-1.5 text-xs text-[var(--foreground)] focus:outline-none focus:border-[var(--primary)]"
             />
           </div>
           <div className="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
-            <span>End</span>
+            <span className="w-8 flex-shrink-0">End</span>
             <input
               type="datetime-local"
               value={stoppedAt}
               onChange={(e) => setStoppedAt(e.target.value)}
-              className="bg-[var(--card)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none focus:border-[var(--primary)]"
+              className="flex-1 bg-[var(--card)] border border-[var(--border)] rounded-lg px-2 py-1.5 text-xs text-[var(--foreground)] focus:outline-none focus:border-[var(--primary)]"
             />
           </div>
-          <CategoryPicker
-            value={category}
-            onChange={setCategory}
-            clients={clients}
-            onClientCreated={onClientCreated}
-          />
+          <div className="sm:justify-self-end">
+            <CategoryPicker
+              value={category}
+              onChange={setCategory}
+              clients={clients}
+              onClientCreated={onClientCreated}
+            />
+          </div>
         </div>
         {error && <p className="text-xs text-red-500">{error}</p>}
         <div className="flex items-center gap-2 justify-end">
@@ -174,7 +176,7 @@ export function EditableTimeEntry({ entry, clients, onClientCreated, onMutated }
         {entry.duration_seconds != null && entry.duration_seconds <= 86400 ? formatDuration(entry.duration_seconds) : "—"}
       </span>
 
-      <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex items-center gap-1 flex-shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
         {confirmDelete ? (
           <>
             <span className="text-xs text-red-500 font-medium mr-1">Delete?</span>

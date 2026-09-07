@@ -49,7 +49,6 @@ export function DateRangePicker({ from, to }: DateRangePickerProps) {
   const matchedPreset = presets.find((p) => p.from === from && p.to === to);
   const isCustom = !matchedPreset;
 
-  // Local date state for custom inputs, initialised from URL
   const [customFrom, setCustomFrom] = useState(from);
   const [customTo, setCustomTo] = useState(to);
 
@@ -65,68 +64,69 @@ export function DateRangePicker({ from, to }: DateRangePickerProps) {
     router.push(qs ? `${pathname}?${qs}` : pathname);
   }, [router, pathname, searchParams]);
 
-  function applyCustom() {
-    if (customFrom || customTo) push(customFrom, customTo);
+  function applyCustom(f: string, t: string) {
+    if (f || t) push(f, t);
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      {presets.map((p) => {
-        const active = matchedPreset?.label === p.label;
-        return (
+    <div className="space-y-2">
+      {/* Preset + Custom buttons */}
+      <div className="flex flex-wrap gap-1.5">
+        {presets.map((p) => (
           <button
             key={p.label}
             type="button"
             onClick={() => push(p.from, p.to)}
-            className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-              active
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              matchedPreset?.label === p.label
                 ? "bg-[var(--primary)] text-[var(--primary-foreground)]"
                 : "bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
             }`}
           >
             {p.label}
           </button>
-        );
-      })}
+        ))}
 
-      {/* Custom button */}
-      <button
-        type="button"
-        onClick={() => {
-          const today = isoDate(new Date());
-          const monthAgo = isoDate(new Date(new Date().setMonth(new Date().getMonth() - 1)));
-          const f = from || monthAgo;
-          const t = to || today;
-          setCustomFrom(f);
-          setCustomTo(t);
-          if (!isCustom) push(f, t);
-        }}
-        className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-          isCustom
-            ? "bg-[var(--primary)] text-[var(--primary-foreground)]"
-            : "bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-        }`}
-      >
-        Custom
-      </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (!isCustom) {
+              const today = isoDate(new Date());
+              const monthAgo = isoDate(new Date(new Date().setMonth(new Date().getMonth() - 1)));
+              const f = from || monthAgo;
+              const t = to || today;
+              setCustomFrom(f);
+              setCustomTo(t);
+              push(f, t);
+            }
+          }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+            isCustom
+              ? "bg-[var(--primary)] text-[var(--primary-foreground)]"
+              : "bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+          }`}
+        >
+          Custom
+        </button>
+      </div>
 
-      {/* Date inputs — only visible when Custom is active */}
+      {/* Custom date inputs — appear below when Custom is active */}
       {isCustom && (
-        <div className="flex items-center gap-1.5 ml-1">
+        <div className="flex flex-wrap items-center gap-2 pl-0.5">
           <input
             type="date"
             value={customFrom}
             onChange={(e) => setCustomFrom(e.target.value)}
-            onBlur={applyCustom}
-            className="bg-[var(--card)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none focus:border-[var(--primary)]"
+            onBlur={() => applyCustom(customFrom, customTo)}
+            className="bg-[var(--card)] border border-[var(--border)] rounded-lg px-2 py-1.5 text-xs text-[var(--foreground)] focus:outline-none focus:border-[var(--primary)]"
           />
           <span className="text-xs text-[var(--muted-foreground)]">–</span>
           <input
             type="date"
             value={customTo}
             onChange={(e) => setCustomTo(e.target.value)}
-            onBlur={applyCustom}
-            className="bg-[var(--card)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none focus:border-[var(--primary)]"
+            onBlur={() => applyCustom(customFrom, customTo)}
+            className="bg-[var(--card)] border border-[var(--border)] rounded-lg px-2 py-1.5 text-xs text-[var(--foreground)] focus:outline-none focus:border-[var(--primary)]"
           />
         </div>
       )}

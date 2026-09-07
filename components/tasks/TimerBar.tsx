@@ -104,58 +104,62 @@ export function TimerBar({ activeEntry, clients, onClientCreated, onMutated }: T
 
   return (
     <div
-      className={`flex flex-wrap items-center gap-3 px-5 py-4 rounded-2xl border transition-colors ${
+      className={`px-4 sm:px-5 py-4 rounded-2xl border transition-colors ${
         isRunning
           ? "border-[var(--primary)]/30 bg-[var(--primary)]/5"
           : "border-[var(--border)] bg-[var(--card)]"
       }`}
     >
-      <span
-        className={`w-2.5 h-2.5 rounded-full flex-shrink-0 transition-colors ${
-          isRunning ? "bg-red-500 animate-pulse" : "bg-[var(--border)]"
-        }`}
-      />
+      {/* Row 1: status dot + description + tag picker */}
+      <div className="flex items-center gap-3">
+        <span
+          className={`w-2.5 h-2.5 rounded-full flex-shrink-0 transition-colors ${
+            isRunning ? "bg-red-500 animate-pulse" : "bg-[var(--border)]"
+          }`}
+        />
+        <input
+          value={description}
+          onChange={(e) => handleDescriptionChange(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && !isRunning && !loading) handleStart(); }}
+          placeholder="What are you working on?"
+          className="flex-1 min-w-0 bg-transparent text-sm focus:outline-none placeholder:text-[var(--muted-foreground)] text-[var(--foreground)]"
+        />
+        <CategoryPicker
+          value={category}
+          onChange={handleCategoryChange}
+          clients={clients}
+          onClientCreated={onClientCreated}
+        />
+      </div>
 
-      <input
-        value={description}
-        onChange={(e) => handleDescriptionChange(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter" && !isRunning && !loading) handleStart(); }}
-        placeholder="What are you working on?"
-        className="flex-1 min-w-0 bg-transparent text-sm focus:outline-none placeholder:text-[var(--muted-foreground)] text-[var(--foreground)]"
-      />
+      {/* Row 2: timer + start/stop */}
+      <div className="flex items-center justify-between mt-3 gap-3">
+        <span
+          className={`font-mono text-2xl font-semibold tabular-nums transition-colors ${
+            isRunning ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)]"
+          }`}
+        >
+          {formatElapsed(elapsed)}
+        </span>
 
-      <CategoryPicker
-        value={category}
-        onChange={handleCategoryChange}
-        clients={clients}
-        onClientCreated={onClientCreated}
-      />
-
-      <span
-        className={`font-mono text-xl font-semibold tabular-nums flex-shrink-0 w-28 text-right transition-colors ${
-          isRunning ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)]"
-        }`}
-      >
-        {formatElapsed(elapsed)}
-      </span>
-
-      <button
-        onClick={isRunning ? handleStop : handleStart}
-        disabled={loading}
-        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors flex-shrink-0 disabled:opacity-50 ${
-          isRunning
-            ? "bg-red-500 hover:bg-red-600 text-white"
-            : "bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90"
-        }`}
-      >
-        {isRunning
-          ? <><Square size={13} fill="currentColor" /> Stop</>
-          : <><Play size={13} fill="currentColor" /> Start</>
-        }
-      </button>
+        <button
+          onClick={isRunning ? handleStop : handleStart}
+          disabled={loading}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors flex-shrink-0 disabled:opacity-50 ${
+            isRunning
+              ? "bg-red-500 hover:bg-red-600 text-white"
+              : "bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90"
+          }`}
+        >
+          {isRunning
+            ? <><Square size={13} fill="currentColor" /> Stop</>
+            : <><Play size={13} fill="currentColor" /> Start</>
+          }
+        </button>
+      </div>
 
       {error && (
-        <p className="w-full text-xs text-red-500">{error}</p>
+        <p className="mt-2 text-xs text-red-500">{error}</p>
       )}
     </div>
   );
