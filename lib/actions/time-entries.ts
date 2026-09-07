@@ -30,9 +30,11 @@ export async function startTimer(description: string, sel?: CategorySelection, t
     .maybeSingle();
 
   if (running) {
-    const durationSeconds = Math.floor(
+    const rawSeconds = Math.floor(
       (Date.now() - new Date(running.started_at).getTime()) / 1000
     );
+    // Cap at 24 hours — anything longer was a forgotten timer, leave duration null
+    const durationSeconds = rawSeconds <= 86400 ? rawSeconds : null;
     await supabase
       .from("time_entries")
       .update({ stopped_at: now, duration_seconds: durationSeconds })

@@ -25,7 +25,10 @@ function dayLabel(date: Date) {
 }
 
 function totalSeconds(entries: { duration_seconds: number | null }[]) {
-  return entries.reduce((sum, e) => sum + (e.duration_seconds ?? 0), 0);
+  return entries.reduce((sum, e) => {
+    const s = e.duration_seconds ?? 0;
+    return sum + (s <= 86400 ? s : 0);
+  }, 0);
 }
 
 type Entry = {

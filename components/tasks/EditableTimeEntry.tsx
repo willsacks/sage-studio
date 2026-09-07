@@ -171,7 +171,7 @@ export function EditableTimeEntry({ entry, clients, onClientCreated, onMutated }
       </span>
 
       <span className="font-mono text-sm font-medium text-[var(--foreground)] flex-shrink-0 w-20 text-right">
-        {entry.duration_seconds != null ? formatDuration(entry.duration_seconds) : "—"}
+        {entry.duration_seconds != null && entry.duration_seconds <= 86400 ? formatDuration(entry.duration_seconds) : "—"}
       </span>
 
       <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
