@@ -14,6 +14,7 @@ async function requireAuth() {
 
 export interface CategorySelection {
   category: string | null;
+  client_id: string | null;
 }
 
 export async function startTimer(description: string, sel?: CategorySelection, todoId?: string | null) {
@@ -45,9 +46,10 @@ export async function startTimer(description: string, sel?: CategorySelection, t
       description: description.trim(),
       started_at: now,
       category: sel?.category ?? null,
+      client_id: sel?.client_id ?? null,
       todo_id: todoId ?? null,
     })
-    .select("id, started_at, description, category")
+    .select("id, started_at, description, category, client_id")
     .single();
 
   if (error) return { error: error.message };
@@ -110,7 +112,7 @@ export async function updateTimerCategory(entryId: string, sel: CategorySelectio
   const { supabase, user } = await requireAuth();
   await supabase
     .from("time_entries")
-    .update({ category: sel.category })
+    .update({ category: sel.category, client_id: sel.client_id })
     .eq("id", entryId)
     .eq("user_id", user.id)
     .is("stopped_at", null);
@@ -141,6 +143,7 @@ export async function updateTimeEntry(
       stopped_at: stop.toISOString(),
       duration_seconds: durationSeconds,
       category: sel?.category ?? null,
+      client_id: sel?.client_id ?? null,
     })
     .eq("id", entryId)
     .eq("user_id", user.id)

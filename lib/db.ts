@@ -192,6 +192,27 @@ export type Database = {
         };
         Relationships: [];
       };
+      clients: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          name?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       time_entries: {
         Row: {
           id: string;
@@ -201,6 +222,7 @@ export type Database = {
           stopped_at: string | null;
           duration_seconds: number | null;
           category: string | null;
+          client_id: string | null;
           todo_id: string | null;
           created_at: string;
         };
@@ -212,6 +234,7 @@ export type Database = {
           stopped_at?: string | null;
           duration_seconds?: number | null;
           category?: string | null;
+          client_id?: string | null;
           todo_id?: string | null;
           created_at?: string;
         };
@@ -223,6 +246,7 @@ export type Database = {
           stopped_at?: string | null;
           duration_seconds?: number | null;
           category?: string | null;
+          client_id?: string | null;
           todo_id?: string | null;
           created_at?: string;
         };

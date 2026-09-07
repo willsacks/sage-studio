@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Pencil, Trash2, Check, X } from "lucide-react";
+import { Pencil, Trash2, Check, X, Building2 } from "lucide-react";
 import { format } from "date-fns";
 import { updateTimeEntry, deleteTimeEntry, type CategorySelection } from "@/lib/actions/time-entries";
-import { CategoryPicker } from "./CategoryPicker";
+import { CategoryPicker, type ClientOption } from "./CategoryPicker";
 
 interface Entry {
   id: string;
@@ -13,10 +13,14 @@ interface Entry {
   stopped_at: string;
   duration_seconds: number | null;
   category: string | null;
+  client_id: string | null;
+  client_name?: string | null;
 }
 
 interface EditableTimeEntryProps {
   entry: Entry;
+  clients: ClientOption[];
+  onClientCreated: (client: ClientOption) => void;
 }
 
 function formatDuration(seconds: number) {
@@ -38,12 +42,15 @@ function toDatetimeLocal(iso: string) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function EditableTimeEntry({ entry }: EditableTimeEntryProps) {
+export function EditableTimeEntry({ entry, clients, onClientCreated }: EditableTimeEntryProps) {
   const [editing, setEditing] = useState(false);
   const [description, setDescription] = useState(entry.description);
   const [startedAt, setStartedAt] = useState(toDatetimeLocal(entry.started_at));
   const [stoppedAt, setStoppedAt] = useState(toDatetimeLocal(entry.stopped_at));
-  const [category, setCategory] = useState<CategorySelection>({ category: entry.category });
+  const [category, setCategory] = useState<CategorySelection>({
+    category: entry.category,
+    client_id: entry.client_id,
+  });
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -51,7 +58,7 @@ export function EditableTimeEntry({ entry }: EditableTimeEntryProps) {
     setDescription(entry.description);
     setStartedAt(toDatetimeLocal(entry.started_at));
     setStoppedAt(toDatetimeLocal(entry.stopped_at));
-    setCategory({ category: entry.category });
+    setCategory({ category: entry.category, client_id: entry.client_id });
     setError(null);
     setEditing(false);
   }
@@ -73,6 +80,9 @@ export function EditableTimeEntry({ entry }: EditableTimeEntryProps) {
       await deleteTimeEntry(entry.id);
     });
   }
+
+  const clientName = entry.client_name ?? clients.find((c) => c.id === entry.client_id)?.name;
+  const tagLabel = clientName ?? entry.category;
 
   if (editing) {
     return (
@@ -104,7 +114,12 @@ export function EditableTimeEntry({ entry }: EditableTimeEntryProps) {
               className="bg-[var(--card)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none focus:border-[var(--primary)]"
             />
           </div>
-          <CategoryPicker value={category} onChange={setCategory} />
+          <CategoryPicker
+            value={category}
+            onChange={setCategory}
+            clients={clients}
+            onClientCreated={onClientCreated}
+          />
         </div>
         {error && <p className="text-xs text-red-500">{error}</p>}
         <div className="flex items-center gap-2 justify-end">
@@ -135,9 +150,10 @@ export function EditableTimeEntry({ entry }: EditableTimeEntryProps) {
         }`}>
           {entry.description || "No description"}
         </p>
-        {entry.category && (
+        {tagLabel && (
           <span className="flex-shrink-0 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] font-medium">
-            {entry.category}
+            {clientName && <Building2 size={9} />}
+            {tagLabel}
           </span>
         )}
       </div>

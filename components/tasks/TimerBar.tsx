@@ -9,13 +9,14 @@ import {
   updateTimerCategory,
   type CategorySelection,
 } from "@/lib/actions/time-entries";
-import { CategoryPicker } from "./CategoryPicker";
+import { CategoryPicker, type ClientOption } from "./CategoryPicker";
 
 export interface ActiveEntry {
   id: string;
   description: string;
   started_at: string;
   category?: string | null;
+  client_id?: string | null;
 }
 
 function formatElapsed(totalSeconds: number) {
@@ -27,14 +28,17 @@ function formatElapsed(totalSeconds: number) {
 
 interface TimerBarProps {
   activeEntry: ActiveEntry | null;
+  clients: ClientOption[];
+  onClientCreated: (client: ClientOption) => void;
 }
 
-export function TimerBar({ activeEntry }: TimerBarProps) {
+export function TimerBar({ activeEntry, clients, onClientCreated }: TimerBarProps) {
   const [isRunning, setIsRunning] = useState(!!activeEntry);
   const [entryId, setEntryId] = useState<string | null>(activeEntry?.id ?? null);
   const [description, setDescription] = useState(activeEntry?.description ?? "");
   const [category, setCategory] = useState<CategorySelection>({
     category: activeEntry?.category ?? null,
+    client_id: activeEntry?.client_id ?? null,
   });
   const [elapsed, setElapsed] = useState(() =>
     activeEntry
@@ -74,7 +78,7 @@ export function TimerBar({ activeEntry }: TimerBarProps) {
     setElapsed(0);
     setEntryId(null);
     setDescription("");
-    setCategory({ category: null });
+    setCategory({ category: null, client_id: null });
     setLoading(false);
   }
 
@@ -117,7 +121,12 @@ export function TimerBar({ activeEntry }: TimerBarProps) {
         className="flex-1 min-w-0 bg-transparent text-sm focus:outline-none placeholder:text-[var(--muted-foreground)] text-[var(--foreground)]"
       />
 
-      <CategoryPicker value={category} onChange={handleCategoryChange} />
+      <CategoryPicker
+        value={category}
+        onChange={handleCategoryChange}
+        clients={clients}
+        onClientCreated={onClientCreated}
+      />
 
       <span
         className={`font-mono text-xl font-semibold tabular-nums flex-shrink-0 w-28 text-right transition-colors ${
