@@ -30,9 +30,10 @@ interface TimerBarProps {
   activeEntry: ActiveEntry | null;
   clients: ClientOption[];
   onClientCreated: (client: ClientOption) => void;
+  onMutated: () => void;
 }
 
-export function TimerBar({ activeEntry, clients, onClientCreated }: TimerBarProps) {
+export function TimerBar({ activeEntry, clients, onClientCreated, onMutated }: TimerBarProps) {
   const [isRunning, setIsRunning] = useState(!!activeEntry);
   const [entryId, setEntryId] = useState<string | null>(activeEntry?.id ?? null);
   const [description, setDescription] = useState(activeEntry?.description ?? "");
@@ -63,6 +64,7 @@ export function TimerBar({ activeEntry, clients, onClientCreated }: TimerBarProp
       setEntryId(result.entry.id);
       setElapsed(0);
       setIsRunning(true);
+      onMutated();
     } else if (result.error) {
       setError(result.error);
     }
@@ -79,6 +81,7 @@ export function TimerBar({ activeEntry, clients, onClientCreated }: TimerBarProp
     setEntryId(null);
     setDescription("");
     setCategory({ category: null, client_id: null });
+    onMutated();
     setLoading(false);
   }
 

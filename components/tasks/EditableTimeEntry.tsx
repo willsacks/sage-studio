@@ -21,6 +21,7 @@ interface EditableTimeEntryProps {
   entry: Entry;
   clients: ClientOption[];
   onClientCreated: (client: ClientOption) => void;
+  onMutated: () => void;
 }
 
 function formatDuration(seconds: number) {
@@ -42,7 +43,7 @@ function toDatetimeLocal(iso: string) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function EditableTimeEntry({ entry, clients, onClientCreated }: EditableTimeEntryProps) {
+export function EditableTimeEntry({ entry, clients, onClientCreated, onMutated }: EditableTimeEntryProps) {
   const [editing, setEditing] = useState(false);
   const [description, setDescription] = useState(entry.description);
   const [startedAt, setStartedAt] = useState(toDatetimeLocal(entry.started_at));
@@ -71,6 +72,7 @@ export function EditableTimeEntry({ entry, clients, onClientCreated }: EditableT
         setError(result.error);
       } else {
         setEditing(false);
+        onMutated();
       }
     });
   }
@@ -78,6 +80,7 @@ export function EditableTimeEntry({ entry, clients, onClientCreated }: EditableT
   function handleDelete() {
     startTransition(async () => {
       await deleteTimeEntry(entry.id);
+      onMutated();
     });
   }
 

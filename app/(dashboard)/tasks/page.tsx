@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Timer } from "lucide-react";
 import { format, isToday, isYesterday, startOfDay } from "date-fns";
 import { TimerBar, type ActiveEntry } from "@/components/tasks/TimerBar";
@@ -45,51 +45,50 @@ export default function TasksPage() {
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function load() {
-      const supabase = createClient();
+  const loadData = useCallback(async () => {
+    const supabase = createClient();
 
-      const [activeRes, entriesRes, clientsRes] = await Promise.all([
-        supabase
-          .from("time_entries")
-          .select("id, description, started_at, category, client_id")
-          .is("stopped_at", null)
-          .maybeSingle(),
-        supabase
-          .from("time_entries")
-          .select("id, description, started_at, stopped_at, duration_seconds, category, client_id")
-          .not("stopped_at", "is", null)
-          .gte("started_at", new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString())
-          .order("started_at", { ascending: false }),
-        supabase
-          .from("clients")
-          .select("id, name")
-          .order("name", { ascending: true }),
-      ]);
+    const [activeRes, entriesRes, clientsRes] = await Promise.all([
+      supabase
+        .from("time_entries")
+        .select("id, description, started_at, category, client_id")
+        .is("stopped_at", null)
+        .maybeSingle(),
+      supabase
+        .from("time_entries")
+        .select("id, description, started_at, stopped_at, duration_seconds, category, client_id")
+        .not("stopped_at", "is", null)
+        .gte("started_at", new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString())
+        .order("started_at", { ascending: false }),
+      supabase
+        .from("clients")
+        .select("id, name")
+        .order("name", { ascending: true }),
+    ]);
 
-      const clientList = (clientsRes.data ?? []).map((c) => ({ id: c.id, name: c.name }));
-      const clientMap = new Map(clientList.map((c) => [c.id, c.name]));
+    const clientList = (clientsRes.data ?? []).map((c) => ({ id: c.id, name: c.name }));
+    const clientMap = new Map(clientList.map((c) => [c.id, c.name]));
 
-      setActiveEntry(activeRes.data ?? null);
-      setClients(clientList);
+    setActiveEntry(activeRes.data ?? null);
+    setClients(clientList);
 
-      const rawEntries = (entriesRes.data ?? []) as Array<{
-        id: string;
-        description: string;
-        started_at: string;
-        stopped_at: string;
-        duration_seconds: number | null;
-        category: string | null;
-        client_id: string | null;
-      }>;
-      setEntries(rawEntries.map((e) => ({
-        ...e,
-        client_name: e.client_id ? (clientMap.get(e.client_id) ?? null) : null,
-      })));
-      setLoading(false);
-    }
-    load();
+    const rawEntries = (entriesRes.data ?? []) as Array<{
+      id: string;
+      description: string;
+      started_at: string;
+      stopped_at: string;
+      duration_seconds: number | null;
+      category: string | null;
+      client_id: string | null;
+    }>;
+    setEntries(rawEntries.map((e) => ({
+      ...e,
+      client_name: e.client_id ? (clientMap.get(e.client_id) ?? null) : null,
+    })));
+    setLoading(false);
   }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   function handleClientCreated(client: ClientOption) {
     setClients((prev) => [...prev, client].sort((a, b) => a.name.localeCompare(b.name)));
@@ -131,6 +130,7 @@ export default function TasksPage() {
         activeEntry={activeEntry}
         clients={clients}
         onClientCreated={handleClientCreated}
+        onMutated={loadData}
       />
 
       {entries.length > 0 && (
@@ -164,6 +164,7 @@ export default function TasksPage() {
                       entry={entry}
                       clients={clients}
                       onClientCreated={handleClientCreated}
+                      onMutated={loadData}
                     />
                   ))}
                 </div>

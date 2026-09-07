@@ -1,17 +1,52 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import Link from "next/link";
-import { Building2 } from "lucide-react";
+import { Building2, ChevronDown } from "lucide-react";
+import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, subDays, subMonths, subQuarters, subYears } from "date-fns";
 
 interface Entry {
   duration_seconds: number | null;
   category: string | null;
   client_id: string | null;
   client_name?: string | null;
+  started_at: string;
 }
 
 interface CategoryBreakdownProps {
   entries: Entry[];
+}
+
+type PeriodKey = "7d" | "30d" | "90d" | "this_week" | "this_month" | "this_quarter" | "this_year" | "all";
+
+interface Period {
+  label: string;
+  key: PeriodKey;
+}
+
+const PERIODS: Period[] = [
+  { label: "Last 7 days", key: "7d" },
+  { label: "Last 30 days", key: "30d" },
+  { label: "Last 90 days", key: "90d" },
+  { label: "This week", key: "this_week" },
+  { label: "This month", key: "this_month" },
+  { label: "This quarter", key: "this_quarter" },
+  { label: "This year", key: "this_year" },
+  { label: "All time", key: "all" },
+];
+
+function getCutoff(key: PeriodKey): Date | null {
+  const now = new Date();
+  switch (key) {
+    case "7d":          return subDays(now, 7);
+    case "30d":         return subDays(now, 30);
+    case "90d":         return subDays(now, 90);
+    case "this_week":   return startOfWeek(now, { weekStartsOn: 1 });
+    case "this_month":  return startOfMonth(now);
+    case "this_quarter":return startOfQuarter(now);
+    case "this_year":   return startOfYear(now);
+    case "all":         return null;
+  }
 }
 
 function formatDuration(seconds: number) {
@@ -22,46 +57,79 @@ function formatDuration(seconds: number) {
 }
 
 export function CategoryBreakdown({ entries }: CategoryBreakdownProps) {
-  const totals = new Map<string, { label: string; seconds: number; clientId?: string }>();
+  const [period, setPeriod] = useState<PeriodKey>("30d");
+  const [open, setOpen] = useState(false);
 
-  for (const entry of entries) {
-    const secs = entry.duration_seconds ?? 0;
-    if (secs === 0) continue;
+  const filtered = useMemo(() => {
+    const cutoff = getCutoff(period);
+    if (!cutoff) return entries;
+    return entries.filter((e) => new Date(e.started_at) >= cutoff);
+  }, [entries, period]);
 
-    if (entry.client_id) {
-      const key = `client:${entry.client_id}`;
-      const label = entry.client_name ?? "Client";
-      const existing = totals.get(key);
-      if (existing) {
-        existing.seconds += secs;
+  const totals = useMemo(() => {
+    const map = new Map<string, { label: string; seconds: number; clientId?: string }>();
+    for (const entry of filtered) {
+      const secs = entry.duration_seconds ?? 0;
+      if (secs === 0) continue;
+      if (entry.client_id) {
+        const key = `client:${entry.client_id}`;
+        const label = entry.client_name ?? "Client";
+        const existing = map.get(key);
+        if (existing) existing.seconds += secs;
+        else map.set(key, { label, seconds: secs, clientId: entry.client_id });
       } else {
-        totals.set(key, { label, seconds: secs, clientId: entry.client_id });
-      }
-    } else {
-      const key = entry.category ?? "uncategorised";
-      const label = entry.category ?? "Uncategorised";
-      const existing = totals.get(key);
-      if (existing) {
-        existing.seconds += secs;
-      } else {
-        totals.set(key, { label, seconds: secs });
+        const key = entry.category ?? "uncategorised";
+        const label = entry.category ?? "Uncategorised";
+        const existing = map.get(key);
+        if (existing) existing.seconds += secs;
+        else map.set(key, { label, seconds: secs });
       }
     }
-  }
+    return map;
+  }, [filtered]);
 
   if (totals.size === 0) return null;
 
   const sorted = Array.from(totals.values()).sort((a, b) => b.seconds - a.seconds);
   const maxSeconds = sorted[0].seconds;
   const totalAll = sorted.reduce((s, c) => s + c.seconds, 0);
+  const selectedPeriod = PERIODS.find((p) => p.key === period)!;
 
   return (
     <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">Where your time went</h2>
-        <span className="text-xs text-[var(--muted-foreground)] font-mono">
-          {formatDuration(totalAll)} total (90 days)
-        </span>
+
+        {/* Period selector */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            className="flex items-center gap-1 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+          >
+            {selectedPeriod.label}
+            <ChevronDown size={11} />
+          </button>
+          {open && (
+            <div
+              className="absolute right-0 top-full mt-1 w-40 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-lg z-50 overflow-hidden"
+              onMouseLeave={() => setOpen(false)}
+            >
+              {PERIODS.map((p) => (
+                <button
+                  key={p.key}
+                  type="button"
+                  onClick={() => { setPeriod(p.key); setOpen(false); }}
+                  className={`w-full text-left px-3 py-2 text-xs hover:bg-[var(--accent)] transition-colors ${
+                    p.key === period ? "text-[var(--primary)] font-medium" : "text-[var(--foreground)]"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -99,6 +167,10 @@ export function CategoryBreakdown({ entries }: CategoryBreakdownProps) {
           );
         })}
       </div>
+
+      <p className="text-[10px] text-[var(--muted-foreground)] text-right font-mono">
+        {formatDuration(totalAll)} total
+      </p>
     </div>
   );
 }
