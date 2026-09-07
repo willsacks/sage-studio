@@ -68,7 +68,10 @@ export function EditableTimeEntry({ entry, clients, onClientCreated, onMutated }
   function handleSave() {
     setError(null);
     startTransition(async () => {
-      const result = await updateTimeEntry(entry.id, description, startedAt, stoppedAt, category);
+      // Convert datetime-local strings (browser local time) to UTC ISO before sending to server
+      const startIso = new Date(startedAt).toISOString();
+      const stopIso = new Date(stoppedAt).toISOString();
+      const result = await updateTimeEntry(entry.id, description, startIso, stopIso, category);
       if (result?.error) {
         setError(result.error);
       } else {
