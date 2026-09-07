@@ -96,7 +96,7 @@ export default async function ClientPage({
   const chartBuckets: { label: string; seconds: number }[] = [];
 
   if (granularity === "day") {
-    const days = Math.max(spanDays + 1, 1); // +1: include both start and end day
+    const days = Math.max(spanDays + 1, 1);
     for (let i = 0; i < days; i++) {
       const day = startOfDay(addDays(chartStart, i));
       const next = addDays(day, 1);
@@ -129,34 +129,205 @@ export default async function ClientPage({
 
   const maxBucketSecs = Math.max(...chartBuckets.map((b) => b.seconds), 1);
   const chartLabel = granularity === "day" ? "Daily" : granularity === "week" ? "Weekly" : "Monthly";
-
-  const printUrl = `sage.studio/tasks/clients/${id}`;
+  const printDate = format(now, "MMMM d, yyyy");
 
   return (
     <>
-      {/* Print-only global styles */}
+      {/* Print styles */}
       <style>{`
+        @media screen {
+          .print-only { display: none !important; }
+          .print-footer { display: none !important; }
+        }
+
         @media print {
-          /* visibility:hidden on all body children, then selectively reveal the report */
+          /* Hide everything, then reveal the report */
           body * { visibility: hidden; }
           #client-report, #client-report * { visibility: visible; }
-          .print-hidden { visibility: hidden !important; }
+
+          /* Items to exclude from print entirely */
+          .print-hidden { display: none !important; }
+
+          /* Items only visible in print */
+          .print-only {
+            display: block !important;
+            visibility: visible !important;
+          }
 
           #client-report {
             position: absolute;
             inset: 0;
-            padding: 32px 40px;
+            padding: 40px 52px 96px;
             max-width: 100%;
-            font-family: system-ui, sans-serif;
-            color: #111;
+            font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+            color: #111827;
             background: #fff;
           }
 
+          /* Branded header */
+          .print-brand-header {
+            display: flex !important;
+            visibility: visible !important;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 28px;
+            padding-bottom: 16px;
+            border-bottom: 1.5px solid #111827;
+          }
+
+          .print-brand-left {
+            display: flex !important;
+            align-items: center;
+            gap: 10px;
+          }
+
+          .print-brand-name {
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: #111827;
+          }
+
+          .print-brand-tagline {
+            font-size: 9px;
+            color: #6b7280;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            display: block;
+            margin-top: 1px;
+          }
+
+          .print-brand-url {
+            font-size: 11px;
+            color: #6b7280;
+            letter-spacing: 0.01em;
+          }
+
+          /* Report title area */
+          .print-report-title {
+            margin-bottom: 24px;
+          }
+
+          .print-report-title h1 {
+            font-size: 26px;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            color: #111827;
+            margin: 0 0 4px;
+          }
+
+          .print-report-title .client-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+            margin: 0 0 3px;
+          }
+
+          .print-report-title .date-range {
+            font-size: 11px;
+            color: #9ca3af;
+          }
+
+          /* Stats */
+          .print-stats {
+            display: grid !important;
+            grid-template-columns: repeat(3, 1fr) !important;
+            gap: 12px !important;
+            margin-bottom: 20px;
+          }
+
+          .print-stat {
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 12px 14px;
+            background: #f9fafb;
+          }
+
+          .print-stat-label {
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            color: #9ca3af;
+            margin-bottom: 4px;
+          }
+
+          .print-stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: #111827;
+            font-variant-numeric: tabular-nums;
+          }
+
+          /* Chart */
+          .chart-container {
+            margin-bottom: 20px;
+            padding: 16px 16px 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            background: #f9fafb;
+          }
+
+          .chart-title {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            color: #9ca3af;
+            margin-bottom: 10px;
+          }
+
+          /* Session table */
+          .sessions-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+          }
+
+          .sessions-table th {
+            text-align: left;
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            color: #9ca3af;
+            padding: 0 0 8px;
+            border-bottom: 1px solid #e5e7eb;
+          }
+
+          .sessions-table td {
+            padding: 8px 0;
+            border-bottom: 1px solid #f3f4f6;
+            color: #374151;
+            vertical-align: middle;
+          }
+
+          .sessions-table td.desc {
+            color: #111827;
+            font-weight: 500;
+          }
+
+          .sessions-table td.desc.empty {
+            color: #9ca3af;
+            font-style: italic;
+            font-weight: 400;
+          }
+
+          .sessions-table td.mono {
+            font-variant-numeric: tabular-nums;
+            font-family: 'SF Mono', 'Courier New', monospace;
+            text-align: right;
+            color: #111827;
+            font-weight: 600;
+          }
+
+          .sessions-table th.right {
+            text-align: right;
+          }
+
+          /* Fixed footer */
           .print-footer {
-            position: fixed;
-            bottom: 24px;
-            left: 40px;
-            right: 40px;
+            position: fixed !important;
+            bottom: 28px !important;
+            left: 52px !important;
+            right: 52px !important;
             display: flex !important;
             visibility: visible !important;
             align-items: center;
@@ -164,29 +335,52 @@ export default async function ClientPage({
             border-top: 1px solid #e5e7eb;
             padding-top: 10px;
             font-size: 10px;
+            color: #9ca3af;
+          }
+
+          .print-footer .footer-brand {
+            font-weight: 600;
             color: #6b7280;
           }
 
-          .print-footer .brand {
-            font-weight: 700;
-            font-size: 12px;
-            color: #111;
-            letter-spacing: -0.02em;
+          .print-footer .footer-url {
+            font-weight: 500;
+            color: #6b7280;
           }
-        }
-
-        @media screen {
-          .print-footer { display: none; }
         }
       `}</style>
 
       <div id="client-report" className="max-w-3xl space-y-6">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-3">
+
+        {/* ── PRINT-ONLY: Sage Studio branded header ── */}
+        <div className="print-only print-brand-header" aria-hidden="true">
+          <div className="print-brand-left">
+            {/* Sage Studio logomark — S-curve in a rounded square */}
+            <svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect width="34" height="34" rx="8" fill="#111827"/>
+              <path d="M23 12C23 12 21 10 17 10C13 10 11 12 11 14C11 16 13 17 17 17.5C21 18 23 19.5 23 21.5C23 23.5 21 24 17 24C13 24 11 22 11 22" stroke="white" strokeWidth="1.8" strokeLinecap="round"/>
+            </svg>
+            <div>
+              <span className="print-brand-name">Sage Studio</span>
+              <span className="print-brand-tagline">Studio Management</span>
+            </div>
+          </div>
+          <span className="print-brand-url">www.sagestudio.org</span>
+        </div>
+
+        {/* ── PRINT-ONLY: report title block ── */}
+        <div className="print-only print-report-title" aria-hidden="true">
+          <h1>Time Report</h1>
+          <p className="client-name">{clientData.name}</p>
+          <p className="date-range">{rangeLabel(from, to)}</p>
+        </div>
+
+        {/* ── SCREEN-ONLY: header with back arrow, title, export button ── */}
+        <div className="print-hidden flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
             <Link
               href="/tasks"
-              className="p-2 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors print-hidden"
+              className="p-2 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors"
             >
               <ArrowLeft size={16} />
             </Link>
@@ -210,33 +404,33 @@ export default async function ClientPage({
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
-            <div className="flex items-center gap-2 text-[var(--muted-foreground)] text-xs mb-1">
-              <Clock size={13} /> Total time
+        <div className="print-stats grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <div className="print-stat rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
+            <div className="print-stat-label flex items-center gap-2 text-[var(--muted-foreground)] text-xs mb-1">
+              <Clock size={13} className="print-hidden" /> Total time
             </div>
-            <p className="text-2xl font-bold font-mono">{formatDuration(totalSecs)}</p>
+            <p className="print-stat-value text-2xl font-bold font-mono">{formatDuration(totalSecs)}</p>
           </div>
-          <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
-            <div className="flex items-center gap-2 text-[var(--muted-foreground)] text-xs mb-1">
-              <Calendar size={13} /> Sessions
+          <div className="print-stat rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
+            <div className="print-stat-label flex items-center gap-2 text-[var(--muted-foreground)] text-xs mb-1">
+              <Calendar size={13} className="print-hidden" /> Sessions
             </div>
-            <p className="text-2xl font-bold">{sessionCount}</p>
+            <p className="print-stat-value text-2xl font-bold">{sessionCount}</p>
           </div>
           {sessionCount > 0 && (
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
-              <div className="flex items-center gap-2 text-[var(--muted-foreground)] text-xs mb-1">
-                <Clock size={13} /> Avg session
+            <div className="print-stat rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
+              <div className="print-stat-label flex items-center gap-2 text-[var(--muted-foreground)] text-xs mb-1">
+                <Clock size={13} className="print-hidden" /> Avg session
               </div>
-              <p className="text-2xl font-bold font-mono">{formatDuration(Math.round(totalSecs / sessionCount))}</p>
+              <p className="print-stat-value text-2xl font-bold font-mono">{formatDuration(Math.round(totalSecs / sessionCount))}</p>
             </div>
           )}
         </div>
 
         {/* Adaptive activity chart */}
         {totalSecs > 0 && (
-          <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5">
-            <h2 className="text-sm font-semibold mb-4">{chartLabel} activity</h2>
+          <div className="chart-container rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5">
+            <h2 className="chart-title text-sm font-semibold mb-4">{chartLabel} activity</h2>
             <div className="flex items-end gap-1 overflow-x-auto">
               {chartBuckets.map((b, i) => (
                 <div key={i} className="flex-1 min-w-[20px] flex flex-col items-center gap-1">
@@ -260,37 +454,68 @@ export default async function ClientPage({
             <p className="text-sm">No time entries for this period.</p>
           </div>
         ) : (
-          <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] overflow-hidden">
-            <div className="px-5 py-3 border-b border-[var(--border)]">
-              <h2 className="text-sm font-semibold">Sessions</h2>
-            </div>
-            <div className="divide-y divide-[var(--border)]">
-              {entries.map((entry) => (
-                <div key={entry.id} className="flex items-center gap-3 px-4 sm:px-5 py-3">
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm truncate ${
-                      entry.description ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)] italic"
-                    }`}>
-                      {entry.description || "No description"}
-                    </p>
-                    <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
-                      {format(new Date(entry.started_at), "EEE, MMM d")} · {formatTime(entry.started_at)} – {formatTime(entry.stopped_at)}
-                    </p>
+          <>
+            {/* Screen view: card list */}
+            <div className="print-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] overflow-hidden">
+              <div className="px-5 py-3 border-b border-[var(--border)]">
+                <h2 className="text-sm font-semibold">Sessions</h2>
+              </div>
+              <div className="divide-y divide-[var(--border)]">
+                {entries.map((entry) => (
+                  <div key={entry.id} className="flex items-center gap-3 px-4 sm:px-5 py-3">
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm truncate ${
+                        entry.description ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)] italic"
+                      }`}>
+                        {entry.description || "No description"}
+                      </p>
+                      <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
+                        {format(new Date(entry.started_at), "EEE, MMM d")} · {formatTime(entry.started_at)} – {formatTime(entry.stopped_at)}
+                      </p>
+                    </div>
+                    <span className="font-mono text-sm font-medium text-[var(--foreground)] flex-shrink-0 tabular-nums">
+                      {entry.duration_seconds != null ? formatDuration(entry.duration_seconds) : "—"}
+                    </span>
                   </div>
-                  <span className="font-mono text-sm font-medium text-[var(--foreground)] flex-shrink-0 tabular-nums">
-                    {entry.duration_seconds != null ? formatDuration(entry.duration_seconds) : "—"}
-                  </span>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+
+            {/* Print view: clean table */}
+            <div className="print-only" aria-hidden="true">
+              <table className="sessions-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: "40%" }}>Description</th>
+                    <th>Date</th>
+                    <th>Time</th>
+                    <th className="right">Duration</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {entries.map((entry) => (
+                    <tr key={entry.id}>
+                      <td className={entry.description ? "desc" : "desc empty"}>
+                        {entry.description || "No description"}
+                      </td>
+                      <td>{format(new Date(entry.started_at), "EEE, MMM d")}</td>
+                      <td>{formatTime(entry.started_at)} – {formatTime(entry.stopped_at)}</td>
+                      <td className="mono">
+                        {entry.duration_seconds != null ? formatDuration(entry.duration_seconds) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
 
-        {/* Print footer — hidden on screen, shown in PDF */}
+        {/* Print footer */}
         <div className="print-footer">
-          <span className="brand">Sage Studio</span>
-          <span>{rangeLabel(from, to)} · {clientData.name}</span>
-          <span>{printUrl}</span>
+          <span className="footer-brand">Sage Studio</span>
+          <span>{printDate} · {clientData.name}</span>
+          <span className="footer-url">www.sagestudio.org</span>
         </div>
       </div>
     </>
