@@ -24,9 +24,14 @@ function dayLabel(date: Date) {
   return format(date, "EEE, MMM d");
 }
 
-function totalSeconds(entries: { duration_seconds: number | null }[]) {
+function effectiveSecs(e: { duration_seconds: number | null; started_at: string; stopped_at: string }) {
+  if (e.duration_seconds != null && e.duration_seconds > 0) return e.duration_seconds;
+  return Math.max(0, Math.floor((new Date(e.stopped_at).getTime() - new Date(e.started_at).getTime()) / 1000));
+}
+
+function totalSeconds(entries: { duration_seconds: number | null; started_at: string; stopped_at: string }[]) {
   return entries.reduce((sum, e) => {
-    const s = e.duration_seconds ?? 0;
+    const s = effectiveSecs(e);
     return sum + (s <= 86400 ? s : 0);
   }, 0);
 }

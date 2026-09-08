@@ -76,7 +76,12 @@ export default async function ClientPage({
     category: string | null;
   }[];
 
-  const totalSecs = entries.reduce((s, e) => s + (e.duration_seconds ?? 0), 0);
+  function entryDuration(e: { duration_seconds: number | null; started_at: string; stopped_at: string }) {
+    if (e.duration_seconds != null && e.duration_seconds > 0) return e.duration_seconds;
+    return Math.max(0, Math.floor((new Date(e.stopped_at).getTime() - new Date(e.started_at).getTime()) / 1000));
+  }
+
+  const totalSecs = entries.reduce((s, e) => s + entryDuration(e), 0);
   const sessionCount = entries.length;
 
   // Adaptive chart: pick granularity based on the selected date range
@@ -474,7 +479,7 @@ export default async function ClientPage({
                       </p>
                     </div>
                     <span className="font-mono text-sm font-medium text-[var(--foreground)] flex-shrink-0 tabular-nums">
-                      {entry.duration_seconds != null ? formatDuration(entry.duration_seconds) : "—"}
+                      {(() => { const s = entryDuration(entry); return s > 0 ? formatDuration(s) : "—"; })()}
                     </span>
                   </div>
                 ))}
@@ -501,7 +506,7 @@ export default async function ClientPage({
                       <td>{format(new Date(entry.started_at), "EEE, MMM d")}</td>
                       <td>{formatTime(entry.started_at)} – {formatTime(entry.stopped_at)}</td>
                       <td className="mono">
-                        {entry.duration_seconds != null ? formatDuration(entry.duration_seconds) : "—"}
+                        {(() => { const s = entryDuration(entry); return s > 0 ? formatDuration(s) : "—"; })()}
                       </td>
                     </tr>
                   ))}

@@ -173,7 +173,12 @@ export function EditableTimeEntry({ entry, clients, onClientCreated, onMutated }
       </span>
 
       <span className="font-mono text-sm font-medium text-[var(--foreground)] flex-shrink-0 w-20 text-right">
-        {entry.duration_seconds != null && entry.duration_seconds <= 86400 ? formatDuration(entry.duration_seconds) : "—"}
+        {(() => {
+          const s = entry.duration_seconds != null && entry.duration_seconds > 0
+            ? entry.duration_seconds
+            : Math.max(0, Math.floor((new Date(entry.stopped_at).getTime() - new Date(entry.started_at).getTime()) / 1000));
+          return s > 0 && s <= 86400 ? formatDuration(s) : "—";
+        })()}
       </span>
 
       <div className="flex items-center gap-1 flex-shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">

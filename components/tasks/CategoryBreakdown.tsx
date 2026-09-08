@@ -11,6 +11,7 @@ interface Entry {
   client_id: string | null;
   client_name?: string | null;
   started_at: string;
+  stopped_at?: string | null;
 }
 
 interface CategoryBreakdownProps {
@@ -69,7 +70,12 @@ export function CategoryBreakdown({ entries }: CategoryBreakdownProps) {
   const totals = useMemo(() => {
     const map = new Map<string, { label: string; seconds: number; clientId?: string }>();
     for (const entry of filtered) {
-      const secs = entry.duration_seconds ?? 0;
+      const raw = entry.duration_seconds != null && entry.duration_seconds > 0
+        ? entry.duration_seconds
+        : entry.stopped_at
+          ? Math.max(0, Math.floor((new Date(entry.stopped_at).getTime() - new Date(entry.started_at).getTime()) / 1000))
+          : 0;
+      const secs = raw;
       if (secs === 0 || secs > 86400) continue;
       if (entry.client_id) {
         const key = `client:${entry.client_id}`;
