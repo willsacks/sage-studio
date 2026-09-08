@@ -68,15 +68,19 @@ export function EditableTimeEntry({ entry, clients, onClientCreated, onMutated }
   function handleSave() {
     setError(null);
     startTransition(async () => {
-      // Convert datetime-local strings (browser local time) to UTC ISO before sending to server
-      const startIso = new Date(startedAt).toISOString();
-      const stopIso = new Date(stoppedAt).toISOString();
-      const result = await updateTimeEntry(entry.id, description, startIso, stopIso, category);
-      if (result?.error) {
-        setError(result.error);
-      } else {
-        setEditing(false);
-        onMutated();
+      try {
+        // Convert datetime-local strings (browser local time) to UTC ISO before sending to server
+        const startIso = new Date(startedAt).toISOString();
+        const stopIso = new Date(stoppedAt).toISOString();
+        const result = await updateTimeEntry(entry.id, description, startIso, stopIso, category);
+        if (result?.error) {
+          setError(result.error);
+        } else {
+          setEditing(false);
+          onMutated();
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Save failed. Please try again.");
       }
     });
   }
