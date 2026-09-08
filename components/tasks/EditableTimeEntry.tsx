@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Pencil, Trash2, Check, X, Building2 } from "lucide-react";
+import { Pencil, Trash2, Check, X, Building2, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { updateTimeEntry, deleteTimeEntry, type CategorySelection } from "@/lib/actions/time-entries";
 import { CategoryPicker, type ClientOption } from "./CategoryPicker";
@@ -176,12 +176,25 @@ export function EditableTimeEntry({ entry, clients, onClientCreated, onMutated }
         {formatTime(entry.started_at)} – {formatTime(entry.stopped_at)}
       </span>
 
-      <span className="font-mono text-sm font-medium text-[var(--foreground)] flex-shrink-0 w-20 text-right">
+      <span className="font-mono text-sm font-medium flex-shrink-0 w-24 text-right flex items-center justify-end gap-1">
         {(() => {
           const s = entry.duration_seconds != null && entry.duration_seconds > 0
             ? entry.duration_seconds
             : Math.max(0, Math.floor((new Date(entry.stopped_at).getTime() - new Date(entry.started_at).getTime()) / 1000));
-          return s > 0 && s <= 86400 ? formatDuration(s) : "—";
+          if (!s) return <span className="text-[var(--muted-foreground)]">—</span>;
+          const isLong = s > 8 * 3600;
+          return (
+            <>
+              {isLong && (
+                <span title="Unusually long — check this entry" className="text-amber-500 flex-shrink-0">
+                  <AlertTriangle size={11} />
+                </span>
+              )}
+              <span className={isLong ? "text-amber-500" : "text-[var(--foreground)]"}>
+                {formatDuration(s)}
+              </span>
+            </>
+          );
         })()}
       </span>
 

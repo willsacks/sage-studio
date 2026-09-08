@@ -30,10 +30,7 @@ function effectiveSecs(e: { duration_seconds: number | null; started_at: string;
 }
 
 function totalSeconds(entries: { duration_seconds: number | null; started_at: string; stopped_at: string }[]) {
-  return entries.reduce((sum, e) => {
-    const s = effectiveSecs(e);
-    return sum + (s <= 86400 ? s : 0);
-  }, 0);
+  return entries.reduce((sum, e) => sum + effectiveSecs(e), 0);
 }
 
 type Entry = {

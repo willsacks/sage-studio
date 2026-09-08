@@ -478,7 +478,7 @@ export default async function ClientPage({
                         {format(new Date(entry.started_at), "EEE, MMM d")} · {formatTime(entry.started_at)} – {formatTime(entry.stopped_at)}
                       </p>
                     </div>
-                    <span className="font-mono text-sm font-medium text-[var(--foreground)] flex-shrink-0 tabular-nums">
+                    <span className={`font-mono text-sm font-medium flex-shrink-0 tabular-nums ${entryDuration(entry) > 8 * 3600 ? "text-amber-500" : "text-[var(--foreground)]"}`}>
                       {(() => { const s = entryDuration(entry); return s > 0 ? formatDuration(s) : "—"; })()}
                     </span>
                   </div>
@@ -505,7 +505,7 @@ export default async function ClientPage({
                       </td>
                       <td>{format(new Date(entry.started_at), "EEE, MMM d")}</td>
                       <td>{formatTime(entry.started_at)} – {formatTime(entry.stopped_at)}</td>
-                      <td className="mono">
+                      <td className={`mono ${entryDuration(entry) > 8 * 3600 ? "text-amber-600" : ""}`}>
                         {(() => { const s = entryDuration(entry); return s > 0 ? formatDuration(s) : "—"; })()}
                       </td>
                     </tr>
