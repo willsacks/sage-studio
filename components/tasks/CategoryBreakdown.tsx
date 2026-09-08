@@ -70,7 +70,7 @@ export function CategoryBreakdown({ entries }: CategoryBreakdownProps) {
     const map = new Map<string, { label: string; seconds: number; clientId?: string }>();
     for (const entry of filtered) {
       const secs = entry.duration_seconds ?? 0;
-      if (secs === 0) continue;
+      if (secs === 0 || secs > 86400) continue;
       if (entry.client_id) {
         const key = `client:${entry.client_id}`;
         const label = entry.client_name ?? "Client";
