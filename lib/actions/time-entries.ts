@@ -156,6 +156,29 @@ export async function updateTimeEntry(
   return { success: true };
 }
 
+export async function addManualEntry(
+  description: string,
+  durationSeconds: number,
+  endedAt: string,
+  sel?: CategorySelection
+) {
+  const { supabase, user } = await requireAuth();
+  const end = new Date(endedAt);
+  const start = new Date(end.getTime() - durationSeconds * 1000);
+  const { error } = await supabase.from("time_entries").insert({
+    user_id: user.id,
+    description: description.trim(),
+    started_at: start.toISOString(),
+    stopped_at: end.toISOString(),
+    duration_seconds: durationSeconds,
+    category: sel?.category ?? null,
+    client_id: sel?.client_id ?? null,
+  });
+  if (error) return { error: error.message };
+  revalidatePath("/tasks");
+  return { success: true };
+}
+
 export async function deleteTimeEntry(entryId: string) {
   const { supabase, user } = await requireAuth();
   await supabase

@@ -6,6 +6,7 @@ import { format, isToday, isYesterday, startOfDay } from "date-fns";
 import { TimerBar, type ActiveEntry } from "@/components/tasks/TimerBar";
 import { EditableTimeEntry } from "@/components/tasks/EditableTimeEntry";
 import { CategoryBreakdown } from "@/components/tasks/CategoryBreakdown";
+import { QuickEntry } from "@/components/tasks/QuickEntry";
 import type { ClientOption } from "@/components/tasks/CategoryPicker";
 import { createClient } from "@/lib/supabase/client";
 
@@ -133,6 +134,12 @@ export default function TasksPage() {
 
       <TimerBar
         activeEntry={activeEntry}
+        clients={clients}
+        onClientCreated={handleClientCreated}
+        onMutated={loadData}
+      />
+
+      <QuickEntry
         clients={clients}
         onClientCreated={handleClientCreated}
         onMutated={loadData}
