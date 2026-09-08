@@ -3,10 +3,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { Timer } from "lucide-react";
 import { format, isToday, isYesterday, startOfDay } from "date-fns";
-import { TimerBar, type ActiveEntry } from "@/components/tasks/TimerBar";
+import { TimeEntryPanel, type ActiveEntry } from "@/components/tasks/TimeEntryPanel";
 import { EditableTimeEntry } from "@/components/tasks/EditableTimeEntry";
 import { CategoryBreakdown } from "@/components/tasks/CategoryBreakdown";
-import { QuickEntry } from "@/components/tasks/QuickEntry";
 import type { ClientOption } from "@/components/tasks/CategoryPicker";
 import { createClient } from "@/lib/supabase/client";
 
@@ -132,14 +131,8 @@ export default function TasksPage() {
         </p>
       </div>
 
-      <TimerBar
+      <TimeEntryPanel
         activeEntry={activeEntry}
-        clients={clients}
-        onClientCreated={handleClientCreated}
-        onMutated={loadData}
-      />
-
-      <QuickEntry
         clients={clients}
         onClientCreated={handleClientCreated}
         onMutated={loadData}
