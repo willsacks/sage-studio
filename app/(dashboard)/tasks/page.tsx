@@ -89,6 +89,11 @@ export default function TasksPage() {
       category: string | null;
       client_id: string | null;
     }>;
+    // TEMP DEBUG
+    console.log("[DEBUG loadData]", rawEntries.length, "entries fetched");
+    rawEntries.filter(e => !e.duration_seconds).forEach(e =>
+      console.log("[DEBUG zero/null dur]", e.id, e.started_at, "→", e.stopped_at, "dur:", e.duration_seconds)
+    );
     setEntries(rawEntries.map((e) => ({
       ...e,
       client_name: e.client_id ? (clientMap.get(e.client_id) ?? null) : null,
