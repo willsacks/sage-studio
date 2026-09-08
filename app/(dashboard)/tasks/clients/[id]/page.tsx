@@ -9,6 +9,7 @@ import { Building2, Clock, Calendar, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { DateRangePicker } from "@/components/tasks/DateRangePicker";
 import { PrintButton } from "@/components/tasks/PrintButton";
+import { CreateInvoiceButton } from "@/components/tasks/CreateInvoicePanel";
 
 function formatDuration(seconds: number) {
   const h = Math.floor(seconds / 3600);
@@ -46,7 +47,7 @@ export default async function ClientPage({
 
   const { data: clientData } = await supabase
     .from("clients")
-    .select("id, name, created_at")
+    .select("id, name, created_at, default_hourly_rate")
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
@@ -56,7 +57,7 @@ export default async function ClientPage({
   // Build date-filtered query
   let query = supabase
     .from("time_entries")
-    .select("id, description, started_at, stopped_at, duration_seconds, category")
+    .select("id, description, started_at, stopped_at, duration_seconds, category, invoice_id")
     .eq("client_id", id)
     .eq("user_id", user.id)
     .not("stopped_at", "is", null)
@@ -74,6 +75,7 @@ export default async function ClientPage({
     stopped_at: string;
     duration_seconds: number | null;
     category: string | null;
+    invoice_id: string | null;
   }[];
 
   function entryDuration(e: { duration_seconds: number | null; started_at: string; stopped_at: string }) {
@@ -82,6 +84,8 @@ export default async function ClientPage({
   }
 
   const totalSecs = entries.reduce((s, e) => s + entryDuration(e), 0);
+  const billedSecs = entries.filter((e) => e.invoice_id).reduce((s, e) => s + entryDuration(e), 0);
+  const unbilledSecs = totalSecs - billedSecs;
   const sessionCount = entries.length;
 
   // Adaptive chart: pick granularity based on the selected date range
@@ -398,7 +402,17 @@ export default async function ClientPage({
               <p className="text-[var(--muted-foreground)] text-xs mt-0.5">{rangeLabel(from, to)}</p>
             </div>
           </div>
-          <PrintButton />
+          <div className="flex items-center gap-2">
+            <CreateInvoiceButton
+              clientId={clientData.id}
+              clientName={clientData.name}
+              defaultRate={(clientData as { default_hourly_rate?: number | null }).default_hourly_rate}
+              from={from}
+              to={to}
+              unbilledSecs={unbilledSecs}
+            />
+            <PrintButton />
+          </div>
         </div>
 
         {/* Date range picker — screen only */}
@@ -428,6 +442,20 @@ export default async function ClientPage({
                 <Clock size={13} className="print-hidden" /> Avg session
               </div>
               <p className="print-stat-value text-2xl font-bold font-mono">{formatDuration(Math.round(totalSecs / sessionCount))}</p>
+            </div>
+          )}
+          {billedSecs > 0 && (
+            <div className="print-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 col-span-2 sm:col-span-1">
+              <div className="flex items-center gap-2 text-[var(--muted-foreground)] text-xs mb-1">
+                Billing status
+              </div>
+              <p className="text-sm font-medium text-[var(--foreground)]">
+                <span className="text-green-600 dark:text-green-400 font-mono">{formatDuration(billedSecs)}</span>
+                <span className="text-[var(--muted-foreground)] font-normal"> billed</span>
+                {unbilledSecs > 0 && (
+                  <> · <span className="font-mono">{formatDuration(unbilledSecs)}</span><span className="text-[var(--muted-foreground)] font-normal"> unbilled</span></>
+                )}
+              </p>
             </div>
           )}
         </div>
@@ -469,11 +497,18 @@ export default async function ClientPage({
                 {entries.map((entry) => (
                   <div key={entry.id} className="flex items-center gap-3 px-4 sm:px-5 py-3">
                     <div className="flex-1 min-w-0">
-                      <p className={`text-sm truncate ${
-                        entry.description ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)] italic"
-                      }`}>
-                        {entry.description || "No description"}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className={`text-sm truncate ${
+                          entry.description ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)] italic"
+                        }`}>
+                          {entry.description || "No description"}
+                        </p>
+                        {entry.invoice_id && (
+                          <span className="flex-shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                            Billed
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
                         {format(new Date(entry.started_at), "EEE, MMM d")} · {formatTime(entry.started_at)} – {formatTime(entry.stopped_at)}
                       </p>
