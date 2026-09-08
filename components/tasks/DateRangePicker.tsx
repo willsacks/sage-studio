@@ -49,11 +49,18 @@ export function DateRangePicker({ from, to }: DateRangePickerProps) {
   const matchedPreset = presets.find((p) => p.from === from && p.to === to);
   const isCustom = !matchedPreset;
 
+  // customOpen tracks whether the custom date inputs are visible, independent of URL state.
+  // isCustom (URL-derived) opens them automatically; clicking "Custom" also opens them.
+  const [customOpen, setCustomOpen] = useState(isCustom);
   const [customFrom, setCustomFrom] = useState(from);
   const [customTo, setCustomTo] = useState(to);
 
   useEffect(() => {
-    if (isCustom) { setCustomFrom(from); setCustomTo(to); }
+    if (isCustom) {
+      setCustomOpen(true);
+      setCustomFrom(from);
+      setCustomTo(to);
+    }
   }, [from, to, isCustom]);
 
   const push = useCallback((f: string, t: string) => {
@@ -76,9 +83,9 @@ export function DateRangePicker({ from, to }: DateRangePickerProps) {
           <button
             key={p.label}
             type="button"
-            onClick={() => push(p.from, p.to)}
+            onClick={() => { setCustomOpen(false); push(p.from, p.to); }}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              matchedPreset?.label === p.label
+              !customOpen && matchedPreset?.label === p.label
                 ? "bg-[var(--primary)] text-[var(--primary-foreground)]"
                 : "bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
             }`}
@@ -90,18 +97,14 @@ export function DateRangePicker({ from, to }: DateRangePickerProps) {
         <button
           type="button"
           onClick={() => {
-            if (!isCustom) {
-              const today = isoDate(new Date());
-              const monthAgo = isoDate(new Date(new Date().setMonth(new Date().getMonth() - 1)));
-              const f = from || monthAgo;
-              const t = to || today;
-              setCustomFrom(f);
-              setCustomTo(t);
-              push(f, t);
-            }
+            const today = isoDate(new Date());
+            const monthAgo = isoDate(new Date(new Date().setMonth(new Date().getMonth() - 1)));
+            setCustomFrom(from || monthAgo);
+            setCustomTo(to || today);
+            setCustomOpen(true);
           }}
           className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-            isCustom
+            customOpen
               ? "bg-[var(--primary)] text-[var(--primary-foreground)]"
               : "bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
           }`}
@@ -111,7 +114,7 @@ export function DateRangePicker({ from, to }: DateRangePickerProps) {
       </div>
 
       {/* Custom date inputs — appear below when Custom is active */}
-      {isCustom && (
+      {customOpen && (
         <div className="flex flex-wrap items-center gap-2 pl-0.5">
           <input
             type="date"
