@@ -61,6 +61,10 @@ function SortableBlock({ block }: { block: Block }) {
         corner_nav: m.CornerNavBlock as never,
         application_form: m.ApplicationFormBlock as never,
         email_gate: m.EmailGateBlock as never,
+        simple_form: m.SimpleFormBlock as never,
+        music_embed: m.MusicEmbedBlock as never,
+        album_showcase: m.AlbumShowcaseBlock as never,
+        discography: m.DiscographyBlock as never,
       };
       setBlockComponent(() => map[block.type] ?? null);
     });
