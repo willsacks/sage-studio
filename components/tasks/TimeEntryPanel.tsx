@@ -59,8 +59,16 @@ export function TimeEntryPanel({ activeEntry, clients, onClientCreated, onMutate
     category: activeEntry?.category ?? null,
     client_id: activeEntry?.client_id ?? null,
   });
+  // Tracks the real start timestamp so elapsed time is always recomputed as
+  // Date.now() - startedAt, never accumulated tick-by-tick — a backgrounded
+  // tab throttles setInterval (sometimes to ~1 tick/min), so a counter that
+  // just does `s => s + 1` per tick falls far behind wall-clock time. The
+  // final saved duration was never affected (stopTimer/startTimer both
+  // already diff real timestamps), only this live display was.
+  const startedAtMsRef = useRef<number | null>(activeEntry ? new Date(activeEntry.started_at).getTime() : null);
+
   const [elapsed, setElapsed] = useState(() =>
-    activeEntry ? Math.floor((Date.now() - new Date(activeEntry.started_at).getTime()) / 1000) : 0
+    startedAtMsRef.current ? Math.floor((Date.now() - startedAtMsRef.current) / 1000) : 0
   );
   const [timerLoading, setTimerLoading] = useState(false);
   const [timerError, setTimerError] = useState<string | null>(null);
@@ -68,8 +76,19 @@ export function TimeEntryPanel({ activeEntry, clients, onClientCreated, onMutate
 
   useEffect(() => {
     if (!isRunning) return;
-    const id = setInterval(() => setElapsed((s) => s + 1), 1000);
-    return () => clearInterval(id);
+    function recompute() {
+      if (startedAtMsRef.current == null) return;
+      setElapsed(Math.floor((Date.now() - startedAtMsRef.current) / 1000));
+    }
+    recompute();
+    const id = setInterval(recompute, 1000);
+    // Catches up instantly on tab focus instead of waiting for the next
+    // (possibly throttled) interval tick.
+    document.addEventListener("visibilitychange", recompute);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", recompute);
+    };
   }, [isRunning]);
 
   async function handleStart() {
@@ -78,6 +97,7 @@ export function TimeEntryPanel({ activeEntry, clients, onClientCreated, onMutate
     const result = await startTimer(timerDesc, timerCat);
     if (result.entry) {
       setEntryId(result.entry.id);
+      startedAtMsRef.current = result.entry.started_at ? new Date(result.entry.started_at).getTime() : Date.now();
       setElapsed(0);
       setIsRunning(true);
       onMutated();
@@ -92,6 +112,7 @@ export function TimeEntryPanel({ activeEntry, clients, onClientCreated, onMutate
     setTimerLoading(true);
     clearTimeout(descDebounce.current);
     await stopTimer(entryId);
+    startedAtMsRef.current = null;
     setIsRunning(false);
     setElapsed(0);
     setEntryId(null);
