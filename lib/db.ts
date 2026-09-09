@@ -197,18 +197,21 @@ export type Database = {
           id: string;
           user_id: string;
           name: string;
+          default_hourly_rate: number | null;
           created_at: string;
         };
         Insert: {
           id?: string;
           user_id: string;
           name: string;
+          default_hourly_rate?: number | null;
           created_at?: string;
         };
         Update: {
           id?: string;
           user_id?: string;
           name?: string;
+          default_hourly_rate?: number | null;
           created_at?: string;
         };
         Relationships: [];
@@ -224,6 +227,7 @@ export type Database = {
           category: string | null;
           client_id: string | null;
           todo_id: string | null;
+          invoice_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -236,6 +240,7 @@ export type Database = {
           category?: string | null;
           client_id?: string | null;
           todo_id?: string | null;
+          invoice_id?: string | null;
           created_at?: string;
         };
         Update: {
@@ -248,6 +253,7 @@ export type Database = {
           category?: string | null;
           client_id?: string | null;
           todo_id?: string | null;
+          invoice_id?: string | null;
           created_at?: string;
         };
         Relationships: [];
