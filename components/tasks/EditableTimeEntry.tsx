@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Pencil, Trash2, Check, X, Building2, AlertTriangle } from "lucide-react";
+import { Pencil, Trash2, Check, X, Building2, AlertTriangle, Play } from "lucide-react";
 import { format } from "date-fns";
 import { updateTimeEntry, deleteTimeEntry, type CategorySelection } from "@/lib/actions/time-entries";
 import { CategoryPicker, type ClientOption } from "./CategoryPicker";
@@ -22,6 +22,7 @@ interface EditableTimeEntryProps {
   clients: ClientOption[];
   onClientCreated: (client: ClientOption) => void;
   onMutated: () => void;
+  onResume: (entry: Entry) => void;
 }
 
 function formatDuration(seconds: number) {
@@ -43,7 +44,7 @@ function toDatetimeLocal(iso: string) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function EditableTimeEntry({ entry, clients, onClientCreated, onMutated }: EditableTimeEntryProps) {
+export function EditableTimeEntry({ entry, clients, onClientCreated, onMutated, onResume }: EditableTimeEntryProps) {
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [description, setDescription] = useState(entry.description);
@@ -219,6 +220,13 @@ export function EditableTimeEntry({ entry, clients, onClientCreated, onMutated }
           </>
         ) : (
           <>
+            <button
+              onClick={() => onResume(entry)}
+              className="p-1.5 rounded text-[var(--muted-foreground)] hover:text-[var(--primary)] hover:bg-[var(--accent)] transition-colors"
+              title="Resume — start a new timer with this description and category"
+            >
+              <Play size={13} fill="currentColor" />
+            </button>
             <button
               onClick={() => setEditing(true)}
               className="p-1.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors"

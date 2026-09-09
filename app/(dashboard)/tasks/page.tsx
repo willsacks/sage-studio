@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Timer } from "lucide-react";
 import { format, isToday, isYesterday, startOfDay } from "date-fns";
-import { TimeEntryPanel, type ActiveEntry } from "@/components/tasks/TimeEntryPanel";
+import { TimeEntryPanel, type ActiveEntry, type ResumeRequest } from "@/components/tasks/TimeEntryPanel";
 import { EditableTimeEntry } from "@/components/tasks/EditableTimeEntry";
 import { CategoryBreakdown } from "@/components/tasks/CategoryBreakdown";
 import type { ClientOption } from "@/components/tasks/CategoryPicker";
@@ -49,6 +49,7 @@ export default function TasksPage() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [resumeRequest, setResumeRequest] = useState<ResumeRequest | null>(null);
 
   const loadData = useCallback(async () => {
     const supabase = createClient();
@@ -99,6 +100,11 @@ export default function TasksPage() {
     setClients((prev) => [...prev, client].sort((a, b) => a.name.localeCompare(b.name)));
   }
 
+  function handleResume(entry: Entry) {
+    setResumeRequest({ description: entry.description, category: entry.category, client_id: entry.client_id, nonce: Date.now() });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   // Group by calendar day
   const groups = new Map<string, Entry[]>();
   for (const entry of entries) {
@@ -136,6 +142,7 @@ export default function TasksPage() {
         clients={clients}
         onClientCreated={handleClientCreated}
         onMutated={loadData}
+        resumeRequest={resumeRequest}
       />
 
       {entries.length > 0 && (
@@ -170,6 +177,7 @@ export default function TasksPage() {
                       clients={clients}
                       onClientCreated={handleClientCreated}
                       onMutated={loadData}
+                      onResume={handleResume}
                     />
                   ))}
                 </div>

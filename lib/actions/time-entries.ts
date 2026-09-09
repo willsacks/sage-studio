@@ -18,43 +18,28 @@ export interface CategorySelection {
 }
 
 export async function startTimer(description: string, sel?: CategorySelection, todoId?: string | null) {
-  const { supabase, user } = await requireAuth();
-  const now = new Date().toISOString();
+  const { supabase } = await requireAuth();
 
-  // Stop any currently running entry first
-  const { data: running } = await supabase
-    .from("time_entries")
-    .select("id, started_at")
-    .eq("user_id", user.id)
-    .is("stopped_at", null)
-    .maybeSingle();
-
-  if (running) {
-    const durationSeconds = Math.round(
-      (Date.now() - new Date(running.started_at).getTime()) / 1000
-    );
-    await supabase
-      .from("time_entries")
-      .update({ stopped_at: now, duration_seconds: durationSeconds })
-      .eq("id", running.id);
-  }
-
-  const { data, error } = await supabase
-    .from("time_entries")
-    .insert({
-      user_id: user.id,
-      description: description.trim(),
-      started_at: now,
-      category: sel?.category ?? null,
-      client_id: sel?.client_id ?? null,
-      todo_id: todoId ?? null,
-    })
-    .select("id, started_at, description, category, client_id")
-    .single();
+  // Closing any currently-running entry and inserting the new one both
+  // happen inside start_time_entry (scripts/add-time-entry-rpc-functions.ts)
+  // as a single atomic round trip, instead of a SELECT -> UPDATE -> INSERT
+  // chain — that sequential chain was the main source of the reported
+  // "long delay when starting a time entry."
+  const { data, error } = (await supabase.rpc("start_time_entry" as never, {
+    p_description: description.trim(),
+    p_category: sel?.category ?? null,
+    p_client_id: sel?.client_id ?? null,
+    p_todo_id: todoId ?? null,
+  } as never)) as unknown as {
+    data: { id: string; started_at: string; description: string; category: string | null; client_id: string | null }[] | null;
+    error: { message: string } | null;
+  };
 
   if (error) return { error: error.message };
+  const entry = data?.[0];
+  if (!entry) return { error: "Failed to start timer" };
   revalidatePath("/tasks");
-  return { entry: data };
+  return { entry };
 }
 
 // ── Todo <-> timer bridge ────────────────────────────────────────────────────
@@ -72,27 +57,18 @@ export async function finishTodoTimer(todoId: string, entryId: string) {
 }
 
 export async function stopTimer(entryId: string) {
-  const { supabase, user } = await requireAuth();
-  const now = new Date().toISOString();
+  const { supabase } = await requireAuth();
 
-  const { data: entry } = await supabase
-    .from("time_entries")
-    .select("started_at")
-    .eq("id", entryId)
-    .eq("user_id", user.id)
-    .single();
-
-  if (!entry) return { error: "Entry not found" };
-
-  const durationSeconds = Math.floor(
-    (Date.now() - new Date(entry.started_at).getTime()) / 1000
-  );
-
-  await supabase
-    .from("time_entries")
-    .update({ stopped_at: now, duration_seconds: durationSeconds })
-    .eq("id", entryId)
-    .eq("user_id", user.id);
+  // One round trip instead of a SELECT (fetch started_at) -> UPDATE chain —
+  // stop_time_entry computes stopped_at/duration_seconds from Postgres's
+  // own now() directly against the stored started_at.
+  const { data, error } = (await supabase.rpc("stop_time_entry" as never, { p_entry_id: entryId } as never)) as unknown as {
+    data: { id: string; duration_seconds: number }[] | null;
+    error: { message: string } | null;
+  };
+  if (error) return { error: error.message };
+  const result = data?.[0];
+  if (!result) return { error: "Entry not found" };
 
   revalidatePath("/tasks");
   return { success: true };

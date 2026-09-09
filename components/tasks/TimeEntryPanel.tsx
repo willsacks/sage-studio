@@ -41,14 +41,24 @@ function parseDuration(input: string): number | null {
   return null;
 }
 
+export interface ResumeRequest {
+  description: string;
+  category: string | null;
+  client_id: string | null;
+  /** Bumped on every resume click so re-resuming the same entry back to back
+   * still re-triggers the effect below, even though the payload looks the same. */
+  nonce: number;
+}
+
 interface TimeEntryPanelProps {
   activeEntry: ActiveEntry | null;
   clients: ClientOption[];
   onClientCreated: (client: ClientOption) => void;
   onMutated: () => void;
+  resumeRequest?: ResumeRequest | null;
 }
 
-export function TimeEntryPanel({ activeEntry, clients, onClientCreated, onMutated }: TimeEntryPanelProps) {
+export function TimeEntryPanel({ activeEntry, clients, onClientCreated, onMutated, resumeRequest }: TimeEntryPanelProps) {
   const [tab, setTab] = useState<"timer" | "log">("timer");
 
   // ── Timer state ──────────────────────────────────────────────────────────
@@ -91,12 +101,16 @@ export function TimeEntryPanel({ activeEntry, clients, onClientCreated, onMutate
     };
   }, [isRunning]);
 
-  async function handleStart() {
+  async function handleStart(override?: { description: string; category: CategorySelection }) {
+    const desc = override?.description ?? timerDesc;
+    const cat = override?.category ?? timerCat;
     setTimerLoading(true);
     setTimerError(null);
-    const result = await startTimer(timerDesc, timerCat);
+    const result = await startTimer(desc, cat);
     if (result.entry) {
       setEntryId(result.entry.id);
+      setTimerDesc(result.entry.description);
+      setTimerCat({ category: result.entry.category, client_id: result.entry.client_id });
       startedAtMsRef.current = result.entry.started_at ? new Date(result.entry.started_at).getTime() : Date.now();
       setElapsed(0);
       setIsRunning(true);
@@ -106,6 +120,16 @@ export function TimeEntryPanel({ activeEntry, clients, onClientCreated, onMutate
     }
     setTimerLoading(false);
   }
+
+  // A row in the completed-entries list was resumed — start a fresh timer
+  // pre-filled with that entry's description/category (this always creates
+  // a new entry, same as a normal Start; it never reopens the old one).
+  useEffect(() => {
+    if (!resumeRequest) return;
+    setTab("timer");
+    handleStart({ description: resumeRequest.description, category: { category: resumeRequest.category, client_id: resumeRequest.client_id } });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeRequest?.nonce]);
 
   async function handleStop() {
     if (!entryId) return;
@@ -228,7 +252,7 @@ export function TimeEntryPanel({ activeEntry, clients, onClientCreated, onMutate
                 {formatElapsed(elapsed)}
               </span>
               <button
-                onClick={isRunning ? handleStop : handleStart}
+                onClick={isRunning ? handleStop : () => handleStart()}
                 disabled={timerLoading}
                 className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors flex-shrink-0 disabled:opacity-50 ${
                   isRunning
