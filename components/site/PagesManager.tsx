@@ -10,7 +10,7 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  GripVertical, ChevronDown, ChevronRight, ExternalLink, Eye, EyeOff,
+  GripVertical, ChevronDown, ChevronRight, Eye, EyeOff,
   Home, Navigation, PanelTop, Pencil, Outdent,
 } from "lucide-react";
 import { togglePagePublished, updatePageVisibility, reorderSitePages } from "@/lib/actions/sites";
@@ -330,10 +330,21 @@ function PageRow({
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-[var(--muted-foreground)] border border-[var(--border)] px-1.5 py-0.5 rounded font-mono">
-            /{page.slug}
-          </span>
           <p className="font-medium text-[var(--foreground)] truncate">{page.title}</p>
+          {page.status === "published" ? (
+            <Link
+              href={`${siteUrl}/${page.slug}`}
+              target="_blank"
+              title="Open in a new tab"
+              className="text-xs text-[var(--muted-foreground)] border border-[var(--border)] px-1.5 py-0.5 rounded font-mono hover:text-[var(--primary)] hover:border-[var(--primary)]/40 transition-colors"
+            >
+              /{page.slug}
+            </Link>
+          ) : (
+            <span className="text-xs text-[var(--muted-foreground)] border border-[var(--border)] px-1.5 py-0.5 rounded font-mono">
+              /{page.slug}
+            </span>
+          )}
           <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
             page.status === "published" ? "bg-green-100 text-green-700" : "bg-[var(--muted)] text-[var(--muted-foreground)]"
           }`}>
@@ -354,15 +365,6 @@ function PageRow({
       </div>
 
       <div className="flex items-center gap-1 flex-shrink-0">
-        {page.status === "published" && (
-          <Link
-            href={`${siteUrl}/${page.slug}`}
-            target="_blank"
-            className="flex items-center justify-center w-8 h-8 rounded hover:bg-[var(--accent)] text-[var(--muted-foreground)] transition-colors"
-          >
-            <ExternalLink size={13} />
-          </Link>
-        )}
         {canEdit && (
           <button
             onClick={() => startTransition(() => { togglePagePublished(page.id, siteId, page.status !== "published"); })}

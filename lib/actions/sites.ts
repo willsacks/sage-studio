@@ -117,6 +117,8 @@ export async function updateSite(siteId: string, formData: FormData) {
       logo_url: (formData.get("logo_url") as string) || null,
       favicon_url: (formData.get("favicon_url") as string) || null,
       footer_text: (formData.get("footer_text") as string)?.trim() || null,
+      blog_label: (formData.get("blog_label") as string)?.trim() || "Blog",
+      show_blog_in_nav: formData.get("show_blog_in_nav") === "on",
       updated_at: new Date().toISOString(),
     })
     .eq("id", siteId);

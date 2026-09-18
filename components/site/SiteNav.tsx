@@ -15,6 +15,7 @@ export function SiteNav({
   basePath,
   hasPosts,
   isBlogActive,
+  blogLabel,
 }: {
   siteSlug: string;
   pages: SitePage[];
@@ -22,10 +23,13 @@ export function SiteNav({
   site: ArtistSite;
   tokens: StyleTokens;
   basePath: string;
-  /** Shows a "Blog" nav entry once the site has at least one published
-   * post — no point linking to an empty archive. */
+  /** Shows a blog nav entry once the site has at least one published post
+   * AND the owner hasn't turned it off in Site Settings — no point linking
+   * to an empty archive, and some owners want the blog reachable only
+   * directly (e.g. shared as a link) without it cluttering the main nav. */
   hasPosts?: boolean;
   isBlogActive?: boolean;
+  blogLabel?: string;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const navPages = pages.filter((p) => p.show_in_nav !== false);
@@ -82,7 +86,7 @@ export function SiteNav({
                     opacity: isBlogActive ? 1 : 0.75,
                   }}
                 >
-                  Blog
+                  {blogLabel ?? "Blog"}
                 </Link>
               )}
             </div>
@@ -138,7 +142,7 @@ export function SiteNav({
                 opacity: isBlogActive ? 1 : 0.75,
               }}
             >
-              Blog
+              {blogLabel ?? "Blog"}
             </Link>
           )}
         </div>

@@ -12,10 +12,26 @@ async function requireAuth() {
   return { supabase, user };
 }
 
-function slugify(title: string): string {
+function baseSlugify(title: string): string {
   const base = title.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  const suffix = Math.random().toString(36).slice(2, 6);
-  return `${base || "post"}-${suffix}`;
+  return base || "post";
+}
+
+/** Only appends a random suffix when the plain slug is already taken on
+ * this site — most posts get a clean /blog/my-title URL; a collision (e.g.
+ * two posts titled the same) is the only case that needs disambiguating. */
+async function uniqueSlugForSite(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  siteId: string,
+  title: string
+): Promise<string> {
+  const base = baseSlugify(title);
+  const { data: existing } = await supabase.from("site_posts").select("slug").eq("site_id", siteId).like("slug", `${base}%`);
+  const taken = new Set((existing ?? []).map((p) => p.slug));
+  if (!taken.has(base)) return base;
+  let n = 2;
+  while (taken.has(`${base}-${n}`)) n++;
+  return `${base}-${n}`;
 }
 
 /** Creates a draft post and returns its id — mirrors addSitePage's shape
@@ -32,7 +48,7 @@ export async function addSitePost(siteId: string, title: string) {
       site_id: siteId,
       user_id: user.id,
       title: trimmed,
-      slug: slugify(trimmed),
+      slug: await uniqueSlugForSite(supabase, siteId, trimmed),
       status: "draft",
     })
     .select("id")
@@ -50,6 +66,8 @@ export async function saveSitePost(
     slug?: string;
     excerpt?: string;
     coverImageUrl?: string | null;
+    coverImageFocusX?: number;
+    coverImageFocusY?: number;
     htmlContent?: string;
     metaTitle?: string | null;
     metaDescription?: string | null;
@@ -65,6 +83,8 @@ export async function saveSitePost(
       ...(data.slug !== undefined ? { slug: data.slug } : {}),
       ...(data.excerpt !== undefined ? { excerpt: data.excerpt } : {}),
       ...(data.coverImageUrl !== undefined ? { cover_image_url: data.coverImageUrl } : {}),
+      ...(data.coverImageFocusX !== undefined ? { cover_image_focus_x: data.coverImageFocusX } : {}),
+      ...(data.coverImageFocusY !== undefined ? { cover_image_focus_y: data.coverImageFocusY } : {}),
       ...(data.htmlContent !== undefined ? { html_content: data.htmlContent } : {}),
       ...(data.metaTitle !== undefined ? { meta_title: data.metaTitle } : {}),
       ...(data.metaDescription !== undefined ? { meta_description: data.metaDescription } : {}),

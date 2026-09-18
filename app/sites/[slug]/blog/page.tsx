@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const site = await getCachedSiteBySlug(slug);
   if (!site) return {};
   const siteName = site.site_title ?? site.name;
-  return { title: { absolute: `Blog | ${siteName}` } };
+  return { title: { absolute: `${site.blog_label} | ${siteName}` } };
 }
 
 export default async function SiteBlogArchivePage({ params }: { params: Promise<{ slug: string }> }) {
@@ -50,10 +50,10 @@ export default async function SiteBlogArchivePage({ params }: { params: Promise<
         body { font-family: "${tokens.fontBody}", serif; color: ${tokens.colorText}; }
       `}</style>
 
-      <SiteNav siteSlug={slug} pages={pages} currentSlug="" site={site} tokens={tokens as StyleTokens} basePath={basePath} hasPosts={posts.length > 0} isBlogActive />
+      <SiteNav siteSlug={slug} pages={pages} currentSlug="" site={site} tokens={tokens as StyleTokens} basePath={basePath} hasPosts={posts.length > 0 && site.show_blog_in_nav} isBlogActive blogLabel={site.blog_label} />
 
       <main className="max-w-3xl mx-auto px-6 py-12">
-        <h1 className="text-3xl font-bold mb-8" style={{ fontFamily: `"${tokens.fontDisplay}", serif` }}>Blog</h1>
+        <h1 className="text-3xl font-bold mb-8" style={{ fontFamily: `"${tokens.fontDisplay}", serif` }}>{site.blog_label}</h1>
 
         {posts.length === 0 ? (
           <p style={{ opacity: 0.7 }}>Nothing published yet — check back soon.</p>
@@ -62,7 +62,12 @@ export default async function SiteBlogArchivePage({ params }: { params: Promise<
             {posts.map((post) => (
               <Link key={post.id} href={`${basePath}/blog/${post.slug}`} className="block group">
                 {post.cover_image_url && (
-                  <img src={post.cover_image_url} alt="" className="w-full aspect-[3/1] object-cover rounded-xl mb-3" />
+                  <img
+                    src={post.cover_image_url}
+                    alt=""
+                    className="w-full aspect-[3/1] object-cover rounded-xl mb-3"
+                    style={{ objectPosition: `${post.cover_image_focus_x ?? 50}% ${post.cover_image_focus_y ?? 50}%` }}
+                  />
                 )}
                 <p className="text-xs opacity-60 mb-1">
                   {post.published_at ? format(new Date(post.published_at), "MMMM d, yyyy") : ""}

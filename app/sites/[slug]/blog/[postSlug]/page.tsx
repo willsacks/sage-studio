@@ -74,11 +74,16 @@ export default async function SiteBlogPostPage({
         body { font-family: "${tokens.fontBody}", serif; color: ${tokens.colorText}; }
       `}</style>
 
-      <SiteNav siteSlug={slug} pages={pages} currentSlug="" site={site} tokens={tokens as StyleTokens} basePath={basePath} hasPosts={posts.length > 0} isBlogActive />
+      <SiteNav siteSlug={slug} pages={pages} currentSlug="" site={site} tokens={tokens as StyleTokens} basePath={basePath} hasPosts={posts.length > 0 && site.show_blog_in_nav} isBlogActive blogLabel={site.blog_label} />
 
       <main className="max-w-3xl mx-auto px-6 py-12">
         {post.cover_image_url && (
-          <img src={post.cover_image_url} alt="" className="w-full aspect-[3/1] object-cover rounded-xl mb-6" />
+          <img
+            src={post.cover_image_url}
+            alt=""
+            className="w-full aspect-[3/1] object-cover rounded-xl mb-6"
+            style={{ objectPosition: `${post.cover_image_focus_x ?? 50}% ${post.cover_image_focus_y ?? 50}%` }}
+          />
         )}
         <p className="text-xs opacity-60 mb-2">
           {post.published_at ? format(new Date(post.published_at), "MMMM d, yyyy") : ""}
@@ -86,7 +91,7 @@ export default async function SiteBlogPostPage({
         <h1 className="text-3xl font-bold mb-6" style={{ fontFamily: `"${tokens.fontDisplay}", serif` }}>
           {post.title}
         </h1>
-        {post.html_content && <SandboxedPostBody html={post.html_content} />}
+        {post.html_content && <SandboxedPostBody html={post.html_content} textColor={tokens.colorText} />}
       </main>
 
       <SiteFooter footerText={site.footer_text} tokens={tokens as StyleTokens} />

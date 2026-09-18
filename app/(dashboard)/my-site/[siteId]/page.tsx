@@ -16,6 +16,7 @@ import { PageTypePicker } from "@/components/site/PageTypePicker";
 import { ImportHtmlButton } from "@/components/site/ImportHtmlButton";
 import { WordPressImportWizard } from "@/components/site/WordPressImportWizard";
 import { PagesManager } from "@/components/site/PagesManager";
+import { CollapsibleSection } from "@/components/site/CollapsibleSection";
 import { getSiteRole, hasAtLeast } from "@/lib/access/site-access";
 
 export async function generateMetadata({ params }: { params: Promise<{ siteId: string }> }): Promise<Metadata> {
@@ -141,18 +142,17 @@ export default async function SitePageManagerPage({ params }: { params: Promise<
       )}
 
       {/* Pages section */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold text-[var(--foreground)]">Pages</h2>
-          {canEdit && (
+      <CollapsibleSection
+        storageKey={`${siteId}:pages`}
+        title="Pages"
+        actions={canEdit && (
             <div className="flex items-center gap-2">
               <WordPressImportWizard siteId={siteId} />
               <ImportHtmlButton siteId={siteId} />
               <PageTypePicker siteId={siteId} existingTypes={pages.map((p) => p.page_type as "home" | "about" | "work" | "contact" | "custom")} templates={{ platform: platformTemplates, personal: personalTemplates }} />
             </div>
           )}
-        </div>
-
+      >
         {pages.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-4 py-14 border-2 border-dashed border-[var(--border)] rounded-xl">
             <Globe size={32} className="text-[var(--muted-foreground)] opacity-30" />
@@ -177,15 +177,14 @@ export default async function SitePageManagerPage({ params }: { params: Promise<
             canEdit={canEdit}
           />
         )}
-      </div>
+      </CollapsibleSection>
 
       {/* Blog Posts */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold text-[var(--foreground)]">Blog Posts</h2>
-          {canEdit && <NewPostButton siteId={siteId} />}
-        </div>
-
+      <CollapsibleSection
+        storageKey={`${siteId}:posts`}
+        title={site.blog_label}
+        actions={canEdit && <NewPostButton siteId={siteId} />}
+      >
         {posts.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-4 py-14 border-2 border-dashed border-[var(--border)] rounded-xl">
             <div className="text-center">
@@ -197,21 +196,20 @@ export default async function SitePageManagerPage({ params }: { params: Promise<
         ) : (
           <PostsManager siteId={siteId} siteUrl={siteUrl} posts={posts} canEdit={canEdit} />
         )}
-      </div>
+      </CollapsibleSection>
 
       {/* Form Submissions */}
       {canEdit && (
-      <div>
-        {unreadSubmissions > 0 && <MarkSubmissionsReadOnMount siteSlug={site.slug} />}
-        <div className="flex items-center gap-3 mb-4">
-          <h2 className="font-semibold text-[var(--foreground)]">Form Submissions</h2>
-          {unreadSubmissions > 0 && (
+      <CollapsibleSection
+        storageKey={`${siteId}:submissions`}
+        title="Form Submissions"
+        badge={unreadSubmissions > 0 && (
             <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-[var(--primary)] text-[var(--primary-foreground)] text-[10px] font-bold">
               {unreadSubmissions} new
             </span>
           )}
-        </div>
-
+      >
+        {unreadSubmissions > 0 && <MarkSubmissionsReadOnMount siteSlug={site.slug} />}
         {canManage && (
           <NotificationEmailForm
             siteId={siteId}
@@ -269,7 +267,7 @@ export default async function SitePageManagerPage({ params }: { params: Promise<
             })}
           </div>
         )}
-      </div>
+      </CollapsibleSection>
       )}
     </div>
   );

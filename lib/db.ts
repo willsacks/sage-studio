@@ -97,6 +97,8 @@ export type Database = {
           custom_domain_verified: boolean;
           is_published: boolean;
           custom_style: Json | null;
+          blog_label: string;
+          show_blog_in_nav: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -115,6 +117,8 @@ export type Database = {
           custom_domain_verified?: boolean;
           is_published?: boolean;
           custom_style?: Json | null;
+          blog_label?: string;
+          show_blog_in_nav?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -133,6 +137,8 @@ export type Database = {
           custom_domain_verified?: boolean;
           is_published?: boolean;
           custom_style?: Json | null;
+          blog_label?: string;
+          show_blog_in_nav?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -201,6 +207,8 @@ export type Database = {
           slug: string;
           excerpt: string | null;
           cover_image_url: string | null;
+          cover_image_focus_x: number;
+          cover_image_focus_y: number;
           html_content: string | null;
           status: "draft" | "published";
           meta_title: string | null;
@@ -217,6 +225,8 @@ export type Database = {
           slug: string;
           excerpt?: string | null;
           cover_image_url?: string | null;
+          cover_image_focus_x?: number;
+          cover_image_focus_y?: number;
           html_content?: string | null;
           status?: "draft" | "published";
           meta_title?: string | null;
@@ -233,6 +243,8 @@ export type Database = {
           slug?: string;
           excerpt?: string | null;
           cover_image_url?: string | null;
+          cover_image_focus_x?: number;
+          cover_image_focus_y?: number;
           html_content?: string | null;
           status?: "draft" | "published";
           meta_title?: string | null;

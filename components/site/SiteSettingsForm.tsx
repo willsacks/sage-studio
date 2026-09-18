@@ -17,6 +17,7 @@ export function SiteSettingsForm({ siteId, site }: { siteId: string; site: Artis
   const [logoUrl, setLogoUrl] = useState<string | null>(site.logo_url);
   const [faviconUrl, setFaviconUrl] = useState<string | null>(site.favicon_url ?? null);
   const [footerText, setFooterText] = useState(site.footer_text ?? "");
+  const [showBlogInNav, setShowBlogInNav] = useState(site.show_blog_in_nav);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -28,6 +29,8 @@ export function SiteSettingsForm({ siteId, site }: { siteId: string; site: Artis
     formData.set("logo_url", logoUrl ?? "");
     formData.set("favicon_url", faviconUrl ?? "");
     formData.set("footer_text", footerText);
+    if (showBlogInNav) formData.set("show_blog_in_nav", "on");
+    else formData.delete("show_blog_in_nav");
 
     startTransition(async () => {
       try {
@@ -85,6 +88,24 @@ export function SiteSettingsForm({ siteId, site }: { siteId: string; site: Artis
           onChange={setFooterText}
           placeholder={`© ${new Date().getFullYear()} ${site.name}`}
         />
+      </div>
+
+      <div className="space-y-2 border-t border-[var(--border)] pt-6">
+        <h2 className="text-sm font-semibold">Blog</h2>
+        <div className="space-y-1.5">
+          <Label htmlFor="blog_label">Blog name</Label>
+          <p className="text-xs text-[var(--muted-foreground)]">Shown as the nav link and archive page title — some sites prefer "News" or "Writing" over "Blog".</p>
+          <Input id="blog_label" name="blog_label" defaultValue={site.blog_label} placeholder="Blog" className="max-w-xs" />
+        </div>
+        <label className="flex items-center gap-2 text-sm cursor-pointer pt-1">
+          <input
+            type="checkbox"
+            checked={showBlogInNav}
+            onChange={(e) => setShowBlogInNav(e.target.checked)}
+            className="rounded border-[var(--border)]"
+          />
+          Show in main site navigation
+        </label>
       </div>
 
       {error && <p className="text-sm text-red-500">{error}</p>}

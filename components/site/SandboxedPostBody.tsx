@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from "react";
  * page, a post body is embedded inline within normal page chrome (nav,
  * other post content), so it needs to report its own height back to size
  * the iframe instead of being full-viewport. */
-export function SandboxedPostBody({ html }: { html: string }) {
+export function SandboxedPostBody({ html, textColor }: { html: string; textColor?: string }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(200);
 
@@ -25,8 +25,13 @@ export function SandboxedPostBody({ html }: { html: string }) {
     return () => window.removeEventListener("message", onMessage);
   }, []);
 
+  // The iframe is its own document, so the site's theme CSS (including
+  // --colorText) never reaches inside it — without an explicit color here,
+  // post text falls back to the browser's default black, which disappears
+  // on a dark-themed site's dark page background. Background stays
+  // transparent so the outer page's own background still shows through.
   const srcDoc = `<!doctype html><html><head><base target="_parent"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
-    html,body{margin:0;padding:0;font-family:inherit;}
+    html,body{margin:0;padding:0;font-family:inherit;background:transparent;${textColor ? `color:${textColor};` : ""}}
     img,video,iframe{max-width:100%;}
   </style></head><body>${html}<script>
     function report() { try { parent.postMessage({ sagePostHeight: document.documentElement.scrollHeight }, "*"); } catch (e) {} }

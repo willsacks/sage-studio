@@ -156,7 +156,8 @@ export default async function PublicSitePageRoute({
             site={site}
             tokens={tokens as StyleTokens}
             basePath={basePath}
-            hasPosts={posts.length > 0}
+            hasPosts={posts.length > 0 && site.show_blog_in_nav}
+            blogLabel={site.blog_label}
           />
         )}
 
