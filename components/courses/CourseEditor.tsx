@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown, Pencil, Video, FileText } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown, Pencil, Video, FileText, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,6 +61,9 @@ export function CourseEditor({ course, modules }: { course: Course; modules: Mod
           <ArrowLeft size={14} /> Courses
         </Link>
         <div className="flex items-center gap-2">
+          <Link href={`/courses/${course.id}/students`} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs font-medium hover:bg-[var(--accent)] transition-colors">
+            <Users size={13} /> Students
+          </Link>
           <Button size="sm" variant={course.status === "published" ? "outline" : "default"} onClick={handleTogglePublished} disabled={isPending}>
             {course.status === "published" ? "Unpublish" : "Publish"}
           </Button>

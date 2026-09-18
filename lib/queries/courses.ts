@@ -59,3 +59,18 @@ export async function getEnrollmentsForCourse(courseId: string): Promise<Enrollm
     .order("enrolled_at", { ascending: false });
   return data ?? [];
 }
+
+/** Courses the given user is an accepted student of — relies on the same
+ * RLS ("Enrolled students view their course") that also gates the join
+ * target, so this naturally returns nothing for courses access was since
+ * revoked from, without any extra filtering here. */
+export async function getEnrolledCoursesForUser(userId: string): Promise<Course[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("enrollments")
+    .select("courses(*)")
+    .eq("user_id", userId)
+    .eq("status", "accepted");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((data ?? []) as any[]).map((r) => r.courses).filter(Boolean) as Course[];
+}

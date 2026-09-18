@@ -17,6 +17,7 @@ export const NAV = [
   { href: "/finances", label: "Finances", icon: Wallet },
   { href: "/newsletter", label: "Newsletter", icon: Mail },
   { href: "/courses", label: "Courses", icon: GraduationCap },
+  { href: "/my-courses", label: "My Courses", icon: GraduationCap },
   { href: "/todos", label: "To Do's", icon: CheckSquare },
   { href: "/tasks", label: "Time Tracker", icon: Timer },
   { href: "/pipeline", label: "Pipeline", icon: GitBranch },
