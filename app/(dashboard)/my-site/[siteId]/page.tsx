@@ -14,6 +14,7 @@ import { ArrowLeft, Globe, ExternalLink, Settings, Eye, EyeOff, Palette } from "
 import { format } from "date-fns";
 import { PageTypePicker } from "@/components/site/PageTypePicker";
 import { ImportHtmlButton } from "@/components/site/ImportHtmlButton";
+import { WordPressImportWizard } from "@/components/site/WordPressImportWizard";
 import { PagesManager } from "@/components/site/PagesManager";
 import { getSiteRole, hasAtLeast } from "@/lib/access/site-access";
 
@@ -145,6 +146,7 @@ export default async function SitePageManagerPage({ params }: { params: Promise<
           <h2 className="font-semibold text-[var(--foreground)]">Pages</h2>
           {canEdit && (
             <div className="flex items-center gap-2">
+              <WordPressImportWizard siteId={siteId} />
               <ImportHtmlButton siteId={siteId} />
               <PageTypePicker siteId={siteId} existingTypes={pages.map((p) => p.page_type as "home" | "about" | "work" | "contact" | "custom")} templates={{ platform: platformTemplates, personal: personalTemplates }} />
             </div>
@@ -160,6 +162,7 @@ export default async function SitePageManagerPage({ params }: { params: Promise<
             </div>
             {canEdit && (
               <div className="flex items-center gap-2">
+                <WordPressImportWizard siteId={siteId} />
                 <ImportHtmlButton siteId={siteId} />
                 <PageTypePicker siteId={siteId} existingTypes={[]} />
               </div>
