@@ -243,6 +243,162 @@ export type Database = {
         };
         Relationships: [];
       };
+      courses: {
+        Row: {
+          id: string;
+          owner_id: string;
+          title: string;
+          slug: string;
+          description: string | null;
+          cover_image_url: string | null;
+          status: "draft" | "published";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          owner_id: string;
+          title: string;
+          slug: string;
+          description?: string | null;
+          cover_image_url?: string | null;
+          status?: "draft" | "published";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          owner_id?: string;
+          title?: string;
+          slug?: string;
+          description?: string | null;
+          cover_image_url?: string | null;
+          status?: "draft" | "published";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      course_modules: {
+        Row: {
+          id: string;
+          course_id: string;
+          title: string;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          course_id: string;
+          title: string;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          course_id?: string;
+          title?: string;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      lessons: {
+        Row: {
+          id: string;
+          module_id: string;
+          title: string;
+          sort_order: number;
+          content_type: "text" | "video";
+          body: string | null;
+          video_path: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          module_id: string;
+          title: string;
+          sort_order?: number;
+          content_type?: "text" | "video";
+          body?: string | null;
+          video_path?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          module_id?: string;
+          title?: string;
+          sort_order?: number;
+          content_type?: "text" | "video";
+          body?: string | null;
+          video_path?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      enrollments: {
+        Row: {
+          id: string;
+          course_id: string;
+          user_id: string | null;
+          email: string;
+          status: "pending" | "accepted";
+          source: "manual" | "stripe";
+          enrolled_at: string;
+        };
+        Insert: {
+          id?: string;
+          course_id: string;
+          user_id?: string | null;
+          email: string;
+          status?: "pending" | "accepted";
+          source?: "manual" | "stripe";
+          enrolled_at?: string;
+        };
+        Update: {
+          id?: string;
+          course_id?: string;
+          user_id?: string | null;
+          email?: string;
+          status?: "pending" | "accepted";
+          source?: "manual" | "stripe";
+          enrolled_at?: string;
+        };
+        Relationships: [];
+      };
+      lesson_progress: {
+        Row: {
+          id: string;
+          enrollment_id: string;
+          lesson_id: string;
+          completed_at: string | null;
+          last_position_seconds: number;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          enrollment_id: string;
+          lesson_id: string;
+          completed_at?: string | null;
+          last_position_seconds?: number;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          enrollment_id?: string;
+          lesson_id?: string;
+          completed_at?: string | null;
+          last_position_seconds?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       clients: {
         Row: {
           id: string;
