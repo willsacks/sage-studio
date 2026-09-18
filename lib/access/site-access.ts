@@ -60,3 +60,19 @@ export async function requirePageRole(
   const role = await requireSiteRole(supabase, page.site_id, userId, min);
   return { siteId: page.site_id, role };
 }
+
+export async function requirePostRole(
+  supabase: SupabaseClient<Database>,
+  postId: string,
+  userId: string,
+  min: SiteRole
+): Promise<{ siteId: string; role: SiteRole }> {
+  const { data: post } = await supabase
+    .from("site_posts")
+    .select("site_id")
+    .eq("id", postId)
+    .single();
+  if (!post) throw new Error("Post not found");
+  const role = await requireSiteRole(supabase, post.site_id, userId, min);
+  return { siteId: post.site_id, role };
+}

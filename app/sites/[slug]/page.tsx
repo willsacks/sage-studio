@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getCachedSiteBySlug, getCachedPublishedPagesForSite } from "@/lib/queries/sites";
+import { getCachedPublishedPostsForSite } from "@/lib/queries/site-posts";
 import { OfferPageBlocks } from "@/components/offer-builder/OfferPageBlocks";
 import { SiteNav } from "@/components/site/SiteNav";
 import { SiteFooter } from "@/components/site/SiteFooter";
@@ -71,9 +72,10 @@ export default async function SiteRootPage({
   const { slug } = await params;
   const { scrollTo } = await searchParams;
   const scrollToId = typeof scrollTo === "string" && SCROLL_TO_ID_PATTERN.test(scrollTo) ? scrollTo : null;
-  const [site, pages] = await Promise.all([
+  const [site, pages, posts] = await Promise.all([
     getCachedSiteBySlug(slug),
     getCachedPublishedPagesForSite(slug),
+    getCachedPublishedPostsForSite(slug),
   ]);
 
   if (!site) notFound();
@@ -166,6 +168,7 @@ export default async function SiteRootPage({
             site={site}
             tokens={tokens as StyleTokens}
             basePath={basePath}
+            hasPosts={posts.length > 0}
           />
         )}
 

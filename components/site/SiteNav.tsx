@@ -13,6 +13,8 @@ export function SiteNav({
   site,
   tokens,
   basePath,
+  hasPosts,
+  isBlogActive,
 }: {
   siteSlug: string;
   pages: SitePage[];
@@ -20,9 +22,14 @@ export function SiteNav({
   site: ArtistSite;
   tokens: StyleTokens;
   basePath: string;
+  /** Shows a "Blog" nav entry once the site has at least one published
+   * post — no point linking to an empty archive. */
+  hasPosts?: boolean;
+  isBlogActive?: boolean;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const navPages = pages.filter((p) => p.show_in_nav !== false);
+  const showNav = navPages.length > 0 || hasPosts;
 
   return (
     <nav
@@ -44,7 +51,7 @@ export function SiteNav({
           )}
         </Link>
 
-        {navPages.length > 0 && (
+        {showNav && (
           <>
             {/* Desktop nav links */}
             <div className="hidden sm:flex items-center gap-1 overflow-x-auto">
@@ -65,6 +72,19 @@ export function SiteNav({
                   </Link>
                 );
               })}
+              {hasPosts && (
+                <Link
+                  href={`${basePath}/blog`}
+                  className="px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-all"
+                  style={{
+                    color: isBlogActive ? tokens.colorAccent : tokens.colorText,
+                    backgroundColor: isBlogActive ? `${tokens.colorAccent}18` : "transparent",
+                    opacity: isBlogActive ? 1 : 0.75,
+                  }}
+                >
+                  Blog
+                </Link>
+              )}
             </div>
 
             {/* Mobile hamburger — the old horizontal-scroll-only list gave no
@@ -84,7 +104,7 @@ export function SiteNav({
         )}
       </div>
 
-      {navPages.length > 0 && mobileOpen && (
+      {showNav && mobileOpen && (
         <div
           className="sm:hidden border-t px-6 py-2"
           style={{ borderColor: `${tokens.colorText}15`, backgroundColor: tokens.colorBackground }}
@@ -107,6 +127,20 @@ export function SiteNav({
               </Link>
             );
           })}
+          {hasPosts && (
+            <Link
+              href={`${basePath}/blog`}
+              onClick={() => setMobileOpen(false)}
+              className="block px-3 py-2.5 rounded-md text-sm font-medium transition-all"
+              style={{
+                color: isBlogActive ? tokens.colorAccent : tokens.colorText,
+                backgroundColor: isBlogActive ? `${tokens.colorAccent}18` : "transparent",
+                opacity: isBlogActive ? 1 : 0.75,
+              }}
+            >
+              Blog
+            </Link>
+          )}
         </div>
       )}
     </nav>

@@ -192,6 +192,57 @@ export type Database = {
         };
         Relationships: [];
       };
+      site_posts: {
+        Row: {
+          id: string;
+          site_id: string;
+          user_id: string;
+          title: string;
+          slug: string;
+          excerpt: string | null;
+          cover_image_url: string | null;
+          html_content: string | null;
+          status: "draft" | "published";
+          meta_title: string | null;
+          meta_description: string | null;
+          published_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          site_id: string;
+          user_id: string;
+          title: string;
+          slug: string;
+          excerpt?: string | null;
+          cover_image_url?: string | null;
+          html_content?: string | null;
+          status?: "draft" | "published";
+          meta_title?: string | null;
+          meta_description?: string | null;
+          published_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          site_id?: string;
+          user_id?: string;
+          title?: string;
+          slug?: string;
+          excerpt?: string | null;
+          cover_image_url?: string | null;
+          html_content?: string | null;
+          status?: "draft" | "published";
+          meta_title?: string | null;
+          meta_description?: string | null;
+          published_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       clients: {
         Row: {
           id: string;

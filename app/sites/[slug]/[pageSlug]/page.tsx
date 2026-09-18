@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getCachedSiteBySlug, getCachedPublishedPageBySlug, getCachedPublishedPagesForSite } from "@/lib/queries/sites";
+import { getCachedPublishedPostsForSite } from "@/lib/queries/site-posts";
 import { OfferPageBlocks } from "@/components/offer-builder/OfferPageBlocks";
 import { SiteNav } from "@/components/site/SiteNav";
 import { SiteFooter } from "@/components/site/SiteFooter";
@@ -113,6 +114,8 @@ export default async function PublicSitePageRoute({
     );
   }
 
+  const posts = await getCachedPublishedPostsForSite(slug);
+
   const tokens = resolveStyleTokens(site);
 
   const cssVars = buildStyleCssVars(tokens);
@@ -153,6 +156,7 @@ export default async function PublicSitePageRoute({
             site={site}
             tokens={tokens as StyleTokens}
             basePath={basePath}
+            hasPosts={posts.length > 0}
           />
         )}
 

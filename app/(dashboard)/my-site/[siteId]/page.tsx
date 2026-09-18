@@ -3,7 +3,10 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getSiteById, getPagesForSite } from "@/lib/queries/sites";
+import { getPostsForSite } from "@/lib/queries/site-posts";
 import { getFormSubmissionsForSite } from "@/lib/queries/form-submissions";
+import { PostsManager } from "@/components/site/PostsManager";
+import { NewPostButton } from "@/components/site/NewPostButton";
 import { toggleSitePublished } from "@/lib/actions/sites";
 import { MarkSubmissionsReadOnMount } from "@/components/site/MarkSubmissionsReadOnMount";
 import { NotificationEmailForm } from "@/components/site/NotificationEmailForm";
@@ -30,9 +33,10 @@ export default async function SitePageManagerPage({ params }: { params: Promise<
   const platformTemplates: never[] = [];
   const personalTemplates: never[] = [];
 
-  const [site, pages] = await Promise.all([
+  const [site, pages, posts] = await Promise.all([
     getSiteById(siteId),
     getPagesForSite(siteId),
+    getPostsForSite(siteId),
   ]);
   if (!site) notFound();
   const role = await getSiteRole(supabase, siteId, user.id);
@@ -169,6 +173,26 @@ export default async function SitePageManagerPage({ params }: { params: Promise<
             homePageId={homePageId}
             canEdit={canEdit}
           />
+        )}
+      </div>
+
+      {/* Blog Posts */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold text-[var(--foreground)]">Blog Posts</h2>
+          {canEdit && <NewPostButton siteId={siteId} />}
+        </div>
+
+        {posts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-4 py-14 border-2 border-dashed border-[var(--border)] rounded-xl">
+            <div className="text-center">
+              <p className="font-medium text-[var(--foreground)]">No posts yet</p>
+              {canEdit && <p className="text-sm text-[var(--muted-foreground)] mt-1">Published posts show up at /blog on your site.</p>}
+            </div>
+            {canEdit && <NewPostButton siteId={siteId} />}
+          </div>
+        ) : (
+          <PostsManager siteId={siteId} siteUrl={siteUrl} posts={posts} canEdit={canEdit} />
         )}
       </div>
 
