@@ -21,7 +21,7 @@ export type Database = {
           bio: string | null;
           timezone: string;
           onboarding_done: boolean;
-          role: "member" | "moderator" | "admin";
+          role: "member" | "moderator" | "admin" | "manager" | "customer_success";
           tier_level: number;
           tier_key: string;
           tier_expires_at: string | null;
@@ -33,6 +33,7 @@ export type Database = {
           profile_links: Json;
           ai_assistant_enabled: boolean;
           ai_finance_assistant_enabled: boolean;
+          active_discount_percent: number | null;
           created_at: string;
         };
         Insert: {
@@ -43,7 +44,7 @@ export type Database = {
           bio?: string | null;
           timezone?: string;
           onboarding_done?: boolean;
-          role?: "member" | "moderator" | "admin";
+          role?: "member" | "moderator" | "admin" | "manager" | "customer_success";
           tier_level?: number;
           tier_key?: string;
           tier_expires_at?: string | null;
@@ -55,6 +56,7 @@ export type Database = {
           profile_links?: Json;
           ai_assistant_enabled?: boolean;
           ai_finance_assistant_enabled?: boolean;
+          active_discount_percent?: number | null;
           created_at?: string;
         };
         Update: {
@@ -65,7 +67,7 @@ export type Database = {
           bio?: string | null;
           timezone?: string;
           onboarding_done?: boolean;
-          role?: "member" | "moderator" | "admin";
+          role?: "member" | "moderator" | "admin" | "manager" | "customer_success";
           tier_level?: number;
           tier_key?: string;
           tier_expires_at?: string | null;
@@ -77,6 +79,7 @@ export type Database = {
           profile_links?: Json;
           ai_assistant_enabled?: boolean;
           ai_finance_assistant_enabled?: boolean;
+          active_discount_percent?: number | null;
           created_at?: string;
         };
         Relationships: [];

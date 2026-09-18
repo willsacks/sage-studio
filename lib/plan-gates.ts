@@ -3,10 +3,12 @@
 // Pro ($5/mo): custom domain, unlimited sites, unlimited pages
 // Admin: all Pro features, no paywall
 
+import { isPlatformStaff } from "@/lib/access/platform-access";
+
 export type StudioPlan = "free" | "pro";
 
 export function isProPlan(tierKey: string, role?: string | null): boolean {
-  return tierKey === "studio_pro" || role === "admin";
+  return tierKey === "studio_pro" || isPlatformStaff(role);
 }
 
 export function canUseCustomDomain(plan: StudioPlan): boolean {

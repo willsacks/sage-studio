@@ -1,18 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { stripe } from "@/lib/stripe";
-
-const PRICE_IDS: Record<string, string> = {
-  pro: process.env.STRIPE_SAGE_STUDIO_PRICE_PRO!,
-};
+import { stripe, getEffectiveProPriceId } from "@/lib/stripe";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const plan = searchParams.get("plan");
 
-  if (!plan || !PRICE_IDS[plan]) {
+  if (plan !== "pro") {
     return NextResponse.json({ error: "Invalid plan" }, { status: 400 });
   }
+  const proPriceId = await getEffectiveProPriceId();
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -45,7 +42,7 @@ export async function GET(request: NextRequest) {
   const session = await stripe.checkout.sessions.create({
     customer: customerId,
     mode: "subscription",
-    line_items: [{ price: PRICE_IDS[plan], quantity: 1 }],
+    line_items: [{ price: proPriceId, quantity: 1 }],
     success_url: `${process.env.NEXT_PUBLIC_APP_URL}/billing?success=true`,
     cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/billing`,
     metadata: { user_id: user.id, platform: "sage_studio" },

@@ -4,16 +4,19 @@ import { revalidatePath } from "next/cache";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { DEFAULT_SYSTEM_BLOCK, DEFAULT_SYSTEM_HTML } from "@/lib/ai/prompts";
 import { DEFAULT_AI_MODEL } from "@/lib/ai/models";
+import { canManagePlatform } from "@/lib/access/platform-access";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyClient = any;
 
+/** Everything gated by this is non-destructive (settings, toggles), so
+ * both admin and manager pass — see lib/access/platform-access.ts. */
 async function requireAdmin(): Promise<AnyClient> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "admin") throw new Error("Not authorized");
+  if (!canManagePlatform(profile?.role)) throw new Error("Not authorized");
   return createAdminClient();
 }
 

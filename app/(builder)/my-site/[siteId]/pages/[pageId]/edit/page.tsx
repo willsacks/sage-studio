@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getSiteById, getSitePageById, getPagesForSite } from "@/lib/queries/sites";
 import { SitePageBuilder } from "@/components/site/SitePageBuilder";
+import { isPlatformStaff } from "@/lib/access/platform-access";
 import { HtmlPageEditor } from "@/components/site/HtmlPageEditor";
 import { ReadOnlyPageView } from "@/components/site/ReadOnlyPageView";
 import { getSiteRole, hasAtLeast } from "@/lib/access/site-access";
@@ -52,7 +53,7 @@ export default async function SitePageEditPage({
       site={site}
       allPages={allPages}
       username={profile?.username ?? null}
-      isAdmin={profile?.role === "admin"}
+      isAdmin={isPlatformStaff(profile?.role)}
       aiEnabled={aiEnabled}
       templates={{
         platform: platformTemplates,

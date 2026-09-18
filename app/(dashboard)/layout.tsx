@@ -4,6 +4,7 @@ import { Sidebar } from "@/components/nav/Sidebar";
 import { MobileNav } from "@/components/nav/MobileNav";
 import { PageContainer } from "@/components/nav/PageContainer";
 import { isProPlan } from "@/lib/plan-gates";
+import { isPlatformStaff } from "@/lib/access/platform-access";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -20,7 +21,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (!profile?.onboarding_done) redirect("/onboarding");
 
   const plan = isProPlan(profile?.tier_key ?? "", profile?.role) ? "pro" : "free";
-  const isAdmin = profile?.role === "admin";
+  const isAdmin = isPlatformStaff(profile?.role);
   const hiddenNavItems = (profile?.hidden_nav_items as string[] | null) ?? [];
 
   return (
