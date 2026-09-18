@@ -1,6 +1,7 @@
 import { Settings } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { NavVisibilityForm } from "@/components/settings/NavVisibilityForm";
+import { AccountForm } from "@/components/settings/AccountForm";
 
 export const metadata = { title: "Settings" };
 
@@ -26,28 +27,13 @@ export default async function SettingsPage() {
         </p>
       </div>
 
-      <div className="rounded-lg border border-[var(--border)] divide-y divide-[var(--border)]">
-        <div className="px-5 py-4">
-          <p className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wide mb-3">Account</p>
-          <dl className="space-y-3">
-            {profile?.display_name && (
-              <div className="flex items-center justify-between">
-                <dt className="text-sm text-[var(--muted-foreground)]">Name</dt>
-                <dd className="text-sm font-medium">{profile.display_name}</dd>
-              </div>
-            )}
-            {profile?.username && (
-              <div className="flex items-center justify-between">
-                <dt className="text-sm text-[var(--muted-foreground)]">Username</dt>
-                <dd className="text-sm font-medium">@{profile.username}</dd>
-              </div>
-            )}
-            <div className="flex items-center justify-between">
-              <dt className="text-sm text-[var(--muted-foreground)]">Email</dt>
-              <dd className="text-sm font-medium">{user!.email}</dd>
-            </div>
-          </dl>
-        </div>
+      <div className="rounded-lg border border-[var(--border)] px-5 py-4">
+        <p className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wide mb-3">Account</p>
+        <AccountForm
+          initialDisplayName={profile?.display_name ?? ""}
+          initialUsername={profile?.username ?? ""}
+          currentEmail={user!.email ?? ""}
+        />
       </div>
 
       <div className="rounded-lg border border-[var(--border)] px-5 py-4">

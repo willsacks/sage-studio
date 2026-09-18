@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ImageUploader } from "@/components/ui/image-uploader";
+import { FocusPointPicker } from "@/components/ui/focus-point-picker";
 import { LessonEditorDialog } from "@/components/courses/LessonEditorDialog";
+import { ConfirmDeleteDialog } from "@/components/courses/ConfirmDeleteDialog";
 import {
   saveCourse,
   toggleCoursePublished,
@@ -27,6 +29,8 @@ export function CourseEditor({ course, modules }: { course: Course; modules: Mod
   const [title, setTitle] = useState(course.title);
   const [description, setDescription] = useState(course.description ?? "");
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(course.cover_image_url);
+  const [coverFocusX, setCoverFocusX] = useState(course.cover_image_focus_x ?? 50);
+  const [coverFocusY, setCoverFocusY] = useState(course.cover_image_focus_y ?? 50);
   const [isPending, startTransition] = useTransition();
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const [newModuleTitle, setNewModuleTitle] = useState("");
@@ -96,6 +100,19 @@ export function CourseEditor({ course, modules }: { course: Course; modules: Mod
             folder="course-covers"
             aspectRatio="wide"
           />
+          {coverImageUrl && (
+            <FocusPointPicker
+              imageUrl={coverImageUrl}
+              focusX={coverFocusX}
+              focusY={coverFocusY}
+              onChange={(x, y) => {
+                setCoverFocusX(x);
+                setCoverFocusY(y);
+                startTransition(async () => { await saveCourse(course.id, { coverImageFocusX: x, coverImageFocusY: y }); router.refresh(); });
+              }}
+              aspectRatio="wide"
+            />
+          )}
         </div>
       </div>
 
@@ -166,6 +183,8 @@ function ModuleCard({
   const router = useRouter();
   const [title, setTitle] = useState(mod.title);
   const [newLessonTitle, setNewLessonTitle] = useState("");
+  const [deletingModule, setDeletingModule] = useState(false);
+  const [deletingLessonId, setDeletingLessonId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   function handleRename() {
@@ -174,7 +193,6 @@ function ModuleCard({
   }
 
   function handleDelete() {
-    if (!confirm(`Delete "${mod.title}" and all its lessons?`)) return;
     startTransition(async () => { await deleteModule(mod.id); router.refresh(); });
   }
 
@@ -188,13 +206,14 @@ function ModuleCard({
   }
 
   function handleDeleteLesson(lessonId: string) {
-    if (!confirm("Delete this lesson?")) return;
     startTransition(async () => { await deleteLesson(lessonId); router.refresh(); });
   }
 
   function handleMoveLesson(lessonId: string, direction: "up" | "down") {
     startTransition(async () => { await moveLesson(mod.id, lessonId, direction); router.refresh(); });
   }
+
+  const deletingLesson = mod.lessons.find((l) => l.id === deletingLessonId) ?? null;
 
   return (
     <div className="rounded-xl border border-[var(--border)] overflow-hidden">
@@ -213,7 +232,7 @@ function ModuleCard({
           onBlur={handleRename}
           className="h-8 text-sm font-medium border-none bg-transparent px-1 focus-visible:ring-1"
         />
-        <button onClick={handleDelete} className="p-1.5 rounded text-[var(--muted-foreground)] hover:text-red-500 hover:bg-red-500/10 transition-colors">
+        <button onClick={() => setDeletingModule(true)} className="p-1.5 rounded text-[var(--muted-foreground)] hover:text-red-500 hover:bg-red-500/10 transition-colors">
           <Trash2 size={14} />
         </button>
       </div>
@@ -234,7 +253,7 @@ function ModuleCard({
             <button onClick={() => onEditLesson(lesson)} className="p-1.5 rounded text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors">
               <Pencil size={13} />
             </button>
-            <button onClick={() => handleDeleteLesson(lesson.id)} className="p-1.5 rounded text-[var(--muted-foreground)] hover:text-red-500 hover:bg-red-500/10 transition-colors">
+            <button onClick={() => setDeletingLessonId(lesson.id)} className="p-1.5 rounded text-[var(--muted-foreground)] hover:text-red-500 hover:bg-red-500/10 transition-colors">
               <Trash2 size={13} />
             </button>
           </div>
@@ -253,6 +272,31 @@ function ModuleCard({
           </Button>
         </div>
       </div>
+
+      <ConfirmDeleteDialog
+        open={deletingModule}
+        onOpenChange={setDeletingModule}
+        title="Delete module?"
+        description={
+          <>
+            <span className="font-medium text-[var(--foreground)]">{mod.title}</span> and its {mod.lessons.length} lesson{mod.lessons.length === 1 ? "" : "s"} will be permanently deleted. This cannot be undone.
+          </>
+        }
+        confirmLabel="Delete module"
+        onConfirm={handleDelete}
+      />
+      <ConfirmDeleteDialog
+        open={!!deletingLessonId}
+        onOpenChange={(open) => !open && setDeletingLessonId(null)}
+        title="Delete lesson?"
+        description={
+          <>
+            <span className="font-medium text-[var(--foreground)]">{deletingLesson?.title}</span> will be permanently deleted. This cannot be undone.
+          </>
+        }
+        confirmLabel="Delete lesson"
+        onConfirm={() => deletingLessonId && handleDeleteLesson(deletingLessonId)}
+      />
     </div>
   );
 }

@@ -51,7 +51,14 @@ export async function addCourse(title: string) {
 
 export async function saveCourse(
   courseId: string,
-  data: { title?: string; slug?: string; description?: string; coverImageUrl?: string | null }
+  data: {
+    title?: string;
+    slug?: string;
+    description?: string;
+    coverImageUrl?: string | null;
+    coverImageFocusX?: number;
+    coverImageFocusY?: number;
+  }
 ) {
   const { supabase, user } = await requireAuth();
   await requireCourseOwner(supabase, courseId, user.id);
@@ -62,6 +69,8 @@ export async function saveCourse(
       ...(data.slug !== undefined ? { slug: data.slug } : {}),
       ...(data.description !== undefined ? { description: data.description } : {}),
       ...(data.coverImageUrl !== undefined ? { cover_image_url: data.coverImageUrl } : {}),
+      ...(data.coverImageFocusX !== undefined ? { cover_image_focus_x: data.coverImageFocusX } : {}),
+      ...(data.coverImageFocusY !== undefined ? { cover_image_focus_y: data.coverImageFocusY } : {}),
       updated_at: new Date().toISOString(),
     })
     .eq("id", courseId);

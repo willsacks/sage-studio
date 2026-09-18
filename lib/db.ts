@@ -263,6 +263,8 @@ export type Database = {
           slug: string;
           description: string | null;
           cover_image_url: string | null;
+          cover_image_focus_x: number;
+          cover_image_focus_y: number;
           status: "draft" | "published";
           created_at: string;
           updated_at: string;
@@ -274,6 +276,8 @@ export type Database = {
           slug: string;
           description?: string | null;
           cover_image_url?: string | null;
+          cover_image_focus_x?: number;
+          cover_image_focus_y?: number;
           status?: "draft" | "published";
           created_at?: string;
           updated_at?: string;
@@ -285,6 +289,8 @@ export type Database = {
           slug?: string;
           description?: string | null;
           cover_image_url?: string | null;
+          cover_image_focus_x?: number;
+          cover_image_focus_y?: number;
           status?: "draft" | "published";
           created_at?: string;
           updated_at?: string;

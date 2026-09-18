@@ -48,7 +48,7 @@ export default async function CoursesPage() {
             >
               <div className="aspect-[2/1] bg-[var(--muted)]/30 flex items-center justify-center">
                 {course.cover_image_url ? (
-                  <img src={course.cover_image_url} alt="" className="w-full h-full object-cover" />
+                  <img src={course.cover_image_url} alt="" className="w-full h-full object-cover" style={{ objectPosition: `${course.cover_image_focus_x ?? 50}% ${course.cover_image_focus_y ?? 50}%` }} />
                 ) : (
                   <GraduationCap size={28} className="text-[var(--muted-foreground)] opacity-30" />
                 )}
