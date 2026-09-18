@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { getCourseById, getEnrollmentsForCourse } from "@/lib/queries/courses";
+import { getCourseById, getStudentProgressForCourse } from "@/lib/queries/courses";
 import { EnrollmentsManager } from "@/components/courses/EnrollmentsManager";
 
 export const metadata: Metadata = { title: "Students" };
@@ -18,7 +18,7 @@ export default async function CourseStudentsPage({ params }: { params: Promise<{
   if (!course) notFound();
   if (course.owner_id !== user.id) redirect("/courses");
 
-  const enrollments = await getEnrollmentsForCourse(courseId);
+  const students = await getStudentProgressForCourse(courseId);
 
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-6">
@@ -33,7 +33,7 @@ export default async function CourseStudentsPage({ params }: { params: Promise<{
           Enroll a student by email — if they already have a Sage Studio account it takes effect immediately, otherwise it activates the next time they log in.
         </p>
       </div>
-      <EnrollmentsManager courseId={courseId} enrollments={enrollments} />
+      <EnrollmentsManager courseId={courseId} students={students} />
     </div>
   );
 }

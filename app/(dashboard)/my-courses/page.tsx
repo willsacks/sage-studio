@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { GraduationCap } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { getEnrolledCoursesForUser } from "@/lib/queries/courses";
+import { getEnrolledCoursesForUser, getMyCourseProgress } from "@/lib/queries/courses";
 import { linkPendingEnrollmentsForCurrentUser } from "@/lib/actions/enrollments";
 
 export const metadata: Metadata = { title: "My Courses" };
@@ -15,6 +15,9 @@ export default async function MyCoursesPage() {
 
   await linkPendingEnrollmentsForCurrentUser();
   const courses = await getEnrolledCoursesForUser(user.id);
+  const progressByCourse = new Map(
+    await Promise.all(courses.map(async (c) => [c.id, await getMyCourseProgress(c.id, user.id)] as const))
+  );
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -33,25 +36,41 @@ export default async function MyCoursesPage() {
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 gap-4">
-          {courses.map((course) => (
-            <Link
-              key={course.id}
-              href={`/my-courses/${course.id}`}
-              className="block rounded-xl border border-[var(--border)] overflow-hidden hover:border-[var(--primary)]/50 transition-colors"
-            >
-              <div className="aspect-[2/1] bg-[var(--muted)]/30 flex items-center justify-center">
-                {course.cover_image_url ? (
-                  <img src={course.cover_image_url} alt="" className="w-full h-full object-cover" style={{ objectPosition: `${course.cover_image_focus_x ?? 50}% ${course.cover_image_focus_y ?? 50}%` }} />
-                ) : (
-                  <GraduationCap size={28} className="text-[var(--muted-foreground)] opacity-30" />
+          {courses.map((course) => {
+            const progress = progressByCourse.get(course.id);
+            const pct = progress && progress.totalLessons > 0 ? Math.round((progress.completedCount / progress.totalLessons) * 100) : 0;
+            const continueHref = progress?.firstIncompleteLessonId
+              ? `/my-courses/${course.id}?lesson=${progress.firstIncompleteLessonId}`
+              : `/my-courses/${course.id}`;
+            return (
+              <div key={course.id} className="rounded-xl border border-[var(--border)] overflow-hidden hover:border-[var(--primary)]/50 transition-colors">
+                <Link href={continueHref} className="block">
+                  <div className="aspect-[2/1] bg-[var(--muted)]/30 flex items-center justify-center">
+                    {course.cover_image_url ? (
+                      <img src={course.cover_image_url} alt="" className="w-full h-full object-cover" style={{ objectPosition: `${course.cover_image_focus_x ?? 50}% ${course.cover_image_focus_y ?? 50}%` }} />
+                    ) : (
+                      <GraduationCap size={28} className="text-[var(--muted-foreground)] opacity-30" />
+                    )}
+                  </div>
+                  <div className="p-4 pb-2">
+                    <h2 className="font-medium">{course.title}</h2>
+                    {course.description && <p className="text-sm text-[var(--muted-foreground)] mt-1 line-clamp-2">{course.description}</p>}
+                  </div>
+                </Link>
+                {progress && progress.totalLessons > 0 && (
+                  <div className="px-4 pb-4">
+                    <div className="flex items-center justify-between text-xs text-[var(--muted-foreground)] mb-1">
+                      <span>{progress.completedCount} / {progress.totalLessons} lessons</span>
+                      <span>{pct}%</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-[var(--muted)] overflow-hidden">
+                      <div className="h-full bg-[var(--primary)]" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
                 )}
               </div>
-              <div className="p-4">
-                <h2 className="font-medium">{course.title}</h2>
-                {course.description && <p className="text-sm text-[var(--muted-foreground)] mt-1 line-clamp-2">{course.description}</p>}
-              </div>
-            </Link>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

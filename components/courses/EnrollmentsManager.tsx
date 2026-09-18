@@ -6,9 +6,9 @@ import { UserPlus, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { enrollStudentByEmail, removeEnrollment } from "@/lib/actions/enrollments";
-import type { Enrollment } from "@/lib/queries/courses";
+import type { StudentProgressRow } from "@/lib/queries/courses";
 
-export function EnrollmentsManager({ courseId, enrollments }: { courseId: string; enrollments: Enrollment[] }) {
+export function EnrollmentsManager({ courseId, students }: { courseId: string; students: StudentProgressRow[] }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -47,25 +47,33 @@ export function EnrollmentsManager({ courseId, enrollments }: { courseId: string
       </div>
       {error && <p className="text-xs text-red-500">{error}</p>}
 
-      {enrollments.length === 0 ? (
+      {students.length === 0 ? (
         <p className="text-sm text-[var(--muted-foreground)]">No students enrolled yet.</p>
       ) : (
         <div className="rounded-xl border border-[var(--border)] divide-y divide-[var(--border)]">
-          {enrollments.map((e) => (
-            <div key={e.id} className="flex items-center gap-3 px-4 py-2.5">
-              <span className="text-sm flex-1 truncate">{e.email}</span>
-              <span
-                className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
-                  e.status === "accepted" ? "bg-green-100 text-green-700" : "bg-[var(--muted)] text-[var(--muted-foreground)]"
-                }`}
-              >
-                {e.status === "accepted" ? "Active" : "Pending — awaiting first login"}
-              </span>
-              <button onClick={() => handleRemove(e.id)} className="p-1.5 rounded text-[var(--muted-foreground)] hover:text-red-500 hover:bg-red-500/10 transition-colors">
-                <X size={13} />
-              </button>
-            </div>
-          ))}
+          {students.map((s) => {
+            const pct = s.totalLessons > 0 ? Math.round((s.completedCount / s.totalLessons) * 100) : 0;
+            return (
+              <div key={s.enrollmentId} className="flex items-center gap-3 px-4 py-2.5">
+                <span className="text-sm flex-1 truncate">{s.email}</span>
+                {s.status === "accepted" && s.totalLessons > 0 && (
+                  <span className="text-xs text-[var(--muted-foreground)] w-32 flex-shrink-0">
+                    {s.completedCount}/{s.totalLessons} lessons ({pct}%)
+                  </span>
+                )}
+                <span
+                  className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                    s.status === "accepted" ? "bg-green-100 text-green-700" : "bg-[var(--muted)] text-[var(--muted-foreground)]"
+                  }`}
+                >
+                  {s.status === "accepted" ? "Active" : "Pending — awaiting first login"}
+                </span>
+                <button onClick={() => handleRemove(s.enrollmentId)} className="p-1.5 rounded text-[var(--muted-foreground)] hover:text-red-500 hover:bg-red-500/10 transition-colors">
+                  <X size={13} />
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
