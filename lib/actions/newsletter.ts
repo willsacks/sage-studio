@@ -95,7 +95,11 @@ export async function createNewsletterList(name: string) {
   try {
     const resend = await requireResendClient(user.id);
     const { data, error } = await resend.audiences.create({ name: trimmed });
-    if (error) return { error: error.message };
+    // This is Resend's own account-level plan limit on the connected Resend
+    // API key, not a Sage Studio permission — there's no Sage Studio-side
+    // gate here to lift for an admin. Only a Resend plan upgrade (on
+    // Resend's account settings, not here) raises it.
+    if (error) return { error: `${error.message} (this is a limit on your connected Resend account's own plan, not Sage Studio)` };
     revalidatePath("/newsletter");
     return { list: data };
   } catch (err) {
@@ -271,6 +275,12 @@ export async function sendNewsletterBroadcast(params: {
   try {
     const resend = await requireResendClient(user.id);
     const { data, error } = await resend.broadcasts.create({
+      // Resend's List Broadcasts endpoint only returns `name` (not
+      // `subject` — that's only on the single-broadcast retrieve
+      // endpoint), and defaults `name` to "Untitled" when it's omitted.
+      // Mirroring the subject into it is what actually makes the Sent
+      // list show something meaningful instead of "Untitled" for every row.
+      name: params.subject,
       segmentId: params.listId,
       from: `${params.fromName} <${params.fromEmail}>`,
       subject: params.subject,
@@ -294,4 +304,17 @@ export async function listRecentBroadcasts() {
   const { data, error } = await resend.broadcasts.list();
   if (error) return { error: error.message, broadcasts: [] };
   return { broadcasts: data?.data ?? [] };
+}
+
+/** The list endpoint above only has name/status/dates — the actual
+ * subject/html body only comes back from retrieving a single broadcast,
+ * which is what backs the "click a sent message to view it" panel. */
+export async function getBroadcast(broadcastId: string) {
+  const { user } = await requireAuth();
+  const resend = await getResendClientForUser(user.id);
+  if (!resend) return { error: "Connect Resend first" };
+
+  const { data, error } = await resend.broadcasts.get(broadcastId);
+  if (error) return { error: error.message };
+  return { broadcast: data };
 }

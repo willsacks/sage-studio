@@ -98,6 +98,7 @@ export type Database = {
           is_published: boolean;
           custom_style: Json | null;
           blog_label: string;
+          blog_slug: string;
           show_blog_in_nav: boolean;
           created_at: string;
           updated_at: string;
@@ -118,6 +119,7 @@ export type Database = {
           is_published?: boolean;
           custom_style?: Json | null;
           blog_label?: string;
+          blog_slug?: string;
           show_blog_in_nav?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -138,6 +140,7 @@ export type Database = {
           is_published?: boolean;
           custom_style?: Json | null;
           blog_label?: string;
+          blog_slug?: string;
           show_blog_in_nav?: boolean;
           created_at?: string;
           updated_at?: string;

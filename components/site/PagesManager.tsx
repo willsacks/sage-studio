@@ -79,6 +79,17 @@ export function PagesManager({
   // math. Track the real pointer position ourselves instead.
   const pointerYRef = useRef<number | null>(null);
 
+  // over.rect (from dnd-kit's DragOver/DragEnd events) reflects each row's
+  // CURRENT, possibly-already-reflowed position — the sortable strategy
+  // shifts sibling rows out of the way to preview a reorder before drop, so
+  // by the time the pointer is "in the middle" of a row, that row may have
+  // already animated toward its top/bottom edge, making the mid-band check
+  // below never pass (this was the actual bug: dragging onto another page
+  // always resolved to "reorder before/after", never "nest inside"). Snapshot
+  // every row's rect once at drag start instead, before any reflow happens,
+  // and use those frozen rects for the whole drag.
+  const rowRectsRef = useRef<Map<string, DOMRect>>(new Map());
+
   useEffect(() => setPages(initialPages), [initialPages]);
 
   useEffect(() => {
@@ -106,9 +117,10 @@ export function PagesManager({
   // the pointer keeps moving, so trusting a value it cached would decide
   // group-vs-reorder from a stale position instead of where the pointer
   // actually was at drop time.
-  function computeDropIntent(overId: string, overRect: { top: number; height: number } | null) {
+  function computeDropIntent(overId: string) {
     const overPage = managedPages.find((p) => p.id === overId);
     const activePage = activeDragId ? managedPages.find((p) => p.id === activeDragId) : undefined;
+    const overRect = rowRectsRef.current.get(overId);
     if (!overPage || !activePage || !overRect) return { canGroup: false, isMidBand: false, after: false };
     const activeHasChildren = managedPages.some((p) => p.parent_page_id === activePage.id);
     const overIsChild = !!overPage.parent_page_id;
@@ -121,6 +133,11 @@ export function PagesManager({
 
   function handleDragStart(event: DragStartEvent) {
     setActiveDragId(event.active.id as string);
+    const map = new Map<string, DOMRect>();
+    document.querySelectorAll<HTMLElement>("[data-page-row-id]").forEach((el) => {
+      map.set(el.dataset.pageRowId!, el.getBoundingClientRect());
+    });
+    rowRectsRef.current = map;
   }
 
   function handleDragOver(event: DragOverEvent) {
@@ -129,7 +146,7 @@ export function PagesManager({
       setGroupTargetId(null);
       return;
     }
-    const { canGroup, isMidBand } = computeDropIntent(over.id as string, over.rect);
+    const { canGroup, isMidBand } = computeDropIntent(over.id as string);
     setGroupTargetId(canGroup && isMidBand ? (over.id as string) : null);
   }
 
@@ -145,7 +162,7 @@ export function PagesManager({
     const overPage = managedPages.find((p) => p.id === overId);
     if (!activePage || !overPage) return;
 
-    const { canGroup, isMidBand, after } = computeDropIntent(overId, over.rect);
+    const { canGroup, isMidBand, after } = computeDropIntent(overId);
     const isGroupDrop = canGroup && isMidBand;
 
     let next: SitePage[];
@@ -259,7 +276,7 @@ function SortablePageRow({
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
 
   return (
-    <div ref={setNodeRef} style={style}>
+    <div ref={setNodeRef} style={style} data-page-row-id={row.page.id}>
       <PageRow
         page={row.page}
         siteId={siteId}

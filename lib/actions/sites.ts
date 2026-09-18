@@ -107,6 +107,9 @@ export async function updateSite(siteId: string, formData: FormData) {
   const { supabase, user } = await requireAuth();
   await requireSiteRole(supabase, siteId, user.id, "editor");
 
+  const blogLabel = (formData.get("blog_label") as string)?.trim() || "Blog";
+  const blogSlug = blogLabel.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "blog";
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
     .from("artist_sites")
@@ -117,7 +120,11 @@ export async function updateSite(siteId: string, formData: FormData) {
       logo_url: (formData.get("logo_url") as string) || null,
       favicon_url: (formData.get("favicon_url") as string) || null,
       footer_text: (formData.get("footer_text") as string)?.trim() || null,
-      blog_label: (formData.get("blog_label") as string)?.trim() || "Blog",
+      blog_label: blogLabel,
+      // Derived from the label, not independently settable — so renaming
+      // the blog always keeps its URL and its displayed name in sync,
+      // which is the whole point of the rename per the user's ask.
+      blog_slug: blogSlug,
       show_blog_in_nav: formData.get("show_blog_in_nav") === "on",
       updated_at: new Date().toISOString(),
     })

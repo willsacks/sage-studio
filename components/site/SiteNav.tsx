@@ -78,7 +78,7 @@ export function SiteNav({
               })}
               {hasPosts && (
                 <Link
-                  href={`${basePath}/blog`}
+                  href={`${basePath}/${site.blog_slug}`}
                   className="px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-all"
                   style={{
                     color: isBlogActive ? tokens.colorAccent : tokens.colorText,
@@ -133,7 +133,7 @@ export function SiteNav({
           })}
           {hasPosts && (
             <Link
-              href={`${basePath}/blog`}
+              href={`${basePath}/${site.blog_slug}`}
               onClick={() => setMobileOpen(false)}
               className="block px-3 py-2.5 rounded-md text-sm font-medium transition-all"
               style={{

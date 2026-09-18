@@ -18,6 +18,7 @@ export function SiteSettingsForm({ siteId, site }: { siteId: string; site: Artis
   const [faviconUrl, setFaviconUrl] = useState<string | null>(site.favicon_url ?? null);
   const [footerText, setFooterText] = useState(site.footer_text ?? "");
   const [showBlogInNav, setShowBlogInNav] = useState(site.show_blog_in_nav);
+  const [blogLabel, setBlogLabel] = useState(site.blog_label);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -95,7 +96,20 @@ export function SiteSettingsForm({ siteId, site }: { siteId: string; site: Artis
         <div className="space-y-1.5">
           <Label htmlFor="blog_label">Blog name</Label>
           <p className="text-xs text-[var(--muted-foreground)]">Shown as the nav link and archive page title — some sites prefer "News" or "Writing" over "Blog".</p>
-          <Input id="blog_label" name="blog_label" defaultValue={site.blog_label} placeholder="Blog" className="max-w-xs" />
+          <Input
+            id="blog_label"
+            name="blog_label"
+            value={blogLabel}
+            onChange={(e) => setBlogLabel(e.target.value)}
+            placeholder="Blog"
+            className="max-w-xs"
+          />
+          <p className="text-xs text-[var(--muted-foreground)]">
+            URL: <span className="font-mono">
+              {(site.custom_domain && site.custom_domain_verified) ? `https://${site.custom_domain}` : `sagestudio.org/sites/${site.slug}`}
+              /{blogLabel.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "blog"}
+            </span>
+          </p>
         </div>
         <label className="flex items-center gap-2 text-sm cursor-pointer pt-1">
           <input

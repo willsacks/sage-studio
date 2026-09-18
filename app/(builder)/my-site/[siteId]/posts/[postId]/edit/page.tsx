@@ -29,5 +29,5 @@ export default async function SitePostEditPage({
   const hasCustomDomain = !!(site.custom_domain && site.custom_domain_verified);
   const siteUrl = hasCustomDomain ? `https://${site.custom_domain}` : `/sites/${site.slug}`;
 
-  return <PostEditor siteId={siteId} siteUrl={siteUrl} post={post} />;
+  return <PostEditor siteId={siteId} siteUrl={siteUrl} blogSlug={site.blog_slug} post={post} />;
 }

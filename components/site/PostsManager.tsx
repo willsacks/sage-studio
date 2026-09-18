@@ -14,24 +14,26 @@ import type { SitePost } from "@/lib/queries/site-posts";
 export function PostsManager({
   siteId,
   siteUrl,
+  blogSlug,
   posts,
   canEdit,
 }: {
   siteId: string;
   siteUrl: string;
+  blogSlug: string;
   posts: SitePost[];
   canEdit: boolean;
 }) {
   return (
     <div className="space-y-2">
       {posts.map((post) => (
-        <PostRow key={post.id} post={post} siteId={siteId} siteUrl={siteUrl} canEdit={canEdit} />
+        <PostRow key={post.id} post={post} siteId={siteId} siteUrl={siteUrl} blogSlug={blogSlug} canEdit={canEdit} />
       ))}
     </div>
   );
 }
 
-function PostRow({ post, siteId, siteUrl, canEdit }: { post: SitePost; siteId: string; siteUrl: string; canEdit: boolean }) {
+function PostRow({ post, siteId, siteUrl, blogSlug, canEdit }: { post: SitePost; siteId: string; siteUrl: string; blogSlug: string; canEdit: boolean }) {
   const [, startTransition] = useTransition();
 
   return (
@@ -41,16 +43,16 @@ function PostRow({ post, siteId, siteUrl, canEdit }: { post: SitePost; siteId: s
           <p className="font-medium text-[var(--foreground)] truncate">{post.title}</p>
           {post.status === "published" ? (
             <Link
-              href={`${siteUrl}/blog/${post.slug}`}
+              href={`${siteUrl}/${blogSlug}/${post.slug}`}
               target="_blank"
               title="Open in a new tab"
               className="text-xs text-[var(--muted-foreground)] border border-[var(--border)] px-1.5 py-0.5 rounded font-mono hover:text-[var(--primary)] hover:border-[var(--primary)]/40 transition-colors"
             >
-              /blog/{post.slug}
+              /{blogSlug}/{post.slug}
             </Link>
           ) : (
             <span className="text-xs text-[var(--muted-foreground)] border border-[var(--border)] px-1.5 py-0.5 rounded font-mono">
-              /blog/{post.slug}
+              /{blogSlug}/{post.slug}
             </span>
           )}
           <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${

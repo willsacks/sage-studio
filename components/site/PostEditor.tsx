@@ -18,7 +18,7 @@ import type { SitePost } from "@/lib/queries/site-posts";
  * html_content (see HtmlPageEditor.tsx) for whatever the editor produces.
  * It's also exactly the shape the WordPress importer needs to fill in (a
  * post's rendered HTML body), so this stays HTML-in/HTML-out under the hood. */
-export function PostEditor({ siteId, siteUrl, post: initialPost }: { siteId: string; siteUrl: string; post: SitePost }) {
+export function PostEditor({ siteId, siteUrl, blogSlug, post: initialPost }: { siteId: string; siteUrl: string; blogSlug: string; post: SitePost }) {
   const [post, setPost] = useState(initialPost);
   const [title, setTitle] = useState(initialPost.title);
   const [slug, setSlug] = useState(initialPost.slug);
@@ -81,7 +81,7 @@ export function PostEditor({ siteId, siteUrl, post: initialPost }: { siteId: str
         <div className="flex items-center gap-2">
           {post.status === "published" && (
             <Link
-              href={`${siteUrl}/blog/${post.slug}`}
+              href={`${siteUrl}/${blogSlug}/${post.slug}`}
               target="_blank"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs font-medium hover:bg-[var(--accent)] transition-colors"
             >
@@ -109,7 +109,7 @@ export function PostEditor({ siteId, siteUrl, post: initialPost }: { siteId: str
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-[var(--muted-foreground)]">Slug</label>
           <div className="flex items-center gap-1.5 text-sm">
-            <span className="text-[var(--muted-foreground)] font-mono">/blog/</span>
+            <span className="text-[var(--muted-foreground)] font-mono">/{blogSlug}/</span>
             <Input value={slug} onChange={(e) => markDirty(setSlug)(e.target.value)} className="font-mono text-sm" />
           </div>
         </div>

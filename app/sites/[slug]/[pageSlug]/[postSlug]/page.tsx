@@ -11,19 +11,22 @@ import type { StyleTokens } from "@/lib/styles";
 import { ORNAMENTS_BY_KEY, DEFAULT_ORNAMENT_KEY, buildOrnamentCssVars } from "@/lib/ornaments";
 import { format } from "date-fns";
 
+// This route only ever represents a blog post — a nested page/subpage
+// concept doesn't otherwise exist, so `pageSlug` must equal the site's
+// (renameable) blog_slug, or this 404s regardless of what postSlug is.
+
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ slug: string; postSlug: string }>;
+  params: Promise<{ slug: string; pageSlug: string; postSlug: string }>;
 }): Promise<Metadata> {
-  const { slug, postSlug } = await params;
-  const [post, site] = await Promise.all([
-    getCachedPublishedPostBySlug(slug, postSlug),
-    getCachedSiteBySlug(slug),
-  ]);
+  const { slug, pageSlug, postSlug } = await params;
+  const site = await getCachedSiteBySlug(slug);
+  if (!site || pageSlug !== site.blog_slug) return { title: { absolute: "Not Found" } };
+  const post = await getCachedPublishedPostBySlug(slug, postSlug);
   if (!post) return { title: { absolute: "Not Found" } };
   const postTitle = post.meta_title ?? post.title;
-  const siteName = site?.site_title ?? site?.name;
+  const siteName = site.site_title ?? site.name;
   const title = siteName ? `${postTitle} | ${siteName}` : postTitle;
   return {
     title: { absolute: title },
@@ -40,18 +43,19 @@ export async function generateMetadata({
 export default async function SiteBlogPostPage({
   params,
 }: {
-  params: Promise<{ slug: string; postSlug: string }>;
+  params: Promise<{ slug: string; pageSlug: string; postSlug: string }>;
 }) {
-  const { slug, postSlug } = await params;
-  const [site, post, pages, posts] = await Promise.all([
-    getCachedSiteBySlug(slug),
+  const { slug, pageSlug, postSlug } = await params;
+  const site = await getCachedSiteBySlug(slug);
+  if (!site) notFound();
+  if (pageSlug !== site.blog_slug) notFound();
+  if (!site.is_published) return <SiteUnpublishedMessage siteName={site.site_title ?? site.name} />;
+
+  const [post, pages, posts] = await Promise.all([
     getCachedPublishedPostBySlug(slug, postSlug),
     getCachedPublishedPagesForSite(slug),
     getCachedPublishedPostsForSite(slug),
   ]);
-
-  if (!site) notFound();
-  if (!site.is_published) return <SiteUnpublishedMessage siteName={site.site_title ?? site.name} />;
   if (!post) notFound();
 
   const tokens = resolveStyleTokens(site);

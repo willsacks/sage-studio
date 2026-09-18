@@ -189,12 +189,12 @@ export default async function SitePageManagerPage({ params }: { params: Promise<
           <div className="flex flex-col items-center justify-center gap-4 py-14 border-2 border-dashed border-[var(--border)] rounded-xl">
             <div className="text-center">
               <p className="font-medium text-[var(--foreground)]">No posts yet</p>
-              {canEdit && <p className="text-sm text-[var(--muted-foreground)] mt-1">Published posts show up at /blog on your site.</p>}
+              {canEdit && <p className="text-sm text-[var(--muted-foreground)] mt-1">Published posts show up at /{site.blog_slug} on your site.</p>}
             </div>
             {canEdit && <NewPostButton siteId={siteId} />}
           </div>
         ) : (
-          <PostsManager siteId={siteId} siteUrl={siteUrl} posts={posts} canEdit={canEdit} />
+          <PostsManager siteId={siteId} siteUrl={siteUrl} blogSlug={site.blog_slug} posts={posts} canEdit={canEdit} />
         )}
       </CollapsibleSection>
 

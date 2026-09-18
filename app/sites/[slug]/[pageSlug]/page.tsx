@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCachedSiteBySlug, getCachedPublishedPageBySlug, getCachedPublishedPagesForSite } from "@/lib/queries/sites";
 import { getCachedPublishedPostsForSite } from "@/lib/queries/site-posts";
@@ -15,6 +16,7 @@ import { ORNAMENTS_BY_KEY, DEFAULT_ORNAMENT_KEY, buildOrnamentCssVars } from "@/
 import { injectFormCaptureScript } from "@/lib/utils/form-capture-script";
 import { injectAnchorScrollFix, injectScrollToOnLoad } from "@/lib/utils/anchor-scroll-fix-script";
 import { injectTopNavigationFix } from "@/lib/utils/top-navigation-fix-script";
+import { format } from "date-fns";
 
 // Only a plain id — this gets embedded into an injected <script> (see
 // injectScrollToOnLoad), so a query param that doesn't match this is
@@ -27,10 +29,17 @@ export async function generateMetadata({
   params: Promise<{ slug: string; pageSlug: string }>;
 }): Promise<Metadata> {
   const { slug, pageSlug } = await params;
-  const [page, site] = await Promise.all([
-    getCachedPublishedPageBySlug(slug, pageSlug),
-    getCachedSiteBySlug(slug),
-  ]);
+  const site = await getCachedSiteBySlug(slug);
+  if (!site) return {};
+
+  // The blog's URL segment is derived from its (renameable) label, so a
+  // regular page slug lookup would never match it — check first.
+  if (site && pageSlug === site.blog_slug) {
+    const siteName = site.site_title ?? site.name;
+    return { title: { absolute: `${site.blog_label} | ${siteName}` } };
+  }
+
+  const page = await getCachedPublishedPageBySlug(slug, pageSlug);
   if (!page) return { title: { absolute: "Not Found" } };
   const pageTitle = page.meta_title ?? page.title;
   const siteName = site?.site_title ?? site?.name;
@@ -74,14 +83,23 @@ export default async function PublicSitePageRoute({
   const { scrollTo } = await searchParams;
   const scrollToId = typeof scrollTo === "string" && SCROLL_TO_ID_PATTERN.test(scrollTo) ? scrollTo : null;
 
-  const [site, page, allPages] = await Promise.all([
-    getCachedSiteBySlug(slug),
+  const site = await getCachedSiteBySlug(slug);
+  if (!site) notFound();
+  if (!site.is_published) return <SiteUnpublishedMessage siteName={site.site_title ?? site.name} />;
+
+  if (pageSlug === site.blog_slug) {
+    const [pages, posts] = await Promise.all([
+      getCachedPublishedPagesForSite(slug),
+      getCachedPublishedPostsForSite(slug),
+    ]);
+    return <BlogArchiveView site={site} pages={pages} posts={posts} slug={slug} />;
+  }
+
+  const [page, allPages] = await Promise.all([
     getCachedPublishedPageBySlug(slug, pageSlug),
     getCachedPublishedPagesForSite(slug),
   ]);
 
-  if (!site) notFound();
-  if (!site.is_published) return <SiteUnpublishedMessage siteName={site.site_title ?? site.name} />;
   if (!page) notFound();
 
   const gateFields = getPageGateFields(page);
@@ -168,5 +186,65 @@ export default async function PublicSitePageRoute({
         <SiteFooter footerText={site.footer_text} tokens={tokens as StyleTokens} />
       </div>
     </PageGateOverlay>
+  );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function BlogArchiveView({ site, pages, posts, slug }: { site: any; pages: any[]; posts: any[]; slug: string }) {
+  const tokens = resolveStyleTokens(site);
+  const cssVars = buildStyleCssVars(tokens);
+  const ornamentKey = site.ornamentation_key ?? DEFAULT_ORNAMENT_KEY;
+  const ornamentTokens = (ORNAMENTS_BY_KEY[ornamentKey] ?? ORNAMENTS_BY_KEY[DEFAULT_ORNAMENT_KEY]).tokens;
+  const ornamentVars = buildOrnamentCssVars(ornamentTokens);
+  const fontsUrl = buildGoogleFontsUrl(getFontsForTokens(tokens));
+  const fontScale = site.font_scale ?? 1;
+  const basePath = (site.custom_domain && site.custom_domain_verified) ? `https://${site.custom_domain}` : `/sites/${slug}`;
+
+  return (
+    <div style={{ backgroundColor: tokens.colorBackground, minHeight: "100vh", color: tokens.colorText }}>
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      <link rel="stylesheet" href={fontsUrl} />
+      <style>{`
+        html { font-size: calc(16px * ${fontScale}); }
+        :root { ${cssVars} ${ornamentVars} }
+        body { font-family: "${tokens.fontBody}", serif; color: ${tokens.colorText}; }
+      `}</style>
+
+      <SiteNav siteSlug={slug} pages={pages} currentSlug="" site={site} tokens={tokens as StyleTokens} basePath={basePath} hasPosts={posts.length > 0 && site.show_blog_in_nav} isBlogActive blogLabel={site.blog_label} />
+
+      <main className="max-w-3xl mx-auto px-6 py-12">
+        <h1 className="text-3xl font-bold mb-8" style={{ fontFamily: `"${tokens.fontDisplay}", serif` }}>{site.blog_label}</h1>
+
+        {posts.length === 0 ? (
+          <p style={{ opacity: 0.7 }}>Nothing published yet — check back soon.</p>
+        ) : (
+          <div className="space-y-8">
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            {posts.map((post: any) => (
+              <Link key={post.id} href={`${basePath}/${site.blog_slug}/${post.slug}`} className="block group">
+                {post.cover_image_url && (
+                  <img
+                    src={post.cover_image_url}
+                    alt=""
+                    className="w-full aspect-[3/1] object-cover rounded-xl mb-3"
+                    style={{ objectPosition: `${post.cover_image_focus_x ?? 50}% ${post.cover_image_focus_y ?? 50}%` }}
+                  />
+                )}
+                <p className="text-xs opacity-60 mb-1">
+                  {post.published_at ? format(new Date(post.published_at), "MMMM d, yyyy") : ""}
+                </p>
+                <h2 className="text-xl font-semibold group-hover:underline" style={{ color: tokens.colorText }}>
+                  {post.title}
+                </h2>
+                {post.excerpt && <p className="text-sm mt-1 opacity-75">{post.excerpt}</p>}
+              </Link>
+            ))}
+          </div>
+        )}
+      </main>
+
+      <SiteFooter footerText={site.footer_text} tokens={tokens as StyleTokens} />
+    </div>
   );
 }
