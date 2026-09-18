@@ -63,6 +63,9 @@ export default async function CoursesPage() {
                   >
                     {course.status}
                   </span>
+                  <span className="text-xs text-[var(--muted-foreground)]">
+                    {course.price_cents ? `$${(course.price_cents / 100).toFixed(2)}` : "Free"}
+                  </span>
                 </div>
                 {course.description && <p className="text-sm text-[var(--muted-foreground)] mt-1 line-clamp-2">{course.description}</p>}
               </div>

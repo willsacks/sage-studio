@@ -105,6 +105,8 @@ export interface StudentProgressRow {
   status: "pending" | "accepted";
   completedCount: number;
   totalLessons: number;
+  pricePaidCents: number | null;
+  invoiceId: string | null;
 }
 
 /** Per-student completion summary for a course's instructor-facing
@@ -113,7 +115,7 @@ export interface StudentProgressRow {
 export async function getStudentProgressForCourse(courseId: string): Promise<StudentProgressRow[]> {
   const supabase = await createClient();
   const [{ data: enrollments }, modules] = await Promise.all([
-    supabase.from("enrollments").select("id, email, status").eq("course_id", courseId),
+    supabase.from("enrollments").select("id, email, status, price_paid_cents, invoice_id").eq("course_id", courseId),
     getCourseContent(courseId),
   ]);
   const totalLessons = modules.reduce((sum, m) => sum + m.lessons.length, 0);
@@ -136,6 +138,8 @@ export async function getStudentProgressForCourse(courseId: string): Promise<Stu
     status: e.status,
     completedCount: completedByEnrollment.get(e.id) ?? 0,
     totalLessons,
+    pricePaidCents: e.price_paid_cents,
+    invoiceId: e.invoice_id,
   }));
 }
 

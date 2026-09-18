@@ -58,6 +58,7 @@ export async function saveCourse(
     coverImageUrl?: string | null;
     coverImageFocusX?: number;
     coverImageFocusY?: number;
+    priceCents?: number | null;
   }
 ) {
   const { supabase, user } = await requireAuth();
@@ -71,6 +72,7 @@ export async function saveCourse(
       ...(data.coverImageUrl !== undefined ? { cover_image_url: data.coverImageUrl } : {}),
       ...(data.coverImageFocusX !== undefined ? { cover_image_focus_x: data.coverImageFocusX } : {}),
       ...(data.coverImageFocusY !== undefined ? { cover_image_focus_y: data.coverImageFocusY } : {}),
+      ...(data.priceCents !== undefined ? { price_cents: data.priceCents } : {}),
       updated_at: new Date().toISOString(),
     })
     .eq("id", courseId);

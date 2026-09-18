@@ -31,13 +31,16 @@ export function CourseEditor({ course, modules }: { course: Course; modules: Mod
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(course.cover_image_url);
   const [coverFocusX, setCoverFocusX] = useState(course.cover_image_focus_x ?? 50);
   const [coverFocusY, setCoverFocusY] = useState(course.cover_image_focus_y ?? 50);
+  const [priceDollars, setPriceDollars] = useState(course.price_cents ? (course.price_cents / 100).toFixed(2) : "");
   const [isPending, startTransition] = useTransition();
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const [newModuleTitle, setNewModuleTitle] = useState("");
 
   function handleSaveDetails() {
+    const parsed = parseFloat(priceDollars);
+    const priceCents = priceDollars.trim() && Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed * 100) : null;
     startTransition(async () => {
-      await saveCourse(course.id, { title: title.trim() || "Untitled course", description, coverImageUrl });
+      await saveCourse(course.id, { title: title.trim() || "Untitled course", description, coverImageUrl, priceCents });
       router.refresh();
     });
   }
@@ -90,6 +93,23 @@ export function CourseEditor({ course, modules }: { course: Course; modules: Mod
             placeholder="What will students learn in this course?"
             className="w-full h-24 resize-none rounded-lg border border-[var(--border)] bg-[var(--background)] text-sm p-3 focus:outline-none focus:ring-2 focus:ring-[var(--ring)]/30 placeholder:text-[var(--muted-foreground)]"
           />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="course-price">Price</Label>
+          <div className="flex items-center gap-2 max-w-[160px]">
+            <span className="text-sm text-[var(--muted-foreground)]">$</span>
+            <Input
+              id="course-price"
+              type="number"
+              step="0.01"
+              min="0"
+              value={priceDollars}
+              onChange={(e) => setPriceDollars(e.target.value)}
+              onBlur={handleSaveDetails}
+              placeholder="Free"
+            />
+          </div>
+          <p className="text-xs text-[var(--muted-foreground)]">Leave blank for a free course. You can comp or discount individual students when enrolling them.</p>
         </div>
         <div className="space-y-1.5">
           <Label>Cover image</Label>

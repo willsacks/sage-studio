@@ -33,7 +33,7 @@ export default async function CourseStudentsPage({ params }: { params: Promise<{
           Enroll a student by email — if they already have a Sage Studio account it takes effect immediately, otherwise it activates the next time they log in.
         </p>
       </div>
-      <EnrollmentsManager courseId={courseId} students={students} />
+      <EnrollmentsManager courseId={courseId} students={students} coursePriceCents={course.price_cents} />
     </div>
   );
 }

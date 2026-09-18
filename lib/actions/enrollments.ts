@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createInvoice, setInvoiceStatus } from "@/lib/actions/finance-invoices";
 
 async function requireAuth() {
   const supabase = await createClient();
@@ -19,19 +20,63 @@ async function requireCourseOwner(supabase: Awaited<ReturnType<typeof createClie
  * whether the email already has a Sage Studio account or not, the row
  * starts "pending" and gets linked/accepted the next time that person is
  * authenticated with a matching email (see linkPendingEnrollmentsForUser),
- * which keeps this action simple and handles both cases identically. */
-export async function enrollStudentByEmail(courseId: string, email: string) {
+ * which keeps this action simple and handles both cases identically.
+ *
+ * `priceCentsOverride` lets the instructor comp a student (0) or discount
+ * them (any amount below the course's list price) — omit it to charge the
+ * course's normal price_cents. A priced enrollment creates a draft invoice
+ * in the instructor's first Finance entity (if they have one) for the
+ * real amount charged, so a discount/comp is exactly what shows up in
+ * Finances, not the list price. */
+export async function enrollStudentByEmail(courseId: string, email: string, priceCentsOverride?: number) {
   const { supabase, user } = await requireAuth();
   await requireCourseOwner(supabase, courseId, user.id);
 
   const trimmed = email.trim().toLowerCase();
   if (!trimmed || !trimmed.includes("@")) return { error: "Enter a valid email address" };
 
+  const { data: course } = await supabase.from("courses").select("title, price_cents").eq("id", courseId).single();
+  const priceCents = priceCentsOverride !== undefined ? Math.max(0, Math.round(priceCentsOverride)) : (course?.price_cents ?? null);
+
+  let invoiceId: string | null = null;
+  if (priceCents && priceCents > 0) {
+    const { data: entity } = await supabase
+      .from("finance_entities")
+      .select("id")
+      .eq("owner_id", user.id)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (entity) {
+      const result = await createInvoice({
+        entityId: entity.id,
+        clientName: trimmed,
+        clientEmail: trimmed,
+        issueDate: new Date().toISOString().slice(0, 10),
+        notes: `Course enrollment: ${course?.title ?? "Untitled course"}`,
+        lineItems: [{ description: `Course: ${course?.title ?? "Untitled course"}`, quantity: 1, unitPrice: priceCents / 100 }],
+      });
+      if ("invoiceId" in result && result.invoiceId) {
+        invoiceId = result.invoiceId;
+        // Draft invoices are easy to miss — this is a real sale that just
+        // happened, so it should show up in Finances' normal "outstanding"
+        // view right away, not sit hidden in drafts until someone notices.
+        await setInvoiceStatus(invoiceId, entity.id, "sent");
+      }
+    }
+    // No finance entity yet — the enrollment still records what was
+    // charged; the instructor just won't see an invoice until they set
+    // Finances up. Not a hard failure, since paying students shouldn't be
+    // blocked on the instructor's bookkeeping setup.
+  }
+
   const { error } = await supabase.from("enrollments").insert({
     course_id: courseId,
     email: trimmed,
     status: "pending",
     source: "manual",
+    price_paid_cents: priceCents,
+    invoice_id: invoiceId,
   });
   if (error) {
     if (error.code === "23505") return { error: "That email is already enrolled in this course" };

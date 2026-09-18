@@ -271,6 +271,7 @@ export type Database = {
           cover_image_url: string | null;
           cover_image_focus_x: number;
           cover_image_focus_y: number;
+          price_cents: number | null;
           status: "draft" | "published";
           created_at: string;
           updated_at: string;
@@ -284,6 +285,7 @@ export type Database = {
           cover_image_url?: string | null;
           cover_image_focus_x?: number;
           cover_image_focus_y?: number;
+          price_cents?: number | null;
           status?: "draft" | "published";
           created_at?: string;
           updated_at?: string;
@@ -297,6 +299,7 @@ export type Database = {
           cover_image_url?: string | null;
           cover_image_focus_x?: number;
           cover_image_focus_y?: number;
+          price_cents?: number | null;
           status?: "draft" | "published";
           created_at?: string;
           updated_at?: string;
@@ -374,6 +377,8 @@ export type Database = {
           email: string;
           status: "pending" | "accepted";
           source: "manual" | "stripe";
+          price_paid_cents: number | null;
+          invoice_id: string | null;
           enrolled_at: string;
         };
         Insert: {
@@ -383,6 +388,8 @@ export type Database = {
           email: string;
           status?: "pending" | "accepted";
           source?: "manual" | "stripe";
+          price_paid_cents?: number | null;
+          invoice_id?: string | null;
           enrolled_at?: string;
         };
         Update: {
@@ -392,6 +399,8 @@ export type Database = {
           email?: string;
           status?: "pending" | "accepted";
           source?: "manual" | "stripe";
+          price_paid_cents?: number | null;
+          invoice_id?: string | null;
           enrolled_at?: string;
         };
         Relationships: [];
