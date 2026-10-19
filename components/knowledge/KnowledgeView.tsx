@@ -62,6 +62,7 @@ export function KnowledgeView({ sections: initialSections, entries: initialEntri
           setEntries((prev) => prev.filter((e) => e.id !== id));
           setActiveEntryId(null);
         }}
+        onBack={() => setActiveEntryId(null)}
       />
     </div>
   );

@@ -95,7 +95,7 @@ function SortableSectionRow({
       className="select-none"
     >
       {/* Section header */}
-      <div className="group flex items-center gap-1 px-2 py-1.5 rounded-lg hover:bg-[var(--accent)] transition-colors">
+      <div className="group flex items-center gap-1 px-2 py-2.5 rounded-lg hover:bg-[var(--accent)] transition-colors">
         {/* Drag handle */}
         <button
           {...attributes}
@@ -126,10 +126,10 @@ function SortableSectionRow({
                 if (e.key === "Escape") { setEditTitle(section.title); setEditing(false); }
               }}
               onClick={(e) => e.stopPropagation()}
-              className="flex-1 min-w-0 text-xs font-semibold bg-transparent focus:outline-none border-b border-[var(--border)]"
+              className="flex-1 min-w-0 text-[15px] font-bold bg-transparent focus:outline-none border-b border-[var(--border)]"
             />
           ) : (
-            <span className="flex-1 min-w-0 text-xs font-semibold uppercase tracking-wide text-[var(--muted-foreground)] truncate">
+            <span className="flex-1 min-w-0 text-[15px] font-bold uppercase tracking-wide text-[var(--foreground)] truncate">
               {section.title}
             </span>
           )}
@@ -218,8 +218,14 @@ function SortableSectionRow({
 
 // ── Entry row ─────────────────────────────────────────────────────────────────
 
+/** Entry bodies are stored as rich-text HTML — strip tags for the plain
+ * one-line preview shown under each entry's title. */
+function previewText(html: string): string {
+  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
 function EntryRow({ entry, active, onClick }: { entry: KnowledgeEntry; active: boolean; onClick: () => void }) {
-  const preview = entry.body.split("\n").find((l) => l.trim()) ?? "";
+  const preview = previewText(entry.body);
   return (
     <button
       onClick={onClick}
@@ -306,7 +312,9 @@ export function KnowledgeSidebar({
   const sectionById = Object.fromEntries(sections.map((s) => [s.id, s]));
 
   return (
-    <div className="w-64 flex-shrink-0 border-r border-[var(--border)] bg-[var(--sidebar-background)] flex flex-col">
+    <div
+      className={`${activeEntryId ? "hidden sm:flex" : "flex"} w-full sm:w-64 flex-shrink-0 border-r border-[var(--border)] bg-[var(--sidebar-background)] flex-col`}
+    >
       {/* Search */}
       <div className="flex-shrink-0 p-3 border-b border-[var(--border)]">
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--accent)] border border-[var(--border)]">
@@ -326,7 +334,7 @@ export function KnowledgeSidebar({
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+      <div className="flex-1 overflow-y-auto p-2 space-y-2">
         {isSearching ? (
           <>
             {searchResults.length === 0 && (
@@ -377,8 +385,8 @@ export function KnowledgeSidebar({
 
             {/* Unsectioned entries */}
             {unsectioned.length > 0 && (
-              <div className="mt-2">
-                <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]/60">
+              <div>
+                <p className="px-3 py-1.5 text-[15px] font-bold uppercase tracking-wide text-[var(--foreground)]">
                   Unsectioned
                 </p>
                 <div className="space-y-0.5">
