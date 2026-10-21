@@ -2,14 +2,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/db";
 import { normalBalanceForType } from "@/lib/finance/default-accounts";
 
-type AccountRow = {
+export type AccountRow = {
   id: string;
   name: string;
   account_type: "asset" | "liability" | "equity" | "income" | "expense";
   account_subtype: string;
 };
 
-type LineRow = {
+export type LineRow = {
   account_id: string;
   debit: number;
   credit: number;
@@ -69,6 +69,15 @@ export async function getBalanceSheet(
   asOfDate: string
 ) {
   const [accounts, lines] = await Promise.all([fetchAccounts(supabase, entityId), fetchLines(supabase, entityId, asOfDate)]);
+  return computeBalanceSheet(accounts, lines, asOfDate);
+}
+
+/** Pure computation half of {@linkcode getBalanceSheet}, split out so
+ * callers that already have accounts/lines rows from a different fetch
+ * path (e.g. the public API's raw `pg` connection, which can't use the
+ * supabase-js builder `fetchAccounts`/`fetchLines` call) can reuse the
+ * exact same arithmetic instead of re-deriving it. */
+export function computeBalanceSheet(accounts: AccountRow[], lines: LineRow[], asOfDate: string) {
   const accountsById = new Map(accounts.map((a) => [a.id, a]));
 
   const balanceByAccount = new Map<string, number>();
@@ -129,6 +138,12 @@ export async function getIncomeStatement(
     fetchAccounts(supabase, entityId),
     fetchLines(supabase, entityId, endDate, startDate),
   ]);
+  return computeIncomeStatement(accounts, lines, startDate, endDate);
+}
+
+/** Pure computation half of {@linkcode getIncomeStatement} — see
+ * {@linkcode computeBalanceSheet}'s doc comment for why this is split out. */
+export function computeIncomeStatement(accounts: AccountRow[], lines: LineRow[], startDate: string, endDate: string) {
   const accountsById = new Map(accounts.map((a) => [a.id, a]));
 
   const balanceByAccount = new Map<string, number>();
@@ -324,6 +339,12 @@ export async function getTrialBalance(
   asOfDate: string
 ) {
   const [accounts, lines] = await Promise.all([fetchAccounts(supabase, entityId), fetchLines(supabase, entityId, asOfDate)]);
+  return computeTrialBalance(accounts, lines, asOfDate);
+}
+
+/** Pure computation half of {@linkcode getTrialBalance} — see
+ * {@linkcode computeBalanceSheet}'s doc comment for why this is split out. */
+export function computeTrialBalance(accounts: AccountRow[], lines: LineRow[], asOfDate: string) {
   const accountsById = new Map(accounts.map((a) => [a.id, a]));
 
   const netByAccount = new Map<string, number>();

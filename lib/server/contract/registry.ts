@@ -1,9 +1,10 @@
 import { todosOperations } from "@/lib/server/ops/todos";
 import { knowledgeOperations } from "@/lib/server/ops/knowledge";
 import { timeOperations } from "@/lib/server/ops/time-entries";
+import { financeOperations } from "@/lib/server/ops/finance";
 import type { AnyOperation } from "@/lib/server/contract/operation";
 
-export const operations: AnyOperation[] = [...todosOperations, ...knowledgeOperations, ...timeOperations];
+export const operations: AnyOperation[] = [...todosOperations, ...knowledgeOperations, ...timeOperations, ...financeOperations];
 
 /** Matches a REST request against the registry — op.http.path may
  * contain `:param` segments (e.g. "/knowledge/:id"). Used only by the
