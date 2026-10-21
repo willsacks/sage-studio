@@ -146,3 +146,26 @@ export function verifyQboState(payload: string, signature: string): boolean {
   const b = Buffer.from(signature);
   return a.length === b.length && timingSafeEqual(a, b);
 }
+
+// Assistant connection tokens (PATs, and later OAuth refresh tokens) get
+// their own dedicated root secret, same rationale as Plaid/QBO — these
+// tokens grant programmatic access to a user's account, so a compromise
+// of one integration's secret shouldn't expose another's.
+function getAssistantRootSecret(): Buffer {
+  const secret = process.env.ASSISTANT_TOKEN_HASH_SECRET;
+  if (!secret || secret.length !== 64) {
+    throw new Error("ASSISTANT_TOKEN_HASH_SECRET must be set to a 64-char hex string (32 bytes).");
+  }
+  return Buffer.from(secret, "hex");
+}
+
+/** One-way hash for bearer tokens (PATs, refresh tokens) — unlike the
+ * encrypt/decrypt pairs above, we never need the raw token back, only to
+ * recognize it again, so this is HMAC-SHA256, not reversible encryption.
+ * Deterministic (same token always hashes the same way) so it can be used
+ * as a lookup key. */
+export function hashAssistantToken(token: string): string {
+  return createHmac("sha256", createHmac("sha256", getAssistantRootSecret()).update("assistant-token-v1").digest())
+    .update(token)
+    .digest("hex");
+}

@@ -1,3 +1,4 @@
+import "@/lib/server/db/pg-types";
 import { Pool, type PoolClient } from "pg";
 import { attachDatabasePool } from "@vercel/functions";
 import type { Principal } from "@/lib/server/auth/principal";
@@ -44,6 +45,29 @@ export async function withRls<T>(principal: Principal, fn: (db: PoolClient) => P
     await client.query("set local role authenticated");
     await client.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify(claimsFor(principal))]);
     await client.query("set local statement_timeout = '8s'");
+    const result = await fn(client);
+    await client.query("commit");
+    return result;
+  } catch (err) {
+    await client.query("rollback").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/** Same as withRls but a real (writable) transaction — reserved for the
+ * handful of flows that need to write as the user rather than read:
+ * creating a connection/PAT and (in M3) the OAuth consent upsert. Not for
+ * operation handlers, which stay read-only until phase 2's write tools
+ * ship. Only lib/server/auth/pat.ts and the future consent action may
+ * import this. */
+export async function withRlsWrite<T>(principal: Principal, fn: (db: PoolClient) => Promise<T>): Promise<T> {
+  const client = await getPool().connect();
+  try {
+    await client.query("begin");
+    await client.query("set local role authenticated");
+    await client.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify(claimsFor(principal))]);
     const result = await fn(client);
     await client.query("commit");
     return result;
