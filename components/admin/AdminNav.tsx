@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, BrainCircuit, Receipt, ShieldCheck, DollarSign } from "lucide-react";
+import { LayoutDashboard, Users, BrainCircuit, Receipt, ShieldCheck, DollarSign, Plug } from "lucide-react";
 
 const TABS = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard, staffOnly: true },
@@ -10,6 +10,7 @@ const TABS = [
   { href: "/admin/pricing", label: "Pricing", icon: DollarSign, staffOnly: true },
   { href: "/admin/ai", label: "AI Settings", icon: BrainCircuit, staffOnly: true },
   { href: "/admin/finance", label: "Finance AI Runs", icon: Receipt, staffOnly: true },
+  { href: "/admin/connections", label: "Connected Apps", icon: Plug, staffOnly: true },
   { href: "/admin/legal", label: "Legal", icon: ShieldCheck, staffOnly: true },
 ];
 

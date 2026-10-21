@@ -4,8 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "tsx scripts/ci-safety-checks.ts",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "safety-check": "tsx scripts/ci-safety-checks.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.107.0",
@@ -60,6 +62,7 @@
     "@types/react-dom": "^19",
     "playwright": "^1.63.0",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }

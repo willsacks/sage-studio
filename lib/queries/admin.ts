@@ -260,3 +260,96 @@ export async function getUserDetail(userId: string): Promise<AdminUserDetail | n
     activeDiscountPercent: profile.active_discount_percent,
   };
 }
+
+export interface AdminConnectionRow {
+  id: string;
+  userId: string;
+  userLabel: string;
+  clientName: string;
+  displayName: string;
+  scopes: Record<string, string>;
+  status: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+/** Cross-user visibility into every connected AI assistant, for the
+ * Platform Admin dashboard — sage.connected_apps isn't exposed via
+ * PostgREST (see docs/schema-map.md), so this reads it through the same
+ * privileged `pg` path the API/MCP server itself uses, then enriches
+ * with profile/email data the normal way (admin client, bypasses RLS,
+ * same pattern as getAllUsers above). This page's own canManagePlatform
+ * gate is the real authorization — queryPrivileged itself has no concept
+ * of "who's asking". */
+export async function getConnectedAppsOverview(): Promise<AdminConnectionRow[]> {
+  const { queryPrivileged } = await import("@/lib/server/db/privileged");
+  const { rows } = await queryPrivileged<{
+    id: string; user_id: string; client_name: string; display_name: string;
+    scopes: Record<string, string>; status: string; created_at: string; last_used_at: string | null;
+  }>(
+    `select g.id, g.user_id, c.client_name, g.display_name, g.scopes, g.status, g.created_at, g.last_used_at
+     from sage.connected_apps g join sage.oauth_clients c on c.id = g.client_id
+     order by g.created_at desc limit 200`
+  );
+  if (rows.length === 0) return [];
+
+  const admin = createAdminClient();
+  const userIds = [...new Set(rows.map((r) => r.user_id))];
+  const { data: profiles } = await admin.from("profiles").select("id, display_name, username").in("id", userIds);
+  const labelMap = new Map((profiles ?? []).map((p) => [p.id, p.display_name ?? p.username ?? p.id.slice(0, 8)]));
+
+  return rows.map((r) => ({
+    id: r.id,
+    userId: r.user_id,
+    userLabel: labelMap.get(r.user_id) ?? r.user_id.slice(0, 8),
+    clientName: r.client_name,
+    displayName: r.display_name,
+    scopes: r.scopes,
+    status: r.status,
+    createdAt: r.created_at,
+    lastUsedAt: r.last_used_at,
+  }));
+}
+
+export interface AdminAuditLogRow {
+  id: number;
+  ts: string;
+  userLabel: string;
+  channel: string;
+  operation: string;
+  tool: string | null;
+  resultStatus: string;
+  errorCode: string | null;
+  httpStatus: number | null;
+  latencyMs: number | null;
+}
+
+/** Recent tool-call activity across every connection, for the same
+ * dashboard — the raw feed a security-conscious user asked for ("see
+ * logging when bots connect and what they do"). */
+export async function getRecentApiAuditLog(limit = 100): Promise<AdminAuditLogRow[]> {
+  const { queryPrivileged } = await import("@/lib/server/db/privileged");
+  const { rows } = await queryPrivileged<{
+    id: number; ts: string; user_id: string | null; channel: string; operation: string;
+    tool: string | null; result_status: string; error_code: string | null; http_status: number | null; latency_ms: number | null;
+  }>(`select id, ts, user_id, channel, operation, tool, result_status, error_code, http_status, latency_ms from sage.api_audit_log order by ts desc limit $1`, [limit]);
+  if (rows.length === 0) return [];
+
+  const admin = createAdminClient();
+  const userIds = [...new Set(rows.map((r) => r.user_id).filter((id): id is string => !!id))];
+  const { data: profiles } = userIds.length > 0 ? await admin.from("profiles").select("id, display_name, username").in("id", userIds) : { data: [] };
+  const labelMap = new Map((profiles ?? []).map((p) => [p.id, p.display_name ?? p.username ?? p.id.slice(0, 8)]));
+
+  return rows.map((r) => ({
+    id: r.id,
+    ts: r.ts,
+    userLabel: r.user_id ? labelMap.get(r.user_id) ?? r.user_id.slice(0, 8) : "unknown",
+    channel: r.channel,
+    operation: r.operation,
+    tool: r.tool,
+    resultStatus: r.result_status,
+    errorCode: r.error_code,
+    httpStatus: r.http_status,
+    latencyMs: r.latency_ms,
+  }));
+}
