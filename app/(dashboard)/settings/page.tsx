@@ -2,12 +2,15 @@ import { Settings } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { NavVisibilityForm } from "@/components/settings/NavVisibilityForm";
 import { AccountForm } from "@/components/settings/AccountForm";
+import { AssistantConnections } from "@/components/settings/AssistantConnections";
+import { listAssistantConnections } from "@/lib/actions/assistant-connections";
 
 export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+  const connections = await listAssistantConnections();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: profile } = await (supabase as any)
@@ -42,6 +45,11 @@ export default async function SettingsPage() {
           Choose which sections show up in your menu.
         </p>
         <NavVisibilityForm initialHidden={(profile?.hidden_nav_items as string[] | null) ?? []} />
+      </div>
+
+      <div className="rounded-lg border border-[var(--border)] px-5 py-4">
+        <p className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wide mb-3">Connected AI assistants</p>
+        <AssistantConnections initialConnections={connections} />
       </div>
     </div>
   );
