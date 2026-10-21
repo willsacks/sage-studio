@@ -1,5 +1,6 @@
 import { randomUUID, createHash } from "crypto";
 import { queryPrivileged } from "@/lib/server/db/privileged";
+import { writeOauthAuditLog } from "@/lib/server/audit/write";
 
 export interface DcrRequest {
   client_name?: string;
@@ -17,6 +18,11 @@ export interface DcrResult {
   client_id_issued_at: number;
 }
 
+// Pseudo-schemes a browser could execute or navigate to in a way that
+// isn't "deliver this URL to another app" — never valid as an OAuth
+// redirect regardless of the custom-URI-scheme allowance below.
+const DANGEROUS_SCHEMES = new Set(["javascript:", "data:", "vbscript:", "about:", "file:"]);
+
 function isValidRedirectUri(uri: string): boolean {
   let parsed: URL;
   try {
@@ -24,6 +30,7 @@ function isValidRedirectUri(uri: string): boolean {
   } catch {
     return false;
   }
+  if (DANGEROUS_SCHEMES.has(parsed.protocol)) return false;
   if (parsed.protocol === "https:") return true;
   // RFC 8252 native-app loopback redirects and custom URI schemes (e.g.
   // Cursor's own scheme) — both are fine since they can't be hijacked the
@@ -56,6 +63,7 @@ export async function registerDcrClient(body: DcrRequest): Promise<DcrResult | {
      values ($1, 'dcr', $2, $3, $4, 'none', false, 'active')`,
     [clientId, clientName, clientUri, redirectUris]
   );
+  await writeOauthAuditLog({ operation: "oauth.clientRegistered", status: "ok", clientId });
 
   return {
     client_id: clientId,

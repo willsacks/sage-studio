@@ -4,6 +4,7 @@ import { queryPrivileged } from "@/lib/server/db/privileged";
 import { withRlsWrite } from "@/lib/server/db/with-rls";
 import { verifyCodeVerifier } from "@/lib/server/auth/pkce";
 import { signAccessToken, ISSUER } from "@/lib/server/auth/oauth-jwt";
+import { writeOauthAuditLog } from "@/lib/server/audit/write";
 import { ALL_MODULES, type Module, type ScopeLevel } from "@/lib/server/auth/principal";
 
 const AUTH_CODE_TTL_SECONDS = 60;
@@ -117,7 +118,8 @@ async function issueTokenPair(
   clientId: string,
   resource: string,
   scopes: Partial<Record<Module, ScopeLevel>>,
-  familyId: string
+  familyId: string,
+  operation: "oauth.tokenIssued" | "oauth.tokenRefreshed"
 ): Promise<TokenResult> {
   const jti = randomUUID();
   const { token, expiresIn } = await signAccessToken({ sub: userId, gid: grantId, client_id: clientId, scopes, resource, jti });
@@ -129,6 +131,7 @@ async function issueTokenPair(
      values ($1, $2, $3, $4, $5, $6, now() + interval '${REFRESH_TOKEN_TTL_SECONDS} seconds')`,
     [refreshHash, grantId, clientId, familyId, resource, JSON.stringify(scopes)]
   );
+  await writeOauthAuditLog({ operation, status: "ok", userId, clientId, grantId });
 
   const grantedModules = ALL_MODULES.filter((m) => (scopes[m] ?? "none") !== "none");
   return { access_token: token, token_type: "Bearer", expires_in: expiresIn, refresh_token: rawRefresh, scope: grantedModules.join(" ") };
@@ -149,6 +152,7 @@ export async function exchangeAuthorizationCode(params: {
   if (row.consumed_at) {
     // Reuse of an auth code is a strong signal of interception — kill the grant outright.
     await queryPrivileged(`update sage.connected_apps set status = 'revoked', revoke_reason = 'authorization_code_reuse_detected' where id = $1`, [row.grant_id]);
+    await writeOauthAuditLog({ operation: "oauth.authCodeReuseDetected", status: "denied", userId: row.user_id as string, clientId: row.client_id as string, grantId: row.grant_id as string, errorCode: "authorization_code_reuse_detected" });
     return { error: "invalid_grant" };
   }
   if (new Date(row.expires_at as string) < new Date()) return { error: "invalid_grant" };
@@ -160,7 +164,7 @@ export async function exchangeAuthorizationCode(params: {
   await queryPrivileged(`update sage.oauth_authorization_codes set consumed_at = now() where code_hash = $1`, [codeHash]);
 
   const familyId = randomUUID();
-  return issueTokenPair(row.grant_id as string, row.user_id as string, row.client_id as string, row.resource as string, row.scopes as Partial<Record<Module, ScopeLevel>>, familyId);
+  return issueTokenPair(row.grant_id as string, row.user_id as string, row.client_id as string, row.resource as string, row.scopes as Partial<Record<Module, ScopeLevel>>, familyId, "oauth.tokenIssued");
 }
 
 export async function refreshAccessToken(params: { refreshToken: string; clientId: string; resource?: string }): Promise<TokenResult | { error: string }> {
@@ -171,12 +175,14 @@ export async function refreshAccessToken(params: { refreshToken: string; clientI
 
   if (row.client_id !== params.clientId) return { error: "invalid_grant" };
   if (new Date(row.expires_at as string) < new Date()) return { error: "invalid_grant" };
+  if (params.resource && params.resource !== ISSUER) return { error: "invalid_target" };
 
   if (row.revoked_at || row.rotated_at) {
     // Reuse of an already-rotated/revoked refresh token — treat as theft,
     // kill the whole token family so a stolen token can't keep refreshing.
     await queryPrivileged(`update sage.oauth_refresh_tokens set revoked_at = now() where family_id = $1 and revoked_at is null`, [row.family_id]);
     await queryPrivileged(`update sage.connected_apps set status = 'revoked', revoke_reason = 'refresh_token_reuse_detected' where id = $1`, [row.grant_id]);
+    await writeOauthAuditLog({ operation: "oauth.refreshTokenReuseDetected", status: "denied", clientId: row.client_id as string, grantId: row.grant_id as string, errorCode: "refresh_token_reuse_detected" });
     return { error: "invalid_grant" };
   }
 
@@ -188,7 +194,7 @@ export async function refreshAccessToken(params: { refreshToken: string; clientI
   await queryPrivileged(`update sage.connected_apps set last_used_at = now() where id = $1`, [row.grant_id]);
 
   const resource = params.resource ?? (row.resource as string);
-  return issueTokenPair(row.grant_id as string, grant.user_id as string, row.client_id as string, resource, row.scopes as Partial<Record<Module, ScopeLevel>>, row.family_id as string);
+  return issueTokenPair(row.grant_id as string, grant.user_id as string, row.client_id as string, resource, row.scopes as Partial<Record<Module, ScopeLevel>>, row.family_id as string, "oauth.tokenRefreshed");
 }
 
 export async function revokeRefreshTokenFamily(refreshToken: string, clientId: string): Promise<void> {

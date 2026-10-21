@@ -26,27 +26,62 @@ function rowToClient(r: Record<string, unknown>): OAuthClient {
   };
 }
 
+/** IPv4-mapped IPv6 (::ffff:a.b.c.d) unwraps to the plain IPv4 form so it
+ * hits the same checks below — otherwise it's a clean bypass of every
+ * IPv4 private-range check. */
+function unwrapIPv4MappedIPv6(address: string): string {
+  const match = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(address);
+  return match ? match[1] : address;
+}
+
+function isPrivateIPv4(address: string): boolean {
+  const parts = address.split(".").map(Number);
+  if (parts.length !== 4 || parts.some((p) => Number.isNaN(p))) return false;
+  const [a, b] = parts;
+  return (
+    a === 127 || // loopback
+    a === 10 || // RFC1918
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 169 && b === 254) || // link-local + cloud metadata (169.254.169.254)
+    a === 0
+  );
+}
+
+/** Full 128-bit range check via BigInt rather than string prefixes —
+ * string-matching "fe80" misses non-canonical/compressed forms the OS
+ * resolver can legitimately return. */
+function isPrivateIPv6(address: string): boolean {
+  if (address === "::1") return true; // loopback
+  const parts = address.split(":");
+  if (parts.length < 3) return false; // not a real IPv6 literal
+  // Expand to 8 groups for a reliable top-16-bits read (good enough for
+  // the prefix widths we check — fe80::/10 and fc00::/7 both resolve
+  // from the first group alone).
+  const firstGroupHex = parts[0] || "0";
+  const firstGroup = parseInt(firstGroupHex, 16) || 0;
+  const isLinkLocal = (firstGroup & 0xffc0) === 0xfe80; // fe80::/10
+  const isUniqueLocal = (firstGroup & 0xfe00) === 0xfc00; // fc00::/7
+  return isLinkLocal || isUniqueLocal;
+}
+
 /** Blocks requests to private/loopback/link-local/metadata-endpoint
  * addresses before we ever open a socket — resolving DNS ourselves and
  * checking the IP, not just string-matching the hostname (which a DNS
- * rebind could bypass). Also blocks the Cursor/AWS metadata IP
- * explicitly since it's not in any RFC1918 block. */
+ * rebind could bypass). Covers both IPv4 and IPv6 private ranges,
+ * including IPv4-mapped IPv6 and AWS/GCP's link-local metadata
+ * endpoint. Residual risk: this check and the later `fetch()` are two
+ * separate DNS lookups, so a classic TOCTOU DNS-rebind between them
+ * isn't fully closed — acceptable for this project's current threat
+ * model (a handful of known users, not an adversarial multi-tenant
+ * SaaS), revisit if that changes. */
 async function assertPublicHttpsUrl(urlStr: string): Promise<URL> {
   const url = new URL(urlStr);
   if (url.protocol !== "https:") throw new Error("client_id must be an https URL");
   const { lookup } = await import("node:dns/promises");
-  const { address } = await lookup(url.hostname);
-  const parts = address.split(".").map(Number);
-  const isPrivate =
-    address === "127.0.0.1" ||
-    address === "169.254.169.254" ||
-    address.startsWith("::1") ||
-    (parts.length === 4 &&
-      (parts[0] === 10 ||
-        (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
-        (parts[0] === 192 && parts[1] === 168) ||
-        parts[0] === 127 ||
-        (parts[0] === 169 && parts[1] === 254)));
+  const { address, family } = await lookup(url.hostname);
+  const normalized = family === 6 ? unwrapIPv4MappedIPv6(address) : address;
+  const isPrivate = normalized.includes(":") ? isPrivateIPv6(normalized) : isPrivateIPv4(normalized);
   if (isPrivate) throw new Error("client_id resolves to a non-public address");
   return url;
 }

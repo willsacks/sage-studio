@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Check, Copy } from "lucide-react";
+import { Loader2, Check, Copy, Sparkles, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,13 +21,13 @@ import {
 } from "@/lib/actions/assistant-connections";
 import type { Module, ScopeLevel } from "@/lib/server/auth/principal";
 
-const MODULE_LABELS: Record<Module, string> = {
-  todos: "To-dos",
-  knowledge: "Knowledge base",
-  time_tracking: "Time tracking",
-  sites: "Websites",
-  finance: "Finance",
-  courses: "Courses",
+const MODULE_INFO: Record<Module, { label: string; hint: string }> = {
+  todos: { label: "To-dos", hint: "see and add items on your to-do list" },
+  knowledge: { label: "Knowledge base", hint: "search and read your knowledge base articles" },
+  time_tracking: { label: "Time tracking", hint: "see your tracked time entries" },
+  sites: { label: "Websites", hint: "see your site pages" },
+  finance: { label: "Finance", hint: "see transactions, accounts, and reports" },
+  courses: { label: "Courses", hint: "see your courses and enrollment counts" },
 };
 
 const MODULE_ORDER: Module[] = ["todos", "knowledge", "time_tracking", "sites", "finance", "courses"];
@@ -36,8 +36,29 @@ function emptyScopes(): Record<Module, boolean> {
   return Object.fromEntries(MODULE_ORDER.map((m) => [m, false])) as Record<Module, boolean>;
 }
 
+function CopyField({ value, mono = true }: { value: string; mono?: boolean }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--muted)] px-3 py-2">
+      <code className={`flex-1 text-xs break-all ${mono ? "font-mono" : ""}`}>{value}</code>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={async () => {
+          await navigator.clipboard.writeText(value);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        }}
+      >
+        {copied ? <Check size={13} /> : <Copy size={13} />}
+      </Button>
+    </div>
+  );
+}
+
 export function AssistantConnections({ initialConnections }: { initialConnections: ConnectionRow[] }) {
   const router = useRouter();
+  const [origin, setOrigin] = useState("");
   const [connections, setConnections] = useState(initialConnections);
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
@@ -45,9 +66,15 @@ export function AssistantConnections({ initialConnections }: { initialConnection
   const [error, setError] = useState<string | null>(null);
   const [creating, startCreating] = useTransition();
   const [revealedToken, setRevealedToken] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [, startRevoking] = useTransition();
+
+  useEffect(() => setOrigin(window.location.origin), []);
+
+  const mcpUrl = origin ? `${origin}/api/mcp` : "";
+  const mcpConfigSnippet = origin
+    ? JSON.stringify({ mcpServers: { "Sage Studio": { url: mcpUrl } } }, null, 2)
+    : "";
 
   function openCreate() {
     setName("");
@@ -86,61 +113,86 @@ export function AssistantConnections({ initialConnections }: { initialConnection
     });
   }
 
-  async function copyToken() {
-    if (!revealedToken) return;
-    await navigator.clipboard.writeText(revealedToken);
-    setCopied(true);
-  }
-
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-[var(--muted-foreground)]">
-          Give an AI assistant (Grok, ChatGPT, Claude, Cursor, etc.) read access to parts of your Sage Studio account.
-        </p>
-        <Button size="sm" onClick={openCreate}>New connection</Button>
+    <div className="space-y-6">
+      {/* Path 1: OAuth-capable assistants — just paste a URL, no token to manage */}
+      <div className="rounded-lg border border-[var(--border)] bg-[var(--muted)]/40 p-4 space-y-3">
+        <div className="flex items-start gap-2">
+          <Sparkles size={16} className="text-[var(--primary)] mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-medium">Recommended: Claude, ChatGPT, or Cursor</p>
+            <p className="text-sm text-[var(--muted-foreground)] mt-0.5">
+              These can connect directly — paste this URL into your assistant&apos;s connector/MCP settings. It will ask you to log in and choose what to share; no password or key to copy.
+            </p>
+          </div>
+        </div>
+        {mcpUrl && (
+          <div className="space-y-2 pl-6">
+            <CopyField value={mcpUrl} />
+            <details className="text-xs text-[var(--muted-foreground)]">
+              <summary className="cursor-pointer hover:text-[var(--foreground)]">Using a config file instead? (Claude Desktop, Cursor)</summary>
+              <pre className="mt-2 rounded-md border border-[var(--border)] bg-[var(--muted)] p-3 overflow-x-auto font-mono text-[11px] leading-relaxed">{mcpConfigSnippet}</pre>
+            </details>
+          </div>
+        )}
       </div>
 
-      {connections.length === 0 ? (
-        <p className="text-sm text-[var(--muted-foreground)]">No connections yet.</p>
-      ) : (
-        <div className="divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
-          {connections.map((c) => {
-            const grantedModules = MODULE_ORDER.filter((m) => (c.scopes[m] ?? "none") !== "none");
-            return (
-              <div key={c.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{c.displayName}</p>
-                  <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
-                    {grantedModules.length > 0
-                      ? grantedModules.map((m) => MODULE_LABELS[m]).join(", ")
-                      : "No access"}
-                    {c.status !== "active" && <span className="ml-2 text-red-500">Revoked</span>}
-                  </p>
-                </div>
-                {c.status === "active" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleRevoke(c.id)}
-                    disabled={revokingId === c.id}
-                  >
-                    {revokingId === c.id && <Loader2 size={13} className="animate-spin mr-1.5" />}
-                    Revoke
-                  </Button>
-                )}
-              </div>
-            );
-          })}
+      {/* Path 2: API-key-only assistants (Grok, custom bots) */}
+      <div className="space-y-3">
+        <div className="flex items-start gap-2 justify-between">
+          <div className="flex items-start gap-2">
+            <KeyRound size={16} className="text-[var(--muted-foreground)] mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium">Other assistants (Grok, custom bots)</p>
+              <p className="text-sm text-[var(--muted-foreground)] mt-0.5">
+                If your assistant only takes an API key — not a connector URL — create one here instead.
+              </p>
+            </div>
+          </div>
+          <Button size="sm" onClick={openCreate} className="flex-shrink-0">Create API key</Button>
         </div>
-      )}
+
+        {connections.length === 0 ? (
+          <p className="text-sm text-[var(--muted-foreground)] pl-6">No connections yet.</p>
+        ) : (
+          <div className="divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
+            {connections.map((c) => {
+              const grantedModules = MODULE_ORDER.filter((m) => (c.scopes[m] ?? "none") !== "none");
+              return (
+                <div key={c.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{c.displayName}</p>
+                    <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
+                      {grantedModules.length > 0
+                        ? grantedModules.map((m) => MODULE_INFO[m].label).join(", ")
+                        : "No access"}
+                      {c.status !== "active" && <span className="ml-2 text-red-500">Revoked</span>}
+                    </p>
+                  </div>
+                  {c.status === "active" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleRevoke(c.id)}
+                      disabled={revokingId === c.id}
+                    >
+                      {revokingId === c.id && <Loader2 size={13} className="animate-spin mr-1.5" />}
+                      Revoke
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New connection</DialogTitle>
+            <DialogTitle>Create an API key</DialogTitle>
             <DialogDescription>
-              This gives read-only access to the modules you choose below. Writing (e.g. adding to-dos) isn't supported yet.
+              Grants read-only access to whatever you check below. Your assistant can look but can&apos;t change or delete anything yet.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -154,17 +206,20 @@ export function AssistantConnections({ initialConnections }: { initialConnection
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Access</Label>
-              <div className="space-y-2">
+              <Label>What can it see?</Label>
+              <div className="space-y-2.5">
                 {MODULE_ORDER.map((m) => (
-                  <label key={m} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <label key={m} className="flex items-start gap-2 text-sm cursor-pointer">
                     <input
                       type="checkbox"
                       checked={selected[m]}
                       onChange={(e) => setSelected((prev) => ({ ...prev, [m]: e.target.checked }))}
-                      className="h-4 w-4 rounded border-[var(--border)]"
+                      className="h-4 w-4 rounded border-[var(--border)] mt-0.5"
                     />
-                    {MODULE_LABELS[m]}
+                    <span>
+                      <span className="font-medium">{MODULE_INFO[m].label}</span>
+                      <span className="text-[var(--muted-foreground)]"> — {MODULE_INFO[m].hint}</span>
+                    </span>
                   </label>
                 ))}
               </div>
@@ -174,7 +229,7 @@ export function AssistantConnections({ initialConnections }: { initialConnection
           <DialogFooter>
             <Button onClick={handleCreate} disabled={creating || !name.trim()}>
               {creating && <Loader2 size={13} className="animate-spin mr-1.5" />}
-              Create connection
+              Create key
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -183,34 +238,28 @@ export function AssistantConnections({ initialConnections }: { initialConnection
       <Dialog
         open={!!revealedToken}
         onOpenChange={(open) => {
-          if (!open) {
-            setRevealedToken(null);
-            setCopied(false);
-          }
+          if (!open) setRevealedToken(null);
         }}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Your access token</DialogTitle>
+            <DialogTitle>Your API key</DialogTitle>
             <DialogDescription>
-              Copy this now — you won't be able to see it again. Paste it into your assistant wherever it asks for an API key or bearer token.
+              Copy this now — you won&apos;t be able to see it again. Give your assistant both this key and the server address below (most ask for them as &quot;API key&quot; and &quot;base URL&quot;, or sometimes just &quot;bearer token&quot;).
             </DialogDescription>
           </DialogHeader>
-          <div className="flex items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--muted)] px-3 py-2">
-            <code className="flex-1 text-xs font-mono break-all">{revealedToken}</code>
-            <Button size="sm" variant="outline" onClick={copyToken}>
-              {copied ? <Check size={13} /> : <Copy size={13} />}
-            </Button>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label className="text-xs text-[var(--muted-foreground)]">API key</Label>
+              {revealedToken && <CopyField value={revealedToken} />}
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-[var(--muted-foreground)]">Server address</Label>
+              {mcpUrl && <CopyField value={mcpUrl} />}
+            </div>
           </div>
           <DialogFooter>
-            <Button
-              onClick={() => {
-                setRevealedToken(null);
-                setCopied(false);
-              }}
-            >
-              I've copied it
-            </Button>
+            <Button onClick={() => setRevealedToken(null)}>I&apos;ve copied it</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

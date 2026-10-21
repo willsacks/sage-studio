@@ -46,6 +46,10 @@ export default async function AuthorizePage({
   if (responseType !== "code") return errorPage("Unsupported request", "Only the authorization code flow is supported.");
   if (!clientId || !redirectUri || !codeChallenge) return errorPage("Invalid request", "This authorization request is missing required parameters.");
   if (codeChallengeMethod !== "S256") return errorPage("Invalid request", "Only PKCE with S256 is supported.");
+  // RFC 8707 resource indicator — there's only one resource server
+  // (this app), so reject anything that doesn't name it rather than
+  // silently storing an arbitrary client-supplied value.
+  if (resource && resource !== ISSUER) return errorPage("Invalid resource", "This authorization server only issues tokens for Sage Studio's own API.");
 
   let client;
   try {
