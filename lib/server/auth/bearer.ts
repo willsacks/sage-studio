@@ -2,19 +2,25 @@ import { randomUUID } from "crypto";
 import { hashAssistantToken } from "@/lib/crypto";
 import { queryPrivileged } from "@/lib/server/db/privileged";
 import { ALL_MODULES, type Channel, type Module, type Principal, type ScopeLevel } from "@/lib/server/auth/principal";
+import { verifyAccessToken, ISSUER } from "@/lib/server/auth/oauth-jwt";
+import { isJtiRevoked } from "@/lib/server/auth/oauth-flow";
 
 export type BearerAuthResult = { ok: true; principal: Principal } | { ok: false; error: string };
 
-/** Resolves a bearer token to a Principal. PATs today (`sage_pat_...`);
- * OAuth access tokens (JWT, `jose.jwtVerify`) arrive in M3 — this
- * function is the one place that distinction is made, so adding JWT
- * support later doesn't touch any route or MCP tool code. */
+/** Resolves a bearer token to a Principal — PATs (`sage_pat_...`, looked
+ * up in the DB) or OAuth access tokens (ES256 JWT, verified against the
+ * resource identifier, never touching the DB except the revocation-jti
+ * check). This is the one place that distinction is made, so no route or
+ * MCP tool code needs to know which kind of token it got. */
 export async function authenticateBearer(authorizationHeader: string | null, channel: Channel): Promise<BearerAuthResult> {
   if (!authorizationHeader?.startsWith("Bearer ")) return { ok: false, error: "missing_token" };
   const token = authorizationHeader.slice("Bearer ".length).trim();
   if (!token) return { ok: false, error: "missing_token" };
 
-  if (!token.startsWith("sage_pat_")) return { ok: false, error: "unsupported_token_format" };
+  if (!token.startsWith("sage_pat_")) {
+    if (token.split(".").length !== 3) return { ok: false, error: "unsupported_token_format" };
+    return authenticateJwt(token, channel);
+  }
 
   const hash = hashAssistantToken(token);
   const { rows: patRows } = await queryPrivileged<{ grant_id: string }>(
@@ -44,6 +50,31 @@ export async function authenticateBearer(authorizationHeader: string | null, cha
     principal: {
       channel, userId: grant.user_id, scopes,
       grantId: grant.id, clientId: grant.client_id, clientName: grant.display_name,
+      requestId: randomUUID(),
+    },
+  };
+}
+
+async function authenticateJwt(token: string, channel: Channel): Promise<BearerAuthResult> {
+  const verified = await verifyAccessToken(token, ISSUER);
+  if (!verified) return { ok: false, error: "invalid_token" };
+  if (await isJtiRevoked(verified.jti)) return { ok: false, error: "revoked" };
+
+  const { rows } = await queryPrivileged<{ status: string; display_name: string }>(
+    "select status, display_name from sage.connected_apps where id = $1",
+    [verified.gid]
+  );
+  const grant = rows[0];
+  if (!grant || grant.status !== "active") return { ok: false, error: "revoked" };
+
+  queryPrivileged("update sage.connected_apps set last_used_at = now() where id = $1", [verified.gid]).catch(() => {});
+
+  const scopes = Object.fromEntries(ALL_MODULES.map((m) => [m, verified.scopes[m] ?? "none"])) as Record<Module, ScopeLevel>;
+  return {
+    ok: true,
+    principal: {
+      channel, userId: verified.sub, scopes,
+      grantId: verified.gid, clientId: verified.clientId, clientName: grant.display_name,
       requestId: randomUUID(),
     },
   };

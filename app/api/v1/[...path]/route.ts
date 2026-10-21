@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateBearer } from "@/lib/server/auth/bearer";
 import { findOperationByPath } from "@/lib/server/contract/registry";
 import { runOperation } from "@/lib/server/contract/run-operation";
+import { ISSUER } from "@/lib/server/auth/oauth-jwt";
 
 export const maxDuration = 30;
+
+const WWW_AUTHENTICATE = `Bearer resource_metadata="${ISSUER}/.well-known/oauth-protected-resource"`;
 
 /** One catch-all route for every phase-1 read operation — matches
  * GET /api/v1/<op.http.path> against the registry (lib/server/contract/
@@ -17,7 +20,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const auth = await authenticateBearer(request.headers.get("authorization"), "api");
   if (!auth.ok) {
-    return NextResponse.json({ error: { code: "unauthenticated", message: auth.error } }, { status: 401 });
+    return NextResponse.json(
+      { error: { code: "unauthenticated", message: auth.error } },
+      { status: 401, headers: { "WWW-Authenticate": WWW_AUTHENTICATE } }
+    );
   }
 
   const found = findOperationByPath("GET", pathStr);
