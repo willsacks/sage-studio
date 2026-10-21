@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { resolveClientForAuthorize } from "@/lib/server/auth/oauth-clients";
 import { createAuthorizationRequest } from "@/lib/server/auth/oauth-flow";
 import { ISSUER } from "@/lib/server/auth/oauth-jwt";
-import { ALL_MODULES, type Module } from "@/lib/server/auth/principal";
+import { ALL_MODULES, type Module, type ScopeLevel } from "@/lib/server/auth/principal";
 import { ConsentForm } from "@/components/oauth/ConsentForm";
 
 const MODULE_LABELS: Record<Module, string> = {
@@ -14,6 +14,23 @@ const MODULE_LABELS: Record<Module, string> = {
   finance: "Finance",
   courses: "Courses",
 };
+
+const WRITABLE_MODULES = new Set<Module>(["todos", "knowledge", "time_tracking", "sites"]);
+
+/** Parses an OAuth `scope` string into per-module levels. Each token is
+ * either a bare module name (defaults to "read") or "module:write" — a
+ * client can only ever be offered what it explicitly asked for, never
+ * more, so an unparseable/unwritable combination just falls back to read. */
+function parseRequestedScopes(scope: string | undefined): Partial<Record<Module, ScopeLevel>> {
+  const result: Partial<Record<Module, ScopeLevel>> = {};
+  for (const token of (scope ?? "").split(/\s+/).filter(Boolean)) {
+    const [name, level] = token.split(":");
+    if (!ALL_MODULES.includes(name as Module)) continue;
+    const module = name as Module;
+    result[module] = level === "write" && WRITABLE_MODULES.has(module) ? "write" : "read";
+  }
+  return result;
+}
 
 function errorPage(title: string, message: string) {
   return (
@@ -69,10 +86,11 @@ export default async function AuthorizePage({
     redirect(`/login?next=${encodeURIComponent(fullPath)}`);
   }
 
-  const requestedModules = (scope ?? "")
-    .split(/\s+/)
-    .filter((m): m is Module => ALL_MODULES.includes(m as Module));
-  const modulesToOffer = requestedModules.length > 0 ? requestedModules : ALL_MODULES;
+  const requestedScopes = parseRequestedScopes(scope);
+  const modulesToOffer = (Object.keys(requestedScopes).length > 0 ? (Object.keys(requestedScopes) as Module[]) : ALL_MODULES);
+  // Unqualified request (no scope param at all, or a module scope isn't
+  // writable) — same "read unless asked otherwise" default.
+  for (const m of modulesToOffer) if (!(m in requestedScopes)) requestedScopes[m] = "read";
 
   const requestId = await createAuthorizationRequest({
     clientId: client.id,
@@ -80,10 +98,11 @@ export default async function AuthorizePage({
     state: state ?? null,
     codeChallenge,
     resource: resource ?? ISSUER,
-    scopesRequested: modulesToOffer,
+    scopesRequested: modulesToOffer.map((m) => (requestedScopes[m] === "write" ? `${m}:write` : m)),
   });
 
   const redirectHost = new URL(redirectUri).host;
+  const anyWriteRequested = Object.values(requestedScopes).includes("write");
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12">
@@ -91,7 +110,7 @@ export default async function AuthorizePage({
         <div>
           <h1 className="text-lg font-semibold">Connect {client.clientName}</h1>
           <p className="text-sm text-[var(--muted-foreground)] mt-1">
-            {client.clientName} wants read-only access to your Sage Studio account.
+            {client.clientName} wants {anyWriteRequested ? "access to" : "read-only access to"} your Sage Studio account.
             {!client.verified && (
               <span className="block mt-2 text-amber-600">
                 This app is not verified. It will redirect to <span className="font-mono">{redirectHost}</span> after you decide.
@@ -102,11 +121,16 @@ export default async function AuthorizePage({
 
         <ConsentForm
           requestId={requestId}
-          modules={modulesToOffer.map((m) => ({ key: m, label: MODULE_LABELS[m] }))}
+          modules={modulesToOffer.map((m) => ({
+            key: m,
+            label: MODULE_LABELS[m],
+            requestedLevel: requestedScopes[m] ?? "read",
+            writable: WRITABLE_MODULES.has(m),
+          }))}
         />
 
         <p className="text-xs text-[var(--muted-foreground)]">
-          This can't move money or delete anything — read-only access only. You can revoke it anytime from Settings.
+          It can never move money. You can revoke this connection anytime from Settings.
         </p>
       </div>
     </div>

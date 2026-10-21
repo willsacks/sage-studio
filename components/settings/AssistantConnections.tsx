@@ -21,19 +21,20 @@ import {
 } from "@/lib/actions/assistant-connections";
 import type { Module, ScopeLevel } from "@/lib/server/auth/principal";
 
-const MODULE_INFO: Record<Module, { label: string; hint: string }> = {
-  todos: { label: "To-dos", hint: "see and add items on your to-do list" },
-  knowledge: { label: "Knowledge base", hint: "search and read your knowledge base articles" },
-  time_tracking: { label: "Time tracking", hint: "see your tracked time entries" },
-  sites: { label: "Websites", hint: "see your site pages" },
-  finance: { label: "Finance", hint: "see transactions, accounts, and reports" },
-  courses: { label: "Courses", hint: "see your courses and enrollment counts" },
+const MODULE_INFO: Record<Module, { label: string; readHint: string; writeHint: string }> = {
+  todos: { label: "To-dos", readHint: "see your to-do list", writeHint: "add and update items" },
+  knowledge: { label: "Knowledge base", readHint: "search and read articles", writeHint: "create and edit articles" },
+  time_tracking: { label: "Time tracking", readHint: "see tracked time entries", writeHint: "start and stop the timer" },
+  sites: { label: "Websites", readHint: "see your site pages", writeHint: "edit page content" },
+  finance: { label: "Finance", readHint: "see transactions, accounts, and reports", writeHint: "" },
+  courses: { label: "Courses", readHint: "see your courses and enrollment counts", writeHint: "" },
 };
 
 const MODULE_ORDER: Module[] = ["todos", "knowledge", "time_tracking", "sites", "finance", "courses"];
+const WRITABLE_MODULES = new Set<Module>(["todos", "knowledge", "time_tracking", "sites"]);
 
-function emptyScopes(): Record<Module, boolean> {
-  return Object.fromEntries(MODULE_ORDER.map((m) => [m, false])) as Record<Module, boolean>;
+function emptyScopes(): Record<Module, ScopeLevel> {
+  return Object.fromEntries(MODULE_ORDER.map((m) => [m, "none"])) as Record<Module, ScopeLevel>;
 }
 
 function CopyField({ value, mono = true }: { value: string; mono?: boolean }) {
@@ -62,7 +63,7 @@ export function AssistantConnections({ initialConnections }: { initialConnection
   const [connections, setConnections] = useState(initialConnections);
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
-  const [selected, setSelected] = useState<Record<Module, boolean>>(emptyScopes());
+  const [selected, setSelected] = useState<Record<Module, ScopeLevel>>(emptyScopes());
   const [error, setError] = useState<string | null>(null);
   const [creating, startCreating] = useTransition();
   const [revealedToken, setRevealedToken] = useState<string | null>(null);
@@ -87,7 +88,7 @@ export function AssistantConnections({ initialConnections }: { initialConnection
     setError(null);
     const scopes: Partial<Record<Module, ScopeLevel>> = {};
     for (const m of MODULE_ORDER) {
-      if (selected[m]) scopes[m] = "read";
+      if (selected[m] !== "none") scopes[m] = selected[m];
     }
     startCreating(async () => {
       const result = await createAssistantConnection(name, scopes);
@@ -164,7 +165,7 @@ export function AssistantConnections({ initialConnections }: { initialConnection
                     <p className="text-sm font-medium truncate">{c.displayName}</p>
                     <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
                       {grantedModules.length > 0
-                        ? grantedModules.map((m) => MODULE_INFO[m].label).join(", ")
+                        ? grantedModules.map((m) => `${MODULE_INFO[m].label}${c.scopes[m] === "write" ? " (view & edit)" : ""}`).join(", ")
                         : "No access"}
                       {c.status !== "active" && <span className="ml-2 text-red-500">Revoked</span>}
                     </p>
@@ -192,7 +193,7 @@ export function AssistantConnections({ initialConnections }: { initialConnection
           <DialogHeader>
             <DialogTitle>Create an API key</DialogTitle>
             <DialogDescription>
-              Grants read-only access to whatever you check below. Your assistant can look but can&apos;t change or delete anything yet.
+              Choose what this assistant can see, and — for a few modules — whether it can also make changes, not just look.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -206,22 +207,39 @@ export function AssistantConnections({ initialConnections }: { initialConnection
               />
             </div>
             <div className="space-y-1.5">
-              <Label>What can it see?</Label>
-              <div className="space-y-2.5">
-                {MODULE_ORDER.map((m) => (
-                  <label key={m} className="flex items-start gap-2 text-sm cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selected[m]}
-                      onChange={(e) => setSelected((prev) => ({ ...prev, [m]: e.target.checked }))}
-                      className="h-4 w-4 rounded border-[var(--border)] mt-0.5"
-                    />
-                    <span>
-                      <span className="font-medium">{MODULE_INFO[m].label}</span>
-                      <span className="text-[var(--muted-foreground)]"> — {MODULE_INFO[m].hint}</span>
-                    </span>
-                  </label>
-                ))}
+              <Label>What can it do?</Label>
+              <div className="space-y-3">
+                {MODULE_ORDER.map((m) => {
+                  const canWrite = WRITABLE_MODULES.has(m);
+                  const level = selected[m];
+                  return (
+                    <div key={m} className="space-y-1">
+                      <label className="flex items-start gap-2 text-sm cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={level !== "none"}
+                          onChange={(e) => setSelected((prev) => ({ ...prev, [m]: e.target.checked ? "read" : "none" }))}
+                          className="h-4 w-4 rounded border-[var(--border)] mt-0.5"
+                        />
+                        <span>
+                          <span className="font-medium">{MODULE_INFO[m].label}</span>
+                          <span className="text-[var(--muted-foreground)]"> — {level === "write" ? MODULE_INFO[m].writeHint : MODULE_INFO[m].readHint}</span>
+                        </span>
+                      </label>
+                      {canWrite && level !== "none" && (
+                        <label className="flex items-center gap-2 text-xs text-[var(--muted-foreground)] cursor-pointer pl-6">
+                          <input
+                            type="checkbox"
+                            checked={level === "write"}
+                            onChange={(e) => setSelected((prev) => ({ ...prev, [m]: e.target.checked ? "write" : "read" }))}
+                            className="h-3.5 w-3.5 rounded border-[var(--border)]"
+                          />
+                          Also let it make changes ({MODULE_INFO[m].writeHint})
+                        </label>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
             {error && <p className="text-sm text-red-500">{error}</p>}

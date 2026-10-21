@@ -11,11 +11,18 @@ async function requireUser() {
   return user;
 }
 
-export async function approveConsent(requestId: string, grantedModules: Module[]): Promise<{ error?: string; redirectTo?: string }> {
+export async function approveConsent(
+  requestId: string,
+  grantedModules: Module[],
+  levels: Partial<Record<Module, ScopeLevel>>
+): Promise<{ error?: string; redirectTo?: string }> {
   const user = await requireUser();
   const scopes: Partial<Record<Module, ScopeLevel>> = {};
-  for (const m of grantedModules) scopes[m] = "read";
+  for (const m of grantedModules) scopes[m] = levels[m] ?? "read";
 
+  // approveAuthorizationRequest re-clamps this against what the client
+  // actually requested at /oauth/authorize — this isn't the real gate,
+  // just passing the user's choice through.
   const result = await approveAuthorizationRequest(requestId, user.id, scopes, "OAuth connection");
   if ("error" in result) return { error: result.error };
 

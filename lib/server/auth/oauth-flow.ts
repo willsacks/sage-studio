@@ -70,7 +70,24 @@ export async function approveAuthorizationRequest(
   const request = await getPendingAuthorizationRequest(requestId);
   if (!request) return { error: "This authorization request has expired. Please try connecting again." };
 
-  const fullScopes = Object.fromEntries(ALL_MODULES.map((m) => [m, grantedScopes[m] ?? "none"])) as Record<Module, ScopeLevel>;
+  // Re-derive the ceiling from what the client actually asked for in its
+  // own `scope` param (stored verbatim at /oauth/authorize) — the consent
+  // screen can only narrow this, never grant more. Without this, a
+  // forged call to this action (it's a client-invokable Server Action)
+  // could request write access to a module the client never asked for.
+  const requestedLevel: Partial<Record<Module, ScopeLevel>> = {};
+  for (const token of request.scopesRequested) {
+    const [name, level] = token.split(":");
+    if (ALL_MODULES.includes(name as Module)) requestedLevel[name as Module] = level === "write" ? "write" : "read";
+  }
+  const RANK: Record<ScopeLevel, number> = { none: 0, read: 1, write: 2 };
+  const fullScopes = Object.fromEntries(
+    ALL_MODULES.map((m) => {
+      const requested = requestedLevel[m] ?? "none";
+      const asked = grantedScopes[m] ?? "none";
+      return [m, RANK[asked] <= RANK[requested] ? asked : requested];
+    })
+  ) as Record<Module, ScopeLevel>;
 
   const grantId = await withRlsWrite(
     { channel: "web", userId, scopes: {} as Record<Module, ScopeLevel>, requestId: "oauth-consent" },

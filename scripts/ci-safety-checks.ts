@@ -1,10 +1,17 @@
 /**
- * M7 — safety CI for the public API/MCP server. Phase 1 ships read-only
- * everywhere (enforced at the DB level by withRls's `BEGIN READ ONLY` —
- * see lib/server/db/with-rls.ts), but this gives a fast, no-DB-required
- * second check that nothing in the operation-registry layer could even
- * attempt a write, and that the privileged (`sage_api`, no RLS) DB paths
- * stay confined to the handful of files that genuinely need them.
+ * M7 — safety CI for the public API/MCP server, updated for phase 2
+ * (write tools). The read-only guarantee is now per-operation, not
+ * per-file: an operation's `mutates: true` flag is what makes
+ * run-operation.ts use a writable transaction (lib/server/db/with-rls.ts's
+ * withRlsWrite) instead of the default `BEGIN READ ONLY`. This script
+ * checks the parts of that guarantee a quick, no-DB-required static scan
+ * actually can: mutating SQL only appears in files explicitly declared
+ * as write-capable below, every operation in those files is honest about
+ * it (`mutates: true` + `minScope: "write"`), and the privileged
+ * (`sage_api`, no RLS) DB paths stay confined to the handful of files
+ * that genuinely need them. (registry.ts also asserts `mutates:true =>
+ * minScope:"write"` at import time — this is the complementary static
+ * check that catches it before that code ever runs.)
  *
  * Run: cd sage-studio && npx tsx scripts/ci-safety-checks.ts
  */
@@ -25,17 +32,38 @@ function pass(label: string) {
 const OPS_DIR = join(process.cwd(), "lib/server/ops");
 const opsFiles = readdirSync(OPS_DIR).filter((f) => f.endsWith(".ts"));
 
-// 1. No mutating SQL verbs in any operation file — phase 1 is read-only
-// everywhere; a write tool belongs in phase 2 with its own review, not
-// slipped into an op file that runOperation treats as read-only.
+// Files allowed to contain mutating SQL at all. Adding a new write-ops
+// file means adding it here deliberately — that's the point.
+const WRITE_FILES = new Set(["todos-write.ts", "knowledge-write.ts", "time-entries-write.ts", "sites-write.ts"]);
+
+// 1. Mutating SQL only in declared write files, and every operation in
+// those files is explicit about being a write (mutates:true + write
+// scope) — not just one operation in the file quietly riding along.
+// Line comments are stripped first — otherwise `//mutates: true,` (code
+// that was commented out, accidentally or otherwise) would still count
+// as a declared write, which defeats the entire point of this check.
+function stripLineComments(src: string): string {
+  return src.replace(/\/\/.*$/gm, "");
+}
 const MUTATING_SQL = /\b(insert\s+into|update\s+public\.|delete\s+from\s+public\.|truncate|drop\s+table)\b/i;
 for (const file of opsFiles) {
-  const content = readFileSync(join(OPS_DIR, file), "utf-8");
-  if (MUTATING_SQL.test(content)) {
-    fail("no-mutating-sql-in-ops", `${file} contains a mutating SQL verb — phase 1 operations must be read-only.`);
+  const content = stripLineComments(readFileSync(join(OPS_DIR, file), "utf-8"));
+  const hasMutatingSql = MUTATING_SQL.test(content);
+  if (hasMutatingSql && !WRITE_FILES.has(file)) {
+    fail("mutating-sql-only-in-write-files", `${file} contains a mutating SQL verb but isn't in WRITE_FILES — either it shouldn't be mutating, or this script needs updating deliberately.`);
+  }
+  if (WRITE_FILES.has(file)) {
+    const opCount = (content.match(/defineOperation\(/g) ?? []).length;
+    const mutatesCount = (content.match(/mutates:\s*true/g) ?? []).length;
+    const writeScopeCount = (content.match(/minScope:\s*"write"/g) ?? []).length;
+    if (opCount === 0) {
+      fail("mutating-sql-only-in-write-files", `${file} is in WRITE_FILES but defines no operations — remove it from the allowlist.`);
+    } else if (mutatesCount !== opCount || writeScopeCount !== opCount) {
+      fail("mutating-sql-only-in-write-files", `${file} has ${opCount} operation(s) but only ${mutatesCount} with mutates:true and ${writeScopeCount} with minScope:"write" — every operation in a write file must declare both.`);
+    }
   }
 }
-if (!failed) pass("no-mutating-sql-in-ops");
+if (!failed) pass("mutating-sql-only-in-write-files");
 
 // 2. No op file imports the privileged (no-RLS) DB paths. Only
 // lib/server/auth/{pat,oauth-flow,bearer}.ts, lib/server/audit/write.ts,
@@ -43,7 +71,7 @@ if (!failed) pass("no-mutating-sql-in-ops");
 // cross-user reads) may ever import these.
 let privilegedImportFound = false;
 for (const file of opsFiles) {
-  const content = readFileSync(join(OPS_DIR, file), "utf-8");
+  const content = stripLineComments(readFileSync(join(OPS_DIR, file), "utf-8"));
   if (/from\s+["']@\/lib\/server\/db\/privileged["']/.test(content) || /withRlsWrite/.test(content)) {
     fail("no-privileged-db-access-in-ops", `${file} imports a privileged/write DB path — operation handlers must only receive ctx.db from withRls.`);
     privilegedImportFound = true;
@@ -51,17 +79,20 @@ for (const file of opsFiles) {
 }
 if (!privilegedImportFound) pass("no-privileged-db-access-in-ops");
 
-// 3. runOperation itself must call withRls, never withRlsWrite — this is
-// the one real enforcement point (Postgres-level BEGIN READ ONLY), so a
-// regression here would silently make every operation writable.
+// 3. run-operation.ts must still be ABLE to run read-only (withRls is
+// referenced) and its use of the writable path must stay conditioned on
+// the operation's own flag — not unconditional, which would make every
+// operation writable regardless of what it declares.
 const runOperationPath = join(process.cwd(), "lib/server/contract/run-operation.ts");
-const runOperationSrc = readFileSync(runOperationPath, "utf-8");
-if (!/\bwithRls\(/.test(runOperationSrc)) {
-  fail("run-operation-uses-withRls", "run-operation.ts no longer calls withRls — the read-only guarantee may have been removed.");
-} else if (/\bwithRlsWrite\(/.test(runOperationSrc)) {
-  fail("run-operation-uses-withRls", "run-operation.ts calls withRlsWrite — every operation would run in a writable transaction.");
+const runOperationSrc = stripLineComments(readFileSync(runOperationPath, "utf-8"));
+if (!/\bwithRls\b/.test(runOperationSrc)) {
+  fail("run-operation-dispatches-by-mutates", "run-operation.ts no longer references withRls at all — the read-only path may have been removed.");
+} else if (!/\bwithRlsWrite\b/.test(runOperationSrc)) {
+  fail("run-operation-dispatches-by-mutates", "run-operation.ts no longer references withRlsWrite — phase 2 write operations would have no writable path.");
+} else if (!/op\.mutates/.test(runOperationSrc)) {
+  fail("run-operation-dispatches-by-mutates", "run-operation.ts doesn't reference op.mutates — the choice between withRls/withRlsWrite may no longer be gated by the operation's own declaration.");
 } else {
-  pass("run-operation-uses-withRls");
+  pass("run-operation-dispatches-by-mutates");
 }
 
 // 4. No admin-only Supabase client (createAdminClient) anywhere under
@@ -75,7 +106,7 @@ function scanForAdminClient(dir: string) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) scanForAdminClient(full);
     else if (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx")) {
-      const content = readFileSync(full, "utf-8");
+      const content = stripLineComments(readFileSync(full, "utf-8"));
       if (/createAdminClient/.test(content)) {
         fail("no-admin-client-in-api-mcp", `${full} imports createAdminClient — the public API/MCP surface must never use the RLS-bypassing admin client.`);
         adminClientFound = true;

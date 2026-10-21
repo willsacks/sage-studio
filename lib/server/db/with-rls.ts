@@ -8,9 +8,10 @@ import type { Principal } from "@/lib/server/auth/principal";
  * same RLS policies that already gate the web app gate this too — see
  * docs/schema-map.md for why most modules need no new policy at all, and
  * sage.api_scope_allows() (scripts/add-assistant-platform-schema.ts) for
- * the one that does. Every call is read-only for now (phase 1 — no write
- * tools exist yet); `begin` without `read only` is reserved for when
- * write tools ship, not available until then. */
+ * the one that does. Phase-1 (read) operations run in `BEGIN READ ONLY`;
+ * phase-2 write operations run via withRlsWrite — run-operation.ts
+ * decides which per-call based on the operation's own `mutates: true`
+ * flag, never per-route or per-channel. */
 
 let pool: Pool | null = null;
 
@@ -56,12 +57,12 @@ export async function withRls<T>(principal: Principal, fn: (db: PoolClient) => P
   }
 }
 
-/** Same as withRls but a real (writable) transaction — reserved for the
- * handful of flows that need to write as the user rather than read:
- * creating a connection/PAT and (in M3) the OAuth consent upsert. Not for
- * operation handlers, which stay read-only until phase 2's write tools
- * ship. Only lib/server/auth/pat.ts and the future consent action may
- * import this. */
+/** Same as withRls but a real (writable) transaction. Two call sites:
+ * connection/PAT creation + OAuth consent (lib/server/auth/pat.ts,
+ * lib/actions/oauth-consent.ts), and run-operation.ts's own dispatch for
+ * any operation with `mutates: true` — never called directly from an
+ * ops file itself (see ci-safety-checks.ts's no-privileged-db-access-in-ops
+ * check, which also forbids importing this from lib/server/ops). */
 export async function withRlsWrite<T>(principal: Principal, fn: (db: PoolClient) => Promise<T>): Promise<T> {
   const client = await getPool().connect();
   try {
