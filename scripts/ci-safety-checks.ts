@@ -34,7 +34,14 @@ const opsFiles = readdirSync(OPS_DIR).filter((f) => f.endsWith(".ts"));
 
 // Files allowed to contain mutating SQL at all. Adding a new write-ops
 // file means adding it here deliberately — that's the point.
-const WRITE_FILES = new Set(["todos-write.ts", "knowledge-write.ts", "time-entries-write.ts", "sites-write.ts"]);
+const WRITE_FILES = new Set([
+  "todos-write.ts",
+  "knowledge-write.ts",
+  "time-entries-write.ts",
+  "sites-write.ts",
+  "finance-write.ts",
+  "courses-write.ts",
+]);
 
 // 1. Mutating SQL only in declared write files, and every operation in
 // those files is explicit about being a write (mutates:true + write
@@ -46,11 +53,16 @@ function stripLineComments(src: string): string {
   return src.replace(/\/\/.*$/gm, "");
 }
 const MUTATING_SQL = /\b(insert\s+into|update\s+public\.|delete\s+from\s+public\.|truncate|drop\s+table)\b/i;
+// A file can also mutate indirectly, via the PgSupabaseShim wrapper
+// around lib/finance/import-commit.ts's business logic (see
+// lib/server/db/supabase-shim.ts) rather than literal SQL text of its
+// own — that's just as much a write path and needs the same scrutiny.
+const USES_SHIM = /PgSupabaseShim/;
 for (const file of opsFiles) {
   const content = stripLineComments(readFileSync(join(OPS_DIR, file), "utf-8"));
-  const hasMutatingSql = MUTATING_SQL.test(content);
+  const hasMutatingSql = MUTATING_SQL.test(content) || USES_SHIM.test(content);
   if (hasMutatingSql && !WRITE_FILES.has(file)) {
-    fail("mutating-sql-only-in-write-files", `${file} contains a mutating SQL verb but isn't in WRITE_FILES — either it shouldn't be mutating, or this script needs updating deliberately.`);
+    fail("mutating-sql-only-in-write-files", `${file} contains a mutating SQL verb or uses PgSupabaseShim but isn't in WRITE_FILES — either it shouldn't be mutating, or this script needs updating deliberately.`);
   }
   if (WRITE_FILES.has(file)) {
     const opCount = (content.match(/defineOperation\(/g) ?? []).length;

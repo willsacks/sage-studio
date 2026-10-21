@@ -5,9 +5,11 @@ import { knowledgeWriteOperations } from "@/lib/server/ops/knowledge-write";
 import { timeOperations } from "@/lib/server/ops/time-entries";
 import { timeWriteOperations } from "@/lib/server/ops/time-entries-write";
 import { financeOperations } from "@/lib/server/ops/finance";
+import { financeWriteOperations } from "@/lib/server/ops/finance-write";
 import { sitesOperations } from "@/lib/server/ops/sites";
 import { sitesWriteOperations } from "@/lib/server/ops/sites-write";
 import { coursesOperations } from "@/lib/server/ops/courses";
+import { coursesWriteOperations } from "@/lib/server/ops/courses-write";
 import type { AnyOperation } from "@/lib/server/contract/operation";
 
 export const operations: AnyOperation[] = [
@@ -18,9 +20,11 @@ export const operations: AnyOperation[] = [
   ...timeOperations,
   ...timeWriteOperations,
   ...financeOperations,
+  ...financeWriteOperations,
   ...sitesOperations,
   ...sitesWriteOperations,
   ...coursesOperations,
+  ...coursesWriteOperations,
 ];
 
 // Fails at import time (build + boot), not just in CI — a mismatch here

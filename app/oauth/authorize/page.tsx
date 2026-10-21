@@ -15,7 +15,7 @@ const MODULE_LABELS: Record<Module, string> = {
   courses: "Courses",
 };
 
-const WRITABLE_MODULES = new Set<Module>(["todos", "knowledge", "time_tracking", "sites"]);
+const WRITABLE_MODULES = new Set<Module>(["todos", "knowledge", "time_tracking", "sites", "finance", "courses"]);
 
 /** Parses an OAuth `scope` string into per-module levels. Each token is
  * either a bare module name (defaults to "read") or "module:write" — a

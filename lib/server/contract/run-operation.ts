@@ -49,6 +49,7 @@ export async function runOperation(op: AnyOperation, principal: Principal, rawIn
     const KNOWN_MESSAGES: Record<string, { code: string; publicMessage: string }> = {
       not_found: { code: "not_found", publicMessage: "Not found" },
       conflict: { code: "conflict", publicMessage: "This was changed elsewhere since you last read it — fetch it again before retrying." },
+      duplicate: { code: "conflict", publicMessage: "That already exists — this wasn't a stale write, it's an actual duplicate." },
     };
     const known = KNOWN_MESSAGES[message];
     const code = known?.code ?? "internal";

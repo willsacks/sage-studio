@@ -26,12 +26,12 @@ const MODULE_INFO: Record<Module, { label: string; readHint: string; writeHint: 
   knowledge: { label: "Knowledge base", readHint: "search and read articles", writeHint: "create and edit articles" },
   time_tracking: { label: "Time tracking", readHint: "see tracked time entries", writeHint: "start and stop the timer" },
   sites: { label: "Websites", readHint: "see your site pages", writeHint: "edit page content" },
-  finance: { label: "Finance", readHint: "see transactions, accounts, and reports", writeHint: "" },
-  courses: { label: "Courses", readHint: "see your courses and enrollment counts", writeHint: "" },
+  finance: { label: "Finance", readHint: "see transactions, accounts, and reports", writeHint: "import accounts, customers, invoices, and payments" },
+  courses: { label: "Courses", readHint: "see your courses and enrollment counts", writeHint: "create courses and add free enrollments" },
 };
 
 const MODULE_ORDER: Module[] = ["todos", "knowledge", "time_tracking", "sites", "finance", "courses"];
-const WRITABLE_MODULES = new Set<Module>(["todos", "knowledge", "time_tracking", "sites"]);
+const WRITABLE_MODULES = new Set<Module>(["todos", "knowledge", "time_tracking", "sites", "finance", "courses"]);
 
 function emptyScopes(): Record<Module, ScopeLevel> {
   return Object.fromEntries(MODULE_ORDER.map((m) => [m, "none"])) as Record<Module, ScopeLevel>;
