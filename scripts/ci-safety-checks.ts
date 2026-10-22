@@ -41,6 +41,9 @@ const WRITE_FILES = new Set([
   "sites-write.ts",
   "finance-write.ts",
   "courses-write.ts",
+  "pipeline-write.ts",
+  "process-write.ts",
+  "newsletter-write.ts",
 ]);
 
 // 1. Mutating SQL only in declared write files, and every operation in

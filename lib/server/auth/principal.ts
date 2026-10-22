@@ -3,7 +3,7 @@
  * (SiteRole, Finance entity role) is checked separately, inside each
  * module's own service functions, not baked into this type. */
 export type Channel = "web" | "mcp" | "api" | "pat";
-export type Module = "todos" | "knowledge" | "time_tracking" | "sites" | "finance" | "courses";
+export type Module = "todos" | "knowledge" | "time_tracking" | "sites" | "finance" | "courses" | "pipeline" | "process" | "newsletter";
 export type ScopeLevel = "none" | "read" | "write";
 
 export interface Principal {
@@ -28,4 +28,4 @@ export function hasScope(p: Principal, module: Module, min: ScopeLevel): boolean
   return level === "write";
 }
 
-export const ALL_MODULES: Module[] = ["todos", "knowledge", "time_tracking", "sites", "finance", "courses"];
+export const ALL_MODULES: Module[] = ["todos", "knowledge", "time_tracking", "sites", "finance", "courses", "pipeline", "process", "newsletter"];
