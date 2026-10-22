@@ -96,10 +96,20 @@ export default async function AuthorizePage({
   }
 
   const requestedScopes = parseRequestedScopes(scope);
-  const modulesToOffer = (Object.keys(requestedScopes).length > 0 ? (Object.keys(requestedScopes) as Module[]) : ALL_MODULES);
-  // Unqualified request (no scope param at all, or a module scope isn't
-  // writable) — same "read unless asked otherwise" default.
-  for (const m of modulesToOffer) if (!(m in requestedScopes)) requestedScopes[m] = "read";
+  // A client that sent no `scope` at all asked for nothing in particular
+  // — there's nothing to "narrow" below, so the ceiling defaults to
+  // everything, write included, and the human's own consent-screen
+  // choices are the real gate (same UI either way: every module listed
+  // with its own read/write toggle). A client that DID send a scope
+  // string but left a module out of it is a deliberate narrower request
+  // — that still defaults to read-only, same as before. Real client seen
+  // in practice (Grok) sends no scope param at all; without this it got
+  // silently read-only with no way to ask for more.
+  const clientSpecifiedScope = !!scope && scope.trim().length > 0;
+  const modulesToOffer = (clientSpecifiedScope && Object.keys(requestedScopes).length > 0 ? (Object.keys(requestedScopes) as Module[]) : ALL_MODULES);
+  for (const m of modulesToOffer) {
+    if (!(m in requestedScopes)) requestedScopes[m] = clientSpecifiedScope ? "read" : (WRITABLE_MODULES.has(m) ? "write" : "read");
+  }
 
   const requestId = await createAuthorizationRequest({
     clientId: client.id,
@@ -115,7 +125,10 @@ export default async function AuthorizePage({
   });
 
   const redirectHost = new URL(redirectUri).host;
-  const anyWriteRequested = Object.values(requestedScopes).includes("write");
+  // Only describe this as wanting write access when the client actually
+  // asked for it — not when the ceiling merely allows it because the
+  // client specified no scope at all (see defaultLevel below).
+  const anyWriteRequested = clientSpecifiedScope && Object.values(requestedScopes).includes("write");
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12">
@@ -124,6 +137,7 @@ export default async function AuthorizePage({
           <h1 className="text-lg font-semibold">Connect {client.clientName}</h1>
           <p className="text-sm text-[var(--muted-foreground)] mt-1">
             {client.clientName} wants {anyWriteRequested ? "access to" : "read-only access to"} your Sage Studio account.
+            {!clientSpecifiedScope && " It didn't ask for anything specific, so pick what to share below — nothing is granted until you choose."}
             {!client.verified && (
               <span className="block mt-2 text-amber-600">
                 This app is not verified. It will redirect to <span className="font-mono">{redirectHost}</span> after you decide.
@@ -138,6 +152,11 @@ export default async function AuthorizePage({
             key: m,
             label: MODULE_LABELS[m],
             requestedLevel: requestedScopes[m] ?? "read",
+            // When the client explicitly asked for this module/level,
+            // pre-check exactly that (same as before). When it asked for
+            // nothing, the ceiling above still allows write, but nothing
+            // is pre-selected beyond read — see ConsentForm's doc comment.
+            defaultLevel: clientSpecifiedScope ? (requestedScopes[m] ?? "read") : "read",
             writable: WRITABLE_MODULES.has(m),
           }))}
         />

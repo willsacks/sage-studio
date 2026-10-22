@@ -9,7 +9,17 @@ import type { Module, ScopeLevel } from "@/lib/server/auth/principal";
 interface ModuleOption {
   key: Module;
   label: string;
+  /** The ceiling — the most this module could be granted, per what the
+   * client asked for (or, if it asked for nothing at all, every module
+   * up to write). Controls whether the write toggle appears at all. */
   requestedLevel: ScopeLevel;
+  /** What's pre-checked when the screen first loads. Equal to
+   * requestedLevel when the client explicitly asked for this level —
+   * but when the client asked for nothing and the ceiling defaults to
+   * "write" on its behalf, this still starts at "read" (or "none"), so
+   * granting write is always something the user actively opts into
+   * here, never something pre-selected on their behalf. */
+  defaultLevel: ScopeLevel;
   writable: boolean;
 }
 
@@ -20,11 +30,8 @@ export function ConsentForm({
   requestId: string;
   modules: ModuleOption[];
 }) {
-  // Defaults to exactly what was requested — the user can narrow (uncheck,
-  // or downgrade write to read) but never grant more than the client asked
-  // for in the first place.
   const [selected, setSelected] = useState<Record<Module, ScopeLevel>>(
-    Object.fromEntries(modules.map((m) => [m.key, m.requestedLevel])) as Record<Module, ScopeLevel>
+    Object.fromEntries(modules.map((m) => [m.key, m.defaultLevel])) as Record<Module, ScopeLevel>
   );
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -59,11 +66,11 @@ export function ConsentForm({
               <input
                 type="checkbox"
                 checked={selected[m.key] !== "none"}
-                onChange={(e) => setSelected((prev) => ({ ...prev, [m.key]: e.target.checked ? m.requestedLevel : "none" }))}
+                onChange={(e) => setSelected((prev) => ({ ...prev, [m.key]: e.target.checked ? m.defaultLevel : "none" }))}
                 className="h-4 w-4 rounded border-[var(--border)]"
               />
               {m.label}
-              {m.requestedLevel === "write" && <span className="text-xs text-[var(--muted-foreground)]">(view & edit)</span>}
+              {selected[m.key] === "write" && <span className="text-xs text-[var(--muted-foreground)]">(view & edit)</span>}
             </label>
             {m.writable && m.requestedLevel === "write" && selected[m.key] !== "none" && (
               <label className="flex items-center gap-2 text-xs text-[var(--muted-foreground)] cursor-pointer pl-6">
