@@ -13,6 +13,21 @@ function getSigningJwk(): JWK {
 export const ISSUER = process.env.NEXT_PUBLIC_APP_URL ?? "https://sagestudio.org";
 const ACCESS_TOKEN_TTL_SECONDS = 60 * 10;
 
+/** There's exactly one resource server behind this AS, but RFC 8707
+ * doesn't pin down whether its "resource" identifier should be the bare
+ * origin or the specific endpoint URL a client is actually calling — and
+ * real clients disagree in practice (a real-world MCP client was seen
+ * sending the full `/api/mcp` URL as `resource`, which the original
+ * strict `resource === ISSUER` check rejected outright as "invalid
+ * resource", blocking a real connection attempt). Accept any of these
+ * and always normalize internally to ISSUER (see signAccessToken /
+ * verifyAccessToken below) — the token's real audience never varies. */
+export const ACCEPTED_RESOURCES = [ISSUER, `${ISSUER}/api/mcp`, `${ISSUER}/api/v1`];
+
+export function isAcceptedResource(resource: string): boolean {
+  return ACCEPTED_RESOURCES.includes(resource);
+}
+
 export async function getPublicJwks(): Promise<{ keys: JWK[] }> {
   const jwk = getSigningJwk();
   // Strip the private component rather than round-tripping through

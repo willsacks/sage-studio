@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { resolveClientForAuthorize } from "@/lib/server/auth/oauth-clients";
 import { createAuthorizationRequest } from "@/lib/server/auth/oauth-flow";
-import { ISSUER } from "@/lib/server/auth/oauth-jwt";
+import { ISSUER, isAcceptedResource } from "@/lib/server/auth/oauth-jwt";
 import { ALL_MODULES, type Module, type ScopeLevel } from "@/lib/server/auth/principal";
 import { ConsentForm } from "@/components/oauth/ConsentForm";
 
@@ -66,7 +66,7 @@ export default async function AuthorizePage({
   // RFC 8707 resource indicator — there's only one resource server
   // (this app), so reject anything that doesn't name it rather than
   // silently storing an arbitrary client-supplied value.
-  if (resource && resource !== ISSUER) return errorPage("Invalid resource", "This authorization server only issues tokens for Sage Studio's own API.");
+  if (resource && !isAcceptedResource(resource)) return errorPage("Invalid resource", "This authorization server only issues tokens for Sage Studio's own API.");
 
   let client;
   try {
@@ -97,7 +97,11 @@ export default async function AuthorizePage({
     redirectUri,
     state: state ?? null,
     codeChallenge,
-    resource: resource ?? ISSUER,
+    // Normalize to ISSUER regardless of which accepted variant the
+    // client sent (bare origin vs. the MCP/REST endpoint URL) — there's
+    // only one real resource server, and the token's audience must
+    // always match what bearer.ts actually verifies against.
+    resource: ISSUER,
     scopesRequested: modulesToOffer.map((m) => (requestedScopes[m] === "write" ? `${m}:write` : m)),
   });
 

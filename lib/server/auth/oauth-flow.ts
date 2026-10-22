@@ -3,7 +3,7 @@ import { hashAssistantToken } from "@/lib/crypto";
 import { queryPrivileged } from "@/lib/server/db/privileged";
 import { withRlsWrite } from "@/lib/server/db/with-rls";
 import { verifyCodeVerifier } from "@/lib/server/auth/pkce";
-import { signAccessToken, ISSUER } from "@/lib/server/auth/oauth-jwt";
+import { signAccessToken, ISSUER, isAcceptedResource } from "@/lib/server/auth/oauth-jwt";
 import { writeOauthAuditLog } from "@/lib/server/audit/write";
 import { ALL_MODULES, type Module, type ScopeLevel } from "@/lib/server/auth/principal";
 
@@ -175,7 +175,12 @@ export async function exchangeAuthorizationCode(params: {
   if (new Date(row.expires_at as string) < new Date()) return { error: "invalid_grant" };
   if (row.client_id !== params.clientId) return { error: "invalid_grant" };
   if (row.redirect_uri !== params.redirectUri) return { error: "invalid_grant" };
-  if (params.resource && row.resource !== params.resource) return { error: "invalid_target" };
+  // row.resource is always ISSUER (normalized at /oauth/authorize) —
+  // check the client's own param against the accepted set, not against
+  // that stored value, since a client may reasonably use a different
+  // accepted resource string at token-exchange time than it did at
+  // authorize time (e.g. the bare origin vs. the /api/mcp endpoint URL).
+  if (params.resource && !isAcceptedResource(params.resource)) return { error: "invalid_target" };
   if (!verifyCodeVerifier(params.codeVerifier, row.code_challenge as string)) return { error: "invalid_grant" };
 
   await queryPrivileged(`update sage.oauth_authorization_codes set consumed_at = now() where code_hash = $1`, [codeHash]);
@@ -192,7 +197,7 @@ export async function refreshAccessToken(params: { refreshToken: string; clientI
 
   if (row.client_id !== params.clientId) return { error: "invalid_grant" };
   if (new Date(row.expires_at as string) < new Date()) return { error: "invalid_grant" };
-  if (params.resource && params.resource !== ISSUER) return { error: "invalid_target" };
+  if (params.resource && !isAcceptedResource(params.resource)) return { error: "invalid_target" };
 
   if (row.revoked_at || row.rotated_at) {
     // Reuse of an already-rotated/revoked refresh token — treat as theft,
@@ -210,7 +215,10 @@ export async function refreshAccessToken(params: { refreshToken: string; clientI
   await queryPrivileged(`update sage.oauth_refresh_tokens set rotated_at = now(), last_used_at = now() where token_hash = $1`, [hash]);
   await queryPrivileged(`update sage.connected_apps set last_used_at = now() where id = $1`, [row.grant_id]);
 
-  const resource = params.resource ?? (row.resource as string);
+  // Always mint against the one real audience, regardless of which
+  // accepted resource string the client used to ask — see
+  // isAcceptedResource's doc comment in oauth-jwt.ts.
+  const resource = ISSUER;
   return issueTokenPair(row.grant_id as string, grant.user_id as string, row.client_id as string, resource, row.scopes as Partial<Record<Module, ScopeLevel>>, row.family_id as string, "oauth.tokenRefreshed");
 }
 
