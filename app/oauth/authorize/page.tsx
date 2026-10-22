@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { resolveClientForAuthorize } from "@/lib/server/auth/oauth-clients";
 import { createAuthorizationRequest } from "@/lib/server/auth/oauth-flow";
 import { ISSUER, isAcceptedResource } from "@/lib/server/auth/oauth-jwt";
+import { writeOauthAuditLog } from "@/lib/server/audit/write";
 import { ALL_MODULES, type Module, type ScopeLevel } from "@/lib/server/auth/principal";
 import { ConsentForm } from "@/components/oauth/ConsentForm";
 
@@ -65,8 +66,16 @@ export default async function AuthorizePage({
   if (codeChallengeMethod !== "S256") return errorPage("Invalid request", "Only PKCE with S256 is supported.");
   // RFC 8707 resource indicator — there's only one resource server
   // (this app), so reject anything that doesn't name it rather than
-  // silently storing an arbitrary client-supplied value.
-  if (resource && !isAcceptedResource(resource)) return errorPage("Invalid resource", "This authorization server only issues tokens for Sage Studio's own API.");
+  // silently storing an arbitrary client-supplied value. Logged on
+  // rejection (DB, not just stdout — Vercel's log stream only tails
+  // live, so a one-off real-client failure is otherwise unrecoverable
+  // after the fact) so a real client's exact rejected value is visible
+  // without needing to catch it live.
+  if (resource && !isAcceptedResource(resource)) {
+    console.error("[oauth/authorize] rejected resource param:", JSON.stringify(resource), "full query:", JSON.stringify(sp));
+    await writeOauthAuditLog({ operation: "oauth.invalidResourceRejected", status: "denied", clientId: clientId ?? null, errorCode: `resource=${resource}`.slice(0, 250) });
+    return errorPage("Invalid resource", "This authorization server only issues tokens for Sage Studio's own API.");
+  }
 
   let client;
   try {

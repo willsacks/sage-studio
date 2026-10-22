@@ -24,8 +24,13 @@ const ACCESS_TOKEN_TTL_SECONDS = 60 * 10;
  * verifyAccessToken below) — the token's real audience never varies. */
 export const ACCEPTED_RESOURCES = [ISSUER, `${ISSUER}/api/mcp`, `${ISSUER}/api/v1`];
 
+function stripTrailingSlash(s: string): string {
+  return s.endsWith("/") ? s.slice(0, -1) : s;
+}
+
 export function isAcceptedResource(resource: string): boolean {
-  return ACCEPTED_RESOURCES.includes(resource);
+  const normalized = stripTrailingSlash(resource);
+  return ACCEPTED_RESOURCES.some((r) => stripTrailingSlash(r) === normalized);
 }
 
 export async function getPublicJwks(): Promise<{ keys: JWK[] }> {
