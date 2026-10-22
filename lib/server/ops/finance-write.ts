@@ -477,6 +477,103 @@ export const financeImportJournalEntries = defineOperation({
   },
 });
 
+const categorizeSplit = z.object({ accountId: z.string(), amount: z.number().positive(), memo: z.string().optional() });
+
+export const financeCategorizeTransaction = defineOperation({
+  id: "finance.categorizeTransaction",
+  tool: "finance_categorize_transaction",
+  module: "finance",
+  minScope: "write",
+  mutates: true,
+  http: { method: "POST", path: "/finance/entities/:entityId/transactions/:transactionId/categorize" },
+  title: "Categorize or recategorize a transaction",
+  description:
+    "Sets (or replaces) the category/split on an existing transaction — including one that landed in 'Uncategorized Income'/'Uncategorized Expense' because nothing matched it automatically. Pass splits (each a positive amount, summing to abs(the transaction's amount)) for a split/categorized entry, or just categoryAccountId for a single category. For a transfer or card payment to another of your own money accounts, set isTransfer + transferAccountId instead. Call finance_search_transactions (filter status: \"uncategorized\") to find candidates, and finance_list_accounts to get accountId values. Rejected if the entity's books are locked through this transaction's date.",
+  input: z
+    .object({
+      entityId: z.string(),
+      transactionId: z.string(),
+      splits: z.array(categorizeSplit).optional(),
+      categoryAccountId: z.string().optional(),
+      isTransfer: z.boolean().optional(),
+      transferAccountId: z.string().optional(),
+    })
+    .refine((v) => !!v.splits || !!v.categoryAccountId || (v.isTransfer && !!v.transferAccountId), {
+      message: "Provide splits, categoryAccountId, or isTransfer+transferAccountId",
+    }),
+  output: z.object({ success: z.literal(true), journalEntryId: z.string() }),
+  handler: async (ctx, input) => {
+    await requireEditorRole(ctx.db, input.entityId, ctx.principal.userId);
+
+    const { rows } = await ctx.db.query(
+      `select t.id, t.amount, t.date, t.payee_name, t.money_account_id, ba.chart_account_id as bank_chart_account_id
+       from public.transactions t left join public.bank_accounts ba on ba.id = t.bank_account_id
+       where t.id = $1 and t.entity_id = $2`,
+      [input.transactionId, input.entityId]
+    );
+    const txn = rows[0] as
+      | { id: string; amount: string | number; date: string; payee_name: string; money_account_id: string | null; bank_chart_account_id: string | null }
+      | undefined;
+    if (!txn) throw new Error("not_found");
+    const amount = Number(txn.amount);
+    const moneyAccountId = txn.bank_chart_account_id ?? txn.money_account_id;
+    if (!moneyAccountId) throw new OpValidationError("This transaction's account hasn't been mapped to a chart of accounts entry yet");
+
+    async function resolveAccount(accountId: string): Promise<string> {
+      const { rows: acctRows } = await ctx.db.query(
+        `select id from public.chart_of_accounts where id = $1 and entity_id = $2`,
+        [accountId, input.entityId]
+      );
+      if (acctRows.length === 0) throw new Error(`accountId "${accountId}" not found on this entity`);
+      return acctRows[0].id;
+    }
+
+    let splits: { accountId: string; amount: number; memo?: string }[];
+    if (input.isTransfer) {
+      if (!input.transferAccountId) throw new OpValidationError("isTransfer requires transferAccountId");
+      splits = [{ accountId: await resolveAccount(input.transferAccountId), amount: Math.abs(amount) }];
+    } else if (input.splits && input.splits.length > 0) {
+      splits = [];
+      for (const s of input.splits) splits.push({ accountId: await resolveAccount(s.accountId), amount: s.amount, memo: s.memo });
+      const splitTotal = Math.round(splits.reduce((sum, s) => sum + s.amount, 0) * 100) / 100;
+      if (splitTotal !== Math.round(Math.abs(amount) * 100) / 100) {
+        throw new OpValidationError(`splits total (${splitTotal}) doesn't match the transaction amount (${Math.abs(amount)})`);
+      }
+    } else {
+      splits = [{ accountId: await resolveAccount(input.categoryAccountId!), amount: Math.abs(amount) }];
+    }
+
+    const shim = new PgSupabaseShim(ctx.db);
+    await clearExistingJournalEntry(ctx.db, txn.id);
+
+    const posted = await postJournalEntry(shim, {
+      entityId: input.entityId,
+      entryDate: txn.date,
+      description: txn.payee_name,
+      sourceType: "bank_transaction",
+      sourceTransactionId: txn.id,
+      createdBy: ctx.principal.userId,
+      lines: buildTransferOrSplitLines(moneyAccountId, amount, splits),
+    });
+    if ("error" in posted) throw new OpValidationError(posted.error);
+
+    for (const s of splits) {
+      await ctx.db.query(
+        `insert into public.transaction_splits (transaction_id, chart_account_id, amount, memo) values ($1, $2, $3, $4)`,
+        [txn.id, s.accountId, s.amount, s.memo ?? null]
+      );
+    }
+    await ctx.db.query(
+      `update public.transactions set status = 'categorized', is_split = $1, journal_entry_id = $2,
+         needs_review = false, review_note = null, flagged_by = null, flagged_at = null
+       where id = $3`,
+      [splits.length > 1, posted.journalEntryId, txn.id]
+    );
+
+    return { success: true, journalEntryId: posted.journalEntryId } as const;
+  },
+});
+
 export const financeDeleteImport = defineOperation({
   id: "finance.deleteImport",
   tool: "finance_delete_import",
@@ -527,5 +624,6 @@ export const financeWriteOperations = [
   financeImportPayment,
   financeImportTransactions,
   financeImportJournalEntries,
+  financeCategorizeTransaction,
   financeDeleteImport,
 ];

@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/db";
 import { getPlaidClient } from "@/lib/finance/plaid-client";
 import { decryptPlaidToken } from "@/lib/crypto";
-import { reverseJournalEntry } from "@/lib/finance/ledger";
+import { reverseJournalEntry, postToUncategorizedBucket } from "@/lib/finance/ledger";
 import { applyMatchingRule } from "@/lib/finance/categorization-rules";
 
 /** Pulls new/changed/removed transactions for one bank connection via
@@ -67,12 +67,14 @@ export async function syncBankConnection(
           .maybeSingle();
 
         let transactionId: string;
+        let alreadyPosted = false;
         if (existing) {
           await supabase
             .from("transactions")
             .update({ date: txn.date, payee_name: payeeName, amount })
             .eq("id", existing.id);
           transactionId = existing.id;
+          alreadyPosted = !!existing.journal_entry_id;
           modifiedCount++;
         } else {
           const { data: inserted, error: insertError } = await supabase
@@ -93,10 +95,18 @@ export async function syncBankConnection(
           addedCount++;
         }
 
-        // Auto-categorize via the entity's rules, highest priority first —
-        // never left silently uncategorized if a rule already matches.
-        if (bankAccount.chart_account_id) {
-          await applyMatchingRule(supabase, {
+        // Auto-categorize via the entity's rules, highest priority first.
+        // If none match, still post to the Uncategorized Income/Expense
+        // fallback rather than leaving it off the ledger entirely — a
+        // transaction with no journal entry is invisible to every report
+        // (lib/finance/reports.ts reads only journal_entry_lines), which
+        // silently hid real incoming money for a real user. Status stays
+        // "uncategorized" either way, so it still surfaces for review.
+        // Skipped entirely for an already-posted existing transaction —
+        // a mere amount/date touch-up from Plaid shouldn't repost (and
+        // potentially double-count) an entry that's already on the ledger.
+        if (bankAccount.chart_account_id && !alreadyPosted) {
+          const matched = await applyMatchingRule(supabase, {
             entityId: bankAccount.entity_id,
             transactionId,
             moneyAccountId: bankAccount.chart_account_id,
@@ -105,6 +115,17 @@ export async function syncBankConnection(
             date: txn.date,
             createdBy: connection.owner_id,
           });
+          if (!matched) {
+            await postToUncategorizedBucket(supabase, {
+              entityId: bankAccount.entity_id,
+              transactionId,
+              moneyAccountId: bankAccount.chart_account_id,
+              amount,
+              date: txn.date,
+              payeeName,
+              createdBy: connection.owner_id,
+            });
+          }
         }
       }
 

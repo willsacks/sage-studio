@@ -93,12 +93,13 @@ export const financeSearchTransactions = defineOperation({
   minScope: "read",
   http: { method: "GET", path: "/finance/entities/:entityId/transactions" },
   title: "Search an entity's transactions",
-  description: "Search one finance entity's transactions by payee text and/or date range.",
+  description: "Search one finance entity's transactions by payee text, date range, and/or status. Filter status: \"uncategorized\" to find the review backlog (transactions that landed in Uncategorized Income/Expense because nothing matched them automatically) — pass each result's id to finance_categorize_transaction to fix it.",
   input: z.object({
     entityId: z.string(),
     text: z.string().max(200).optional(),
     startDate: z.string().optional(),
     endDate: z.string().optional(),
+    status: z.enum(["uncategorized", "categorized", "excluded"]).optional(),
     limit: Limit,
   }),
   output: Page(transactionSummary),
@@ -117,6 +118,10 @@ export const financeSearchTransactions = defineOperation({
     if (input.endDate) {
       params.push(input.endDate);
       where += ` and date <= $${params.length}`;
+    }
+    if (input.status) {
+      params.push(input.status);
+      where += ` and status = $${params.length}`;
     }
     params.push(input.limit);
     const { rows } = await ctx.db.query(

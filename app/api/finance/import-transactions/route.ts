@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireFinanceEntityRole } from "@/lib/access/finance-access";
 import { parseTransactionsCsv } from "@/lib/finance/csv-import";
 import { applyMatchingRule } from "@/lib/finance/categorization-rules";
+import { postToUncategorizedBucket } from "@/lib/finance/ledger";
 import { MONEY_ACCOUNT_SUBTYPES } from "@/lib/finance/default-accounts";
 
 // Route Handler rather than a Server Action — a CSV of a few thousand rows
@@ -73,7 +74,10 @@ export async function POST(request: NextRequest) {
   // Auto-categorize against any existing rules (Bank Accounts tab) rather
   // than always leaving CSV-imported rows uncategorized regardless of
   // rules the user already set up — matches what Plaid-synced transactions
-  // already get (lib/finance/plaid-sync.ts).
+  // already get (lib/finance/plaid-sync.ts). When nothing matches, still
+  // post to the Uncategorized Income/Expense fallback so the row isn't
+  // invisible to every report (which read only journal_entry_lines) —
+  // it stays flagged status:"uncategorized" for review either way.
   let autoCategorized = 0;
   for (const t of inserted) {
     const matched = await applyMatchingRule(supabase, {
@@ -85,7 +89,19 @@ export async function POST(request: NextRequest) {
       date: t.date,
       createdBy: user.id,
     });
-    if (matched) autoCategorized++;
+    if (matched) {
+      autoCategorized++;
+    } else {
+      await postToUncategorizedBucket(supabase, {
+        entityId,
+        transactionId: t.id,
+        moneyAccountId,
+        amount: t.amount,
+        date: t.date,
+        payeeName: t.payee_name,
+        createdBy: user.id,
+      });
+    }
   }
 
   return NextResponse.json({ imported: inserted.length, skipped, errors, autoCategorized });

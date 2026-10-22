@@ -185,6 +185,66 @@ export async function postImportedTransaction(
   return { transactionId: txn.id as string, journalEntryId: posted.journalEntryId };
 }
 
+/**
+ * Posts a transaction that arrived with no matching categorization rule
+ * (Plaid sync, CSV import) to the entity's "Uncategorized Income"/
+ * "Uncategorized Expense" fallback account instead of leaving it with no
+ * journal entry at all. Every report (lib/finance/reports.ts) reads only
+ * journal_entry_lines, so an unposted transaction was previously invisible
+ * everywhere — including the cash balance itself, not just the P&L —
+ * which is exactly how real incoming money (Zelle/Venmo/a deposit) went
+ * missing for a real user. Deliberately does NOT mark the transaction
+ * "categorized" — it stays "uncategorized" so the review queues
+ * (applyRuleToExistingTransactions, the Finance UI's review list) still
+ * surface it; only its presence on the ledger changes. Recategorizing
+ * later reverses this entry exactly like reversing any other
+ * (categorizeTransaction already handles that — it doesn't care whether
+ * the prior entry was a real category or this fallback one).
+ */
+export async function postToUncategorizedBucket(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: SupabaseClient<Database> | any,
+  input: {
+    entityId: string;
+    transactionId: string;
+    moneyAccountId: string;
+    amount: number;
+    date: string;
+    payeeName: string;
+    createdBy: string;
+  }
+): Promise<{ journalEntryId: string } | { error: string }> {
+  const bucketName = input.amount >= 0 ? "Uncategorized Income" : "Uncategorized Expense";
+  const { data: bucket } = await supabase
+    .from("chart_of_accounts")
+    .select("id")
+    .eq("entity_id", input.entityId)
+    .eq("name", bucketName)
+    .eq("is_default", true)
+    .maybeSingle();
+  if (!bucket) return { error: `${bucketName} account not found on this entity` };
+
+  const posted = await postJournalEntry(supabase, {
+    entityId: input.entityId,
+    entryDate: input.date,
+    description: input.payeeName,
+    sourceType: "bank_transaction",
+    sourceTransactionId: input.transactionId,
+    createdBy: input.createdBy,
+    lines: buildJournalLines(input.moneyAccountId, input.amount, [{ accountId: bucket.id, amount: Math.abs(input.amount) }]),
+  });
+  if ("error" in posted) return posted;
+
+  const { error: splitError } = await supabase
+    .from("transaction_splits")
+    .insert({ transaction_id: input.transactionId, chart_account_id: bucket.id, amount: Math.abs(input.amount) });
+  if (splitError) return { error: splitError.message };
+
+  await supabase.from("transactions").update({ journal_entry_id: posted.journalEntryId }).eq("id", input.transactionId);
+
+  return posted;
+}
+
 /** Reverses a journal entry by posting an equal-and-opposite entry, rather
  * than deleting it — preserves history and keeps is_locked entries auditable
  * even after their underlying transaction is re-categorized. */
