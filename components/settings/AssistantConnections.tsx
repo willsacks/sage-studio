@@ -223,7 +223,7 @@ export function AssistantConnections({ initialConnections }: { initialConnection
                         />
                         <span>
                           <span className="font-medium">{MODULE_INFO[m].label}</span>
-                          <span className="text-[var(--muted-foreground)]"> — {level === "write" ? MODULE_INFO[m].writeHint : MODULE_INFO[m].readHint}</span>
+                          <span className="text-[var(--muted-foreground)]"> — {MODULE_INFO[m].readHint}</span>
                         </span>
                       </label>
                       {canWrite && level !== "none" && (

@@ -70,7 +70,6 @@ export function ConsentForm({
                 className="h-4 w-4 rounded border-[var(--border)]"
               />
               {m.label}
-              {selected[m.key] === "write" && <span className="text-xs text-[var(--muted-foreground)]">(view & edit)</span>}
             </label>
             {m.writable && m.requestedLevel === "write" && selected[m.key] !== "none" && (
               <label className="flex items-center gap-2 text-xs text-[var(--muted-foreground)] cursor-pointer pl-6">
