@@ -17,6 +17,12 @@ export type PostJournalEntryInput = {
   sourceTransactionId?: string;
   createdBy: string;
   lines: JournalLineInput[];
+  /** Source system's own id for a "pure" journal entry not backed by a
+   * transactions row (accruals, depreciation, opening balances) — set
+   * only by the journal-entry importer, so a re-run can recognize and
+   * update rather than duplicate it. Unique per (entity_id, external_id). */
+  externalId?: string;
+  source?: string;
 };
 
 function round2(n: number): number {
@@ -74,6 +80,7 @@ export async function postJournalEntry(
       source_type: input.sourceType,
       source_transaction_id: input.sourceTransactionId ?? null,
       created_by: input.createdBy,
+      ...(input.externalId ? { external_id: input.externalId, source: input.source ?? null } : {}),
     })
     .select("id")
     .single();
@@ -120,6 +127,14 @@ export async function postImportedTransaction(
     splits: SplitInput[];
     createdBy: string;
     sourceType?: "manual" | "bank_transaction" | "import";
+    /** Source system's own id (e.g. a QuickBooks transaction id) — set
+     * only by the transaction/journal-entry importer, so a re-run can
+     * recognize and skip what it already posted instead of duplicating
+     * it. Unique per (entity_id, external_id) at the DB level. */
+    externalId?: string;
+    source?: string;
+    notes?: string;
+    clearedAt?: string | null;
   }
 ): Promise<{ transactionId: string; journalEntryId: string } | { error: string }> {
   const { data: txn, error: txnError } = await supabase
@@ -132,6 +147,9 @@ export async function postImportedTransaction(
       amount: input.amount,
       status: "categorized",
       is_split: input.splits.length > 1,
+      ...(input.externalId ? { external_id: input.externalId, source: input.source ?? null } : {}),
+      ...(input.notes !== undefined ? { notes: input.notes } : {}),
+      ...(input.clearedAt !== undefined ? { cleared_at: input.clearedAt } : {}),
     })
     .select("id")
     .single();

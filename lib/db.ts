@@ -859,6 +859,8 @@ export type Database = {
           source_transaction_id: string | null;
           created_by: string;
           is_locked: boolean;
+          external_id: string | null;
+          source: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -871,6 +873,8 @@ export type Database = {
           source_transaction_id?: string | null;
           created_by: string;
           is_locked?: boolean;
+          external_id?: string | null;
+          source?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -883,6 +887,8 @@ export type Database = {
           source_transaction_id?: string | null;
           created_by?: string;
           is_locked?: boolean;
+          external_id?: string | null;
+          source?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1076,6 +1082,8 @@ export type Database = {
           flagged_by: string | null;
           flagged_at: string | null;
           money_account_id: string | null;
+          external_id: string | null;
+          source: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -1098,6 +1106,8 @@ export type Database = {
           flagged_by?: string | null;
           flagged_at?: string | null;
           money_account_id?: string | null;
+          external_id?: string | null;
+          source?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1120,6 +1130,8 @@ export type Database = {
           flagged_by?: string | null;
           flagged_at?: string | null;
           money_account_id?: string | null;
+          external_id?: string | null;
+          source?: string | null;
           created_at?: string;
           updated_at?: string;
         };

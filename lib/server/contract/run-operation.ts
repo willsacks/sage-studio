@@ -2,7 +2,7 @@ import { z } from "zod";
 import { withRls, withRlsWrite } from "@/lib/server/db/with-rls";
 import { hasScope, type Principal } from "@/lib/server/auth/principal";
 import { writeAuditLog } from "@/lib/server/audit/write";
-import type { AnyOperation } from "@/lib/server/contract/operation";
+import { OpValidationError, type AnyOperation } from "@/lib/server/contract/operation";
 
 export interface OpError {
   error: { code: string; message: string; request_id: string };
@@ -45,6 +45,10 @@ export async function runOperation(op: AnyOperation, principal: Principal, rawIn
     await writeAuditLog({ requestId, principal, operation: op.id, tool: op.tool, module: op.module, status: "ok", latencyMs: Date.now() - start });
     return { data: parsed };
   } catch (err) {
+    if (err instanceof OpValidationError) {
+      await writeAuditLog({ requestId, principal, operation: op.id, tool: op.tool, module: op.module, status: "error", errorCode: "invalid_input", latencyMs: Date.now() - start });
+      return { error: { code: "invalid_input", message: err.message, request_id: requestId } };
+    }
     const message = err instanceof Error ? err.message : "internal";
     const KNOWN_MESSAGES: Record<string, { code: string; publicMessage: string }> = {
       not_found: { code: "not_found", publicMessage: "Not found" },

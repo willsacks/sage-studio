@@ -33,6 +33,15 @@ export interface Operation<I extends z.ZodType = z.ZodType, O extends z.ZodType 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyOperation = Operation<any, any>;
 
+/** Throw this from a handler for a business-rule rejection whose message
+ * is meant to reach the caller verbatim (books locked through a date,
+ * split amounts don't sum to the transaction total, an unbalanced
+ * journal entry) — run-operation.ts maps it to a real 400/invalid_input
+ * with this exact message, unlike a plain `Error`, which always
+ * collapses to a generic "something went wrong" so unexpected internal
+ * errors never leak implementation details to an external caller. */
+export class OpValidationError extends Error {}
+
 /** Identity helper so each op file can write `defineOperation({ ... })`
  * and get full input/output type inference in its own `handler`, while
  * still being assignable to AnyOperation in the registry — annotating
