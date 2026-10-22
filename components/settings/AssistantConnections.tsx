@@ -19,22 +19,11 @@ import {
   revokeAssistantConnection,
   type ConnectionRow,
 } from "@/lib/actions/assistant-connections";
+import { MODULE_DISPLAY, MODULE_DISPLAY_ORDER } from "@/lib/module-display";
 import type { Module, ScopeLevel } from "@/lib/server/auth/principal";
 
-const MODULE_INFO: Record<Module, { label: string; readHint: string; writeHint: string }> = {
-  todos: { label: "To-dos", readHint: "see your to-do list", writeHint: "add and update items" },
-  knowledge: { label: "Knowledge base", readHint: "search and read articles", writeHint: "create and edit articles" },
-  time_tracking: { label: "Time tracking", readHint: "see tracked time entries", writeHint: "start and stop the timer" },
-  sites: { label: "Websites", readHint: "see your site pages", writeHint: "edit page content" },
-  finance: { label: "Finance", readHint: "see transactions, accounts, and reports", writeHint: "import accounts, customers, invoices, and payments" },
-  courses: { label: "Courses", readHint: "see your courses and enrollment counts", writeHint: "create courses and add free enrollments" },
-};
-
-const MODULE_ORDER: Module[] = ["todos", "knowledge", "time_tracking", "sites", "finance", "courses"];
-const WRITABLE_MODULES = new Set<Module>(["todos", "knowledge", "time_tracking", "sites", "finance", "courses"]);
-
 function emptyScopes(): Record<Module, ScopeLevel> {
-  return Object.fromEntries(MODULE_ORDER.map((m) => [m, "none"])) as Record<Module, ScopeLevel>;
+  return Object.fromEntries(MODULE_DISPLAY_ORDER.map((m) => [m, "none"])) as Record<Module, ScopeLevel>;
 }
 
 function CopyField({ value, mono = true }: { value: string; mono?: boolean }) {
@@ -87,7 +76,7 @@ export function AssistantConnections({ initialConnections }: { initialConnection
   function handleCreate() {
     setError(null);
     const scopes: Partial<Record<Module, ScopeLevel>> = {};
-    for (const m of MODULE_ORDER) {
+    for (const m of MODULE_DISPLAY_ORDER) {
       if (selected[m] !== "none") scopes[m] = selected[m];
     }
     startCreating(async () => {
@@ -158,14 +147,14 @@ export function AssistantConnections({ initialConnections }: { initialConnection
         ) : (
           <div className="divide-y divide-[var(--border)] rounded-lg border border-[var(--border)]">
             {connections.map((c) => {
-              const grantedModules = MODULE_ORDER.filter((m) => (c.scopes[m] ?? "none") !== "none");
+              const grantedModules = MODULE_DISPLAY_ORDER.filter((m) => (c.scopes[m] ?? "none") !== "none");
               return (
                 <div key={c.id} className="flex items-center justify-between gap-3 px-4 py-3">
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{c.displayName}</p>
                     <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
                       {grantedModules.length > 0
-                        ? grantedModules.map((m) => `${MODULE_INFO[m].label}${c.scopes[m] === "write" ? " (view & edit)" : ""}`).join(", ")
+                        ? grantedModules.map((m) => `${MODULE_DISPLAY[m].label}${c.scopes[m] === "write" ? " (view & edit)" : ""}`).join(", ")
                         : "No access"}
                       {c.status !== "active" && <span className="ml-2 text-red-500">Revoked</span>}
                     </p>
@@ -193,7 +182,7 @@ export function AssistantConnections({ initialConnections }: { initialConnection
           <DialogHeader>
             <DialogTitle>Create an API key</DialogTitle>
             <DialogDescription>
-              Choose what this assistant can see, and — for a few modules — whether it can also make changes, not just look.
+              For each section, choose whether this assistant can view it, edit it, or neither.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -208,35 +197,36 @@ export function AssistantConnections({ initialConnections }: { initialConnection
             </div>
             <div className="space-y-1.5">
               <Label>What can it do?</Label>
-              <div className="space-y-3">
-                {MODULE_ORDER.map((m) => {
-                  const canWrite = WRITABLE_MODULES.has(m);
+              <div className="divide-y divide-[var(--border)]">
+                {MODULE_DISPLAY_ORDER.map((m) => {
+                  const { label, icon: Icon } = MODULE_DISPLAY[m];
                   const level = selected[m];
                   return (
-                    <div key={m} className="space-y-1">
-                      <label className="flex items-start gap-2 text-sm cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={level !== "none"}
-                          onChange={(e) => setSelected((prev) => ({ ...prev, [m]: e.target.checked ? "read" : "none" }))}
-                          className="h-4 w-4 rounded border-[var(--border)] mt-0.5"
-                        />
-                        <span>
-                          <span className="font-medium">{MODULE_INFO[m].label}</span>
-                          <span className="text-[var(--muted-foreground)]"> — {MODULE_INFO[m].readHint}</span>
-                        </span>
-                      </label>
-                      {canWrite && level !== "none" && (
-                        <label className="flex items-center gap-2 text-xs text-[var(--muted-foreground)] cursor-pointer pl-6">
+                    <div key={m} className="py-2.5 first:pt-0 last:pb-0">
+                      <div className="flex items-center gap-2 text-sm font-medium mb-1.5">
+                        <Icon size={15} className="text-[var(--muted-foreground)]" />
+                        {label}
+                      </div>
+                      <div className="flex items-center gap-5 pl-[23px]">
+                        <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={level !== "none"}
+                            onChange={(e) => setSelected((prev) => ({ ...prev, [m]: e.target.checked ? "read" : "none" }))}
+                            className="h-4 w-4 rounded border-[var(--border)]"
+                          />
+                          View
+                        </label>
+                        <label className="flex items-center gap-1.5 text-sm cursor-pointer">
                           <input
                             type="checkbox"
                             checked={level === "write"}
                             onChange={(e) => setSelected((prev) => ({ ...prev, [m]: e.target.checked ? "write" : "read" }))}
-                            className="h-3.5 w-3.5 rounded border-[var(--border)]"
+                            className="h-4 w-4 rounded border-[var(--border)]"
                           />
-                          Also let it make changes ({MODULE_INFO[m].writeHint})
+                          Edit
                         </label>
-                      )}
+                      </div>
                     </div>
                   );
                 })}

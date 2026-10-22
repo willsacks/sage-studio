@@ -7,28 +7,16 @@ import { writeOauthAuditLog } from "@/lib/server/audit/write";
 import { ALL_MODULES, type Module, type ScopeLevel } from "@/lib/server/auth/principal";
 import { ConsentForm } from "@/components/oauth/ConsentForm";
 
-const MODULE_LABELS: Record<Module, string> = {
-  todos: "To-dos",
-  knowledge: "Knowledge base",
-  time_tracking: "Time tracking",
-  sites: "Websites",
-  finance: "Finance",
-  courses: "Courses",
-};
-
-const WRITABLE_MODULES = new Set<Module>(["todos", "knowledge", "time_tracking", "sites", "finance", "courses"]);
-
 /** Parses an OAuth `scope` string into per-module levels. Each token is
  * either a bare module name (defaults to "read") or "module:write" — a
  * client can only ever be offered what it explicitly asked for, never
- * more, so an unparseable/unwritable combination just falls back to read. */
+ * more, so an unparseable module is just dropped. */
 function parseRequestedScopes(scope: string | undefined): Partial<Record<Module, ScopeLevel>> {
   const result: Partial<Record<Module, ScopeLevel>> = {};
   for (const token of (scope ?? "").split(/\s+/).filter(Boolean)) {
     const [name, level] = token.split(":");
     if (!ALL_MODULES.includes(name as Module)) continue;
-    const module = name as Module;
-    result[module] = level === "write" && WRITABLE_MODULES.has(module) ? "write" : "read";
+    result[name as Module] = level === "write" ? "write" : "read";
   }
   return result;
 }
@@ -108,7 +96,7 @@ export default async function AuthorizePage({
   const clientSpecifiedScope = !!scope && scope.trim().length > 0;
   const modulesToOffer = (clientSpecifiedScope && Object.keys(requestedScopes).length > 0 ? (Object.keys(requestedScopes) as Module[]) : ALL_MODULES);
   for (const m of modulesToOffer) {
-    if (!(m in requestedScopes)) requestedScopes[m] = clientSpecifiedScope ? "read" : (WRITABLE_MODULES.has(m) ? "write" : "read");
+    if (!(m in requestedScopes)) requestedScopes[m] = clientSpecifiedScope ? "read" : "write";
   }
 
   const requestId = await createAuthorizationRequest({
@@ -150,14 +138,12 @@ export default async function AuthorizePage({
           requestId={requestId}
           modules={modulesToOffer.map((m) => ({
             key: m,
-            label: MODULE_LABELS[m],
             requestedLevel: requestedScopes[m] ?? "read",
             // When the client explicitly asked for this module/level,
             // pre-check exactly that (same as before). When it asked for
             // nothing, the ceiling above still allows write, but nothing
             // is pre-selected beyond read — see ConsentForm's doc comment.
             defaultLevel: clientSpecifiedScope ? (requestedScopes[m] ?? "read") : "read",
-            writable: WRITABLE_MODULES.has(m),
           }))}
         />
 
