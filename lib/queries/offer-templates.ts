@@ -5,10 +5,6 @@ import type { PageData, PageTheme } from "@/lib/types/builder";
 export type OfferTemplate = Tables<"offer_templates"> & {
   page_data: PageData;
   theme: PageTheme | null;
-  template_key?: string | null;
-  thumbnail_url?: string | null;
-  name: string; // alias for title — components reference .name
-  is_promoted?: boolean; // alias for promoted
 };
 
 export async function getMyTemplates(): Promise<OfferTemplate[]> {
@@ -26,7 +22,21 @@ export async function getMyTemplates(): Promise<OfferTemplate[]> {
   return (data ?? []) as unknown as OfferTemplate[];
 }
 
-// Stub — platform templates not used in Sage Studio
+/** Sage-Studio-maintained templates shared with every user — this table
+ * is shared with creatorscircle.art (lib/db.ts's own top-of-file note),
+ * which already seeded a library of these (book/album/concert/course/
+ * etc. launch pages). getPlatformTemplates() previously returned a
+ * hardcoded [] and the site-page editor never called it at all
+ * (app/(builder)/my-site/[siteId]/pages/[pageId]/edit/page.tsx hardcoded
+ * empty arrays instead) — so none of that existing library, including
+ * the "Online Course" template, ever reached a Sage Studio site page. */
 export async function getPlatformTemplates(): Promise<OfferTemplate[]> {
-  return [];
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("offer_templates")
+    .select("*")
+    .eq("owner_type", "platform")
+    .order("use_count", { ascending: false });
+
+  return (data ?? []) as unknown as OfferTemplate[];
 }

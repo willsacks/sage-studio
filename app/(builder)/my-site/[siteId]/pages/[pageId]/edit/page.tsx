@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getSiteById, getSitePageById, getPagesForSite } from "@/lib/queries/sites";
 import { getCoursesForOwner } from "@/lib/queries/courses";
+import { getPlatformTemplates, getMyTemplates } from "@/lib/queries/offer-templates";
 import { SitePageBuilder } from "@/components/site/SitePageBuilder";
 import { isPlatformStaff } from "@/lib/access/platform-access";
 import { HtmlPageEditor } from "@/components/site/HtmlPageEditor";
@@ -25,13 +26,12 @@ export default async function SitePageEditPage({
     .single();
   const aiEnabled = profile?.ai_assistant_enabled ?? false;
 
-  const platformTemplates: never[] = [];
-  const personalTemplates: never[] = [];
-
-  const [site, page, allPages] = await Promise.all([
+  const [site, page, allPages, platformTemplates, personalTemplates] = await Promise.all([
     getSiteById(siteId),
     getSitePageById(pageId),
     getPagesForSite(siteId),
+    getPlatformTemplates(),
+    getMyTemplates(),
   ]);
 
   if (!site) notFound();

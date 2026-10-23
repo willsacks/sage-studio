@@ -183,7 +183,7 @@ export default async function MySitesPage() {
                 </div>
                 <div className="p-4 space-y-3">
                   <div>
-                    <p className="font-semibold leading-tight">{t.title}</p>
+                    <p className="font-semibold leading-tight">{t.name}</p>
                     {t.description && (
                       <p className="text-xs text-[var(--muted-foreground)] mt-0.5 line-clamp-2">{t.description}</p>
                     )}

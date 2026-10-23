@@ -30,7 +30,7 @@ export async function saveAsTemplate(
   const { error } = await supabase.from("offer_templates").insert({
     owner_id: user.id,
     owner_type: "member",
-    title: name,
+    name,
     description: description ?? null,
     page_data: page.page_data,
     theme: page.theme,
