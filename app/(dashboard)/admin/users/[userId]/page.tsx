@@ -8,6 +8,7 @@ import { canViewUserAccounts, canManagePlatform, isPlatformAdmin } from "@/lib/a
 import { getUserDetail } from "@/lib/queries/admin";
 import { RoleSelector, AiAccessToggles } from "@/components/admin/UserDetailControls";
 import { DiscountForm } from "@/components/admin/DiscountForm";
+import { CourseFeeForm } from "@/components/admin/CourseFeeForm";
 
 export async function generateMetadata({ params }: { params: Promise<{ userId: string }> }): Promise<Metadata> {
   const { userId } = await params;
@@ -63,6 +64,12 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
           <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
             <span className="text-sm text-[var(--muted-foreground)]">Subscription discount</span>
             <DiscountForm userId={detail.id} currentPercent={detail.activeDiscountPercent} />
+          </div>
+        )}
+        {canManage && (
+          <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
+            <span className="text-sm text-[var(--muted-foreground)]">Course sales fee</span>
+            <CourseFeeForm userId={detail.id} currentBps={detail.coursePlatformFeeBps} />
           </div>
         )}
       </div>

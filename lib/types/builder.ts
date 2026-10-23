@@ -17,7 +17,8 @@ export type BlockType =
   | "album_showcase"
   | "discography"
   | "simple_form"
-  | "email_gate";
+  | "email_gate"
+  | "course_enroll";
 
 export type SocialPlatform =
   | "instagram"
@@ -300,6 +301,19 @@ export interface EmailGateBlockData {
   rememberUnlock?: boolean; // default true — skip re-gating via localStorage
 }
 
+export interface CourseEnrollBlockData {
+  courseId?: string;
+  /** Snapshotted at insert time so the block renders correctly even if
+   * the course is later renamed or repriced — re-synced via "Refresh
+   * from course" in the settings panel rather than live-fetched on every
+   * render, same reasoning a cached price tag beats a live price lookup
+   * for a block that's mostly viewed by logged-out visitors. */
+  courseTitle?: string;
+  priceCents?: number | null;
+  description?: string;
+  buttonText?: string;
+}
+
 export type BlockData =
   | HeroBlockData
   | TextBlockData
@@ -319,7 +333,8 @@ export type BlockData =
   | AlbumShowcaseBlockData
   | DiscographyBlockData
   | SimpleFormBlockData
-  | EmailGateBlockData;
+  | EmailGateBlockData
+  | CourseEnrollBlockData;
 
 export interface Block {
   id: string;
@@ -368,6 +383,7 @@ export const BLOCK_FIELD_KEYS: Record<BlockType, string[]> = {
   discography: ["heading", "subheading", "columns", "releases"],
   simple_form: ["heading", "subheading", "fields", "submitText", "successMessage", "notificationEmail"],
   email_gate: ["title", "description", "buttonText", "filePath", "fileName", "successHeading", "successMessage", "downloadButtonText", "rememberUnlock"],
+  course_enroll: ["courseId", "courseTitle", "priceCents", "description", "buttonText"],
 };
 
 export const BLOCK_LABELS: Record<BlockType, string> = {
@@ -390,6 +406,7 @@ export const BLOCK_LABELS: Record<BlockType, string> = {
   discography: "Discography",
   simple_form: "Simple Form",
   email_gate: "Email Gate",
+  course_enroll: "Course Enrollment",
 };
 
 /** A readable name for a block in the AI-assistant selection chip — the type
@@ -564,6 +581,10 @@ export function createBlock(type: BlockType): Block {
       downloadButtonText: "Download Now",
       rememberUnlock: true,
     } as EmailGateBlockData,
+    course_enroll: {
+      description: "Get full access to the course material.",
+      buttonText: "Enroll Now",
+    } as CourseEnrollBlockData,
   };
   return { id, type, data: defaults[type] };
 }

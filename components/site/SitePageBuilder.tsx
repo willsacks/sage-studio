@@ -3,6 +3,7 @@
 import { Builder } from "@/components/offer-builder/Builder";
 import { saveSitePage } from "@/lib/actions/sites";
 import type { SitePage, ArtistSite } from "@/lib/queries/sites";
+import type { SiteCourseRef } from "@/lib/store/builder";
 import type { OfferTemplate } from "@/lib/queries/offer-templates";
 import type { OfferPage } from "@/lib/queries/offer-pages";
 import type { PageData, PageTheme } from "@/lib/types/builder";
@@ -17,9 +18,10 @@ interface SitePageBuilderProps {
   isAdmin: boolean;
   aiEnabled?: boolean;
   templates: { platform: OfferTemplate[]; personal: OfferTemplate[]; promoted: OfferTemplate[] };
+  courses: SiteCourseRef[];
 }
 
-export function SitePageBuilder({ page, site, allPages, username, isAdmin, aiEnabled = false, templates }: SitePageBuilderProps) {
+export function SitePageBuilder({ page, site, allPages, username, isAdmin, aiEnabled = false, templates, courses }: SitePageBuilderProps) {
   const asOfferPage = {
     ...page,
     owner_id: page.user_id,
@@ -73,6 +75,7 @@ export function SitePageBuilder({ page, site, allPages, username, isAdmin, aiEna
   const siteContext = {
     siteSlug: site.slug,
     pages: allPages.map((p) => ({ id: p.id, title: p.title, slug: p.slug })),
+    courses,
   };
 
   return (

@@ -105,7 +105,7 @@ export async function createInvoice(params: {
   return { invoiceId: invoice.id as string };
 }
 
-export async function setInvoiceStatus(invoiceId: string, entityId: string, status: "sent" | "void") {
+export async function setInvoiceStatus(invoiceId: string, entityId: string, status: "sent" | "void" | "paid") {
   const { supabase, user } = await requireAuth();
   await requireFinanceEntityRole(supabase, entityId, user.id, "editor");
 
@@ -117,7 +117,7 @@ export async function setInvoiceStatus(invoiceId: string, entityId: string, stat
     await supabase.from("time_entries").update({ invoice_id: null }).eq("invoice_id", invoiceId);
   }
 
-  await logFinanceAudit(supabase, { entityId, actorId: user.id, action: status === "void" ? "invoice.voided" : "invoice.sent", targetTable: "invoices", targetId: invoiceId });
+  await logFinanceAudit(supabase, { entityId, actorId: user.id, action: status === "void" ? "invoice.voided" : status === "paid" ? "invoice.paid" : "invoice.sent", targetTable: "invoices", targetId: invoiceId });
   revalidatePath("/finances");
   revalidatePath("/tasks");
   return { success: true };

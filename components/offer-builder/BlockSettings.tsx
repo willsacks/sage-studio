@@ -8,7 +8,7 @@ import type {
   CTABannerBlockData, VideoEmbedBlockData, SpacerBlockData, DividerBlockData,
   CornerNavBlockData, SocialPlatform, ApplicationFormBlockData, FormField, FormFieldType,
   MusicEmbedBlockData, AlbumShowcaseBlockData, DiscographyBlockData, MusicPlatform,
-  SimpleFormBlockData, EmailGateBlockData,
+  SimpleFormBlockData, EmailGateBlockData, CourseEnrollBlockData,
 } from "@/lib/types/builder";
 import { useState } from "react";
 import { X, Plus, Trash2 } from "lucide-react";
@@ -1183,6 +1183,53 @@ function DiscographySettings({ data, update }: { data: DiscographyBlockData; upd
   );
 }
 
+/** Mirrors the Corner Nav page-link dropdown's pattern (siteContext read
+ * via useBuilderStore, see that block's settings above) but for the
+ * creator's own published, priced courses instead of site pages — the
+ * first block settings panel needing that kind of picker for courses. */
+function CourseEnrollSettings({ data, update }: { data: CourseEnrollBlockData; update: (d: Partial<CourseEnrollBlockData>) => void }) {
+  const siteContext = useBuilderStore((s) => s.siteContext);
+  const courses = siteContext?.courses ?? [];
+
+  function handleSelect(courseId: string) {
+    if (!courseId) {
+      update({ courseId: undefined, courseTitle: undefined, priceCents: undefined });
+      return;
+    }
+    const course = courses.find((c) => c.id === courseId);
+    update({ courseId, courseTitle: course?.title, priceCents: course?.priceCents ?? null });
+  }
+
+  return (
+    <div className="space-y-4">
+      <Field label="Course">
+        {courses.length === 0 ? (
+          <p className="text-xs text-[var(--muted-foreground)]">
+            No published, priced courses yet — set a price and publish a course first (Courses tab).
+          </p>
+        ) : (
+          <select
+            value={data.courseId ?? ""}
+            onChange={(e) => handleSelect(e.target.value)}
+            className="w-full px-3 py-2 text-sm rounded-md border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)]"
+          >
+            <option value="">— choose a course —</option>
+            {courses.map((c) => (
+              <option key={c.id} value={c.id}>{c.title}</option>
+            ))}
+          </select>
+        )}
+      </Field>
+      <Field label="Description">
+        <Textarea value={data.description ?? ""} onChange={(v) => update({ description: v })} placeholder="Get full access to the course material." />
+      </Field>
+      <Field label="Button text">
+        <Input value={data.buttonText ?? ""} onChange={(v) => update({ buttonText: v })} placeholder="Enroll Now" />
+      </Field>
+    </div>
+  );
+}
+
 export function BlockSettings() {
   const selectedBlockId = useBuilderStore((s) => s.selectedBlockId);
   const blocks = useBuilderStore((s) => s.blocks);
@@ -1379,6 +1426,7 @@ export function BlockSettings() {
         {block.type === "discography" && <DiscographySettings data={block.data as DiscographyBlockData} update={update} />}
         {block.type === "simple_form" && <SimpleFormSettings data={block.data as SimpleFormBlockData} update={update} />}
         {block.type === "email_gate" && <EmailGateSettings data={block.data as EmailGateBlockData} update={update} />}
+        {block.type === "course_enroll" && <CourseEnrollSettings data={block.data as CourseEnrollBlockData} update={update} />}
       </div>
     </div>
   );

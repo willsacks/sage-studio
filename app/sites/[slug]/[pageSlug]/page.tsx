@@ -8,6 +8,7 @@ import { SiteNav } from "@/components/site/SiteNav";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { SiteUnpublishedMessage } from "@/components/site/SiteUnpublishedMessage";
 import { PageGateOverlay } from "@/components/site/PageGateOverlay";
+import { CourseClassroomContent } from "@/components/site/CourseClassroomContent";
 import { getPageGateFields, isPageUnlocked } from "@/lib/utils/page-gate";
 import type { PageData } from "@/lib/types/builder";
 import { buildStyleCssVars, buildGoogleFontsUrl, getFontsForTokens, resolveStyleTokens } from "@/lib/styles";
@@ -148,6 +149,42 @@ export default async function PublicSitePageRoute({
   const basePath = (site.custom_domain && site.custom_domain_verified)
     ? `https://${site.custom_domain}`
     : `/sites/${slug}`;
+
+  // The course classroom has its own real-auth + enrollment gate
+  // (CourseClassroomContent), entirely independent of the email-capture
+  // PageGateOverlay used below — so it's rendered outside that wrapper,
+  // not behind it.
+  if (page.page_type === "course_classroom" && (page as unknown as { gate_course_id?: string | null }).gate_course_id) {
+    const courseId = (page as unknown as { gate_course_id: string }).gate_course_id;
+    return (
+      <div style={{ backgroundColor: tokens.colorBackground, minHeight: "100vh", color: tokens.colorText }}>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="stylesheet" href={fontsUrl} />
+        <style>{`
+          html { font-size: calc(16px * ${fontScale}); }
+          :root { ${cssVars} ${ornamentVars} }
+          body { font-family: "${tokens.fontBody}", serif; color: ${tokens.colorText}; }
+        `}</style>
+        {showHeader && (
+          <SiteNav
+            siteSlug={slug}
+            pages={allPages}
+            currentSlug={pageSlug}
+            site={site}
+            tokens={tokens as StyleTokens}
+            basePath={basePath}
+            hasPosts={posts.length > 0 && site.show_blog_in_nav}
+            blogLabel={site.blog_label}
+          />
+        )}
+        <main>
+          <CourseClassroomContent courseId={courseId} />
+        </main>
+        <SiteFooter footerText={site.footer_text} tokens={tokens as StyleTokens} />
+      </div>
+    );
+  }
 
   return (
     <PageGateOverlay {...gateOverlayProps}>

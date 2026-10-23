@@ -22,6 +22,7 @@ export { AlbumShowcaseBlock } from "./AlbumShowcaseBlock";
 export { DiscographyBlock } from "./DiscographyBlock";
 export { SimpleFormBlock } from "./SimpleFormBlock";
 export { EmailGateBlock } from "./EmailGateBlock";
+export { CourseEnrollBlock } from "./CourseEnrollBlock";
 
 import { HeroBlock } from "./HeroBlock";
 import { TextBlock } from "./TextBlock";
@@ -42,6 +43,7 @@ import { AlbumShowcaseBlock } from "./AlbumShowcaseBlock";
 import { DiscographyBlock } from "./DiscographyBlock";
 import { SimpleFormBlock } from "./SimpleFormBlock";
 import { EmailGateBlock } from "./EmailGateBlock";
+import { CourseEnrollBlock } from "./CourseEnrollBlock";
 
 import type {
   HeroBlockData,
@@ -63,6 +65,7 @@ import type {
   DiscographyBlockData,
   SimpleFormBlockData,
   EmailGateBlockData,
+  CourseEnrollBlockData,
 } from "@/lib/types/builder";
 
 /**
@@ -211,6 +214,13 @@ export function renderBlock(
         isEditing,
         siteSlug,
         blockId: block.id,
+      });
+
+    case "course_enroll":
+      return React.createElement(CourseEnrollBlock, {
+        key: block.id,
+        data: block.data as CourseEnrollBlockData,
+        isEditing,
       });
 
     default:

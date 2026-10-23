@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getSiteById, getSitePageById, getPagesForSite } from "@/lib/queries/sites";
+import { getCoursesForOwner } from "@/lib/queries/courses";
 import { SitePageBuilder } from "@/components/site/SitePageBuilder";
 import { isPlatformStaff } from "@/lib/access/platform-access";
 import { HtmlPageEditor } from "@/components/site/HtmlPageEditor";
@@ -34,6 +35,7 @@ export default async function SitePageEditPage({
   ]);
 
   if (!site) notFound();
+  const courses = await getCoursesForOwner(site.user_id);
   if (!page) notFound();
   const role = await getSiteRole(supabase, siteId, user.id);
   if (!role) notFound();
@@ -60,6 +62,7 @@ export default async function SitePageEditPage({
         personal: personalTemplates,
         promoted: [],
       }}
+      courses={courses.filter((c) => c.status === "published" && c.price_cents).map((c) => ({ id: c.id, title: c.title, priceCents: c.price_cents }))}
     />
   );
 }

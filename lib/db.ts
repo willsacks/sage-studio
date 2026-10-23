@@ -34,6 +34,10 @@ export type Database = {
           ai_assistant_enabled: boolean;
           ai_finance_assistant_enabled: boolean;
           active_discount_percent: number | null;
+          stripe_connect_account_id: string | null;
+          stripe_connect_charges_enabled: boolean;
+          stripe_connect_payouts_enabled: boolean;
+          course_platform_fee_bps: number | null;
           created_at: string;
         };
         Insert: {
@@ -57,6 +61,10 @@ export type Database = {
           ai_assistant_enabled?: boolean;
           ai_finance_assistant_enabled?: boolean;
           active_discount_percent?: number | null;
+          stripe_connect_account_id?: string | null;
+          stripe_connect_charges_enabled?: boolean;
+          stripe_connect_payouts_enabled?: boolean;
+          course_platform_fee_bps?: number | null;
           created_at?: string;
         };
         Update: {
@@ -80,6 +88,10 @@ export type Database = {
           ai_assistant_enabled?: boolean;
           ai_finance_assistant_enabled?: boolean;
           active_discount_percent?: number | null;
+          stripe_connect_account_id?: string | null;
+          stripe_connect_charges_enabled?: boolean;
+          stripe_connect_payouts_enabled?: boolean;
+          course_platform_fee_bps?: number | null;
           created_at?: string;
         };
         Relationships: [];
@@ -165,6 +177,8 @@ export type Database = {
           meta_title: string | null;
           meta_description: string | null;
           html_content: string | null;
+          requires_course_enrollment: boolean;
+          gate_course_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -182,6 +196,8 @@ export type Database = {
           meta_title?: string | null;
           meta_description?: string | null;
           html_content?: string | null;
+          requires_course_enrollment?: boolean;
+          gate_course_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -199,6 +215,8 @@ export type Database = {
           meta_title?: string | null;
           meta_description?: string | null;
           html_content?: string | null;
+          requires_course_enrollment?: boolean;
+          gate_course_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -273,6 +291,7 @@ export type Database = {
           cover_image_focus_y: number;
           price_cents: number | null;
           status: "draft" | "published";
+          site_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -287,6 +306,7 @@ export type Database = {
           cover_image_focus_y?: number;
           price_cents?: number | null;
           status?: "draft" | "published";
+          site_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -301,6 +321,7 @@ export type Database = {
           cover_image_focus_y?: number;
           price_cents?: number | null;
           status?: "draft" | "published";
+          site_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };

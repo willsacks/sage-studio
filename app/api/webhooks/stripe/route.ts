@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/server";
+import { postPaidCourseInvoice } from "@/lib/finance/course-invoice";
 import type Stripe from "stripe";
 
 export async function POST(request: NextRequest) {
@@ -91,6 +92,72 @@ export async function POST(request: NextRequest) {
           current_period_end: item ? new Date((item as any).current_period_end * 1000).toISOString() : null,
           cancel_at_period_end: sub.cancel_at_period_end,
         });
+      }
+
+      return NextResponse.json({ received: true });
+    }
+
+    // ── Course enrollment (self-serve, paid via the creator's own Stripe
+    // Connect account — app/api/course-checkout/route.ts) ────────────────
+    if (checkoutType === "course_enrollment") {
+      const courseId = session.metadata?.course_id;
+      const email = session.customer_details?.email?.toLowerCase();
+      if (!courseId || !email) return NextResponse.json({ received: true });
+
+      const { data: course } = await supabase
+        .from("courses")
+        .select("title, owner_id")
+        .eq("id", courseId)
+        .single();
+      if (!course) return NextResponse.json({ received: true });
+
+      const { data: userId } = (await supabase.rpc("get_user_id_by_email" as never, { p_email: email } as never)) as unknown as {
+        data: string | null;
+      };
+
+      const priceCents = session.amount_total ?? 0;
+      let invoiceId: string | null = null;
+      if (priceCents > 0) {
+        const { data: entity } = await supabase
+          .from("finance_entities")
+          .select("id")
+          .eq("owner_id", course.owner_id)
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        if (entity) {
+          const result = await postPaidCourseInvoice(supabase, {
+            entityId: entity.id,
+            actorId: course.owner_id,
+            courseTitle: course.title,
+            clientEmail: email,
+            amountCents: priceCents,
+            issueDate: new Date().toISOString().slice(0, 10),
+          });
+          if ("invoiceId" in result) invoiceId = result.invoiceId;
+        }
+        // No finance entity yet — enrollment still records what was paid;
+        // the creator just won't see an invoice until Finances is set up,
+        // same non-blocking fallback as the manual-invite enrollment path.
+      }
+
+      // Stripe already confirmed the email + payment, so this starts
+      // "accepted" immediately — unlike a manual instructor invite, which
+      // starts "pending" until the invitee's own login confirms the email.
+      const { error: insertError } = await supabase.from("enrollments").insert({
+        course_id: courseId,
+        user_id: userId ?? null,
+        email,
+        status: "accepted",
+        source: "stripe",
+        price_paid_cents: priceCents,
+        invoice_id: invoiceId,
+      });
+      // A re-delivered webhook event hits the same unique (course_id, email)
+      // constraint enrollStudentByEmail already relies on — safe to ignore,
+      // not a real failure, since the enrollment was already recorded.
+      if (insertError && insertError.code !== "23505") {
+        console.error("[course_enrollment webhook]", insertError.message);
       }
 
       return NextResponse.json({ received: true });

@@ -12,16 +12,17 @@ import {
 } from "@/lib/types/builder";
 
 export interface SitePageRef { id: string; title: string; slug: string }
+export interface SiteCourseRef { id: string; title: string; priceCents: number | null }
 
 interface BuilderState {
   blocks: Block[];
   selectedBlockId: string | null;
   isDirty: boolean;
   theme: PageTheme;
-  siteContext: { siteSlug: string; pages: SitePageRef[] } | null;
+  siteContext: { siteSlug: string; pages: SitePageRef[]; courses: SiteCourseRef[] } | null;
 
   setBlocks: (blocks: Block[]) => void;
-  setSiteContext: (ctx: { siteSlug: string; pages: SitePageRef[] } | null) => void;
+  setSiteContext: (ctx: { siteSlug: string; pages: SitePageRef[]; courses: SiteCourseRef[] } | null) => void;
   setTheme: (theme: PageTheme) => void;
   updateTheme: (partial: Partial<PageTheme>) => void;
   addBlock: (type: BlockType, afterId?: string | null) => void;

@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown, Pencil, Video, FileText, Users } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown, Pencil, Video, FileText, Users, Globe, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +21,7 @@ import {
   addLesson,
   deleteLesson,
   moveLesson,
+  createSiteForCourse,
 } from "@/lib/actions/courses";
 import type { Course, ModuleWithLessons, Lesson } from "@/lib/queries/courses";
 
@@ -33,6 +34,19 @@ export function CourseEditor({ course, modules }: { course: Course; modules: Mod
   const [coverFocusY, setCoverFocusY] = useState(course.cover_image_focus_y ?? 50);
   const [priceDollars, setPriceDollars] = useState(course.price_cents ? (course.price_cents / 100).toFixed(2) : "");
   const [isPending, startTransition] = useTransition();
+  const [siteError, setSiteError] = useState<string | null>(null);
+  const [creatingSite, setCreatingSite] = useState(false);
+
+  function handleCreateSite() {
+    setSiteError(null);
+    setCreatingSite(true);
+    startTransition(async () => {
+      const result = await createSiteForCourse(course.id);
+      setCreatingSite(false);
+      if (result.error) { setSiteError(result.error); return; }
+      router.push(`/my-site/${result.siteId}`);
+    });
+  }
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const [newModuleTitle, setNewModuleTitle] = useState("");
 
@@ -68,6 +82,19 @@ export function CourseEditor({ course, modules }: { course: Course; modules: Mod
           <ArrowLeft size={14} /> Courses
         </Link>
         <div className="flex items-center gap-2">
+          {course.site_id ? (
+            <Link href={`/my-site/${course.site_id}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs font-medium hover:bg-[var(--accent)] transition-colors">
+              <Globe size={13} /> Site
+            </Link>
+          ) : (
+            <button
+              onClick={handleCreateSite}
+              disabled={creatingSite}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs font-medium hover:bg-[var(--accent)] transition-colors disabled:opacity-60"
+            >
+              {creatingSite ? <Loader2 size={13} className="animate-spin" /> : <Globe size={13} />} Create a site for this course
+            </button>
+          )}
           <Link href={`/courses/${course.id}/students`} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs font-medium hover:bg-[var(--accent)] transition-colors">
             <Users size={13} /> Students
           </Link>
@@ -76,6 +103,7 @@ export function CourseEditor({ course, modules }: { course: Course; modules: Mod
           </Button>
         </div>
       </div>
+      {siteError && <p className="text-xs text-red-500">{siteError}</p>}
 
       {/* Course details */}
       <div className="space-y-4">

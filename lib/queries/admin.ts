@@ -222,6 +222,7 @@ export interface AdminUserDetail extends AdminUserRow {
   ownedCourses: { id: string; title: string; status: string }[];
   enrolledCourses: { id: string; title: string; status: string }[];
   activeDiscountPercent: number | null;
+  coursePlatformFeeBps: number | null;
 }
 
 /** Backs the customer-success "look up an account" view — read-only, no
@@ -230,7 +231,7 @@ export async function getUserDetail(userId: string): Promise<AdminUserDetail | n
   const admin = createAdminClient();
   const { data: profile } = await admin
     .from("profiles")
-    .select("id, display_name, username, role, tier_key, ai_assistant_enabled, ai_finance_assistant_enabled, created_at, active_discount_percent")
+    .select("id, display_name, username, role, tier_key, ai_assistant_enabled, ai_finance_assistant_enabled, created_at, active_discount_percent, course_platform_fee_bps")
     .eq("id", userId)
     .single();
   if (!profile) return null;
@@ -258,6 +259,7 @@ export async function getUserDetail(userId: string): Promise<AdminUserDetail | n
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     enrolledCourses: ((enrollments ?? []) as any[]).map((e) => e.courses).filter(Boolean),
     activeDiscountPercent: profile.active_discount_percent,
+    coursePlatformFeeBps: profile.course_platform_fee_bps,
   };
 }
 

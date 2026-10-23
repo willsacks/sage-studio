@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Save, Eye, Globe, Bookmark, Layers, Loader2, Check, AlertCircle, Monitor, Tablet, Smartphone, ArrowLeft, Sparkles } from "lucide-react";
 import Link from "next/link";
-import { useBuilderStore, type SitePageRef } from "@/lib/store/builder";
+import { useBuilderStore, type SitePageRef, type SiteCourseRef } from "@/lib/store/builder";
 import { saveOfferPage, publishOfferPage } from "@/lib/actions/offer-pages";
 import type { OfferPage } from "@/lib/queries/offer-pages";
 import type { OfferTemplate } from "@/lib/queries/offer-templates";
@@ -31,7 +31,7 @@ interface BuilderProps {
   saveAction?: (id: string, data: { title: string; page_data: PageData; theme?: PageTheme }) => Promise<{ error?: string } | undefined>;
   publishAction?: (id: string, published: boolean) => Promise<void>;
   saveSettingsAction?: (id: string, data: { slug: string; publish_mode: string; custom_domain?: string; og_image?: string | null; og_title?: string | null; og_description?: string | null; is_gated?: boolean; gate_title?: string | null; gate_description?: string | null; gate_button_text?: string | null }) => Promise<void>;
-  siteContext?: { siteSlug: string; pages: SitePageRef[] };
+  siteContext?: { siteSlug: string; pages: SitePageRef[]; courses: SiteCourseRef[] };
   siteStyleVars?: string;
   ornamentStyleVars?: string;
   previewUrlOverride?: string | null;

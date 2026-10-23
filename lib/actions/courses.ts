@@ -49,6 +49,62 @@ export async function addCourse(title: string) {
   return { courseId: data.id as string };
 }
 
+/** Creates a dedicated site for a course — a "home" page (the real
+ * sales/marketing page, built with the normal site builder, completely
+ * untouched — the creator adds a course_enroll block to it themselves)
+ * plus a "learn" page with page_type "course_classroom", which the
+ * public route (app/sites/[slug]/[pageSlug]/page.tsx) renders as the
+ * actual course player once a visitor is logged in and enrolled. Counts
+ * against the same Free-plan site limit any other site creation does
+ * (lib/plan-gates.ts's canCreateSite) — this isn't a way around it. */
+export async function createSiteForCourse(courseId: string) {
+  const { supabase, user } = await requireAuth();
+  await requireCourseOwner(supabase, courseId, user.id);
+
+  const { data: fullCourse } = await supabase.from("courses").select("title, site_id").eq("id", courseId).single();
+  if (fullCourse?.site_id) return { error: "This course already has a site" };
+
+  const { count: siteCount } = await supabase
+    .from("artist_sites")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", user.id);
+  const { data: profile } = await supabase.from("profiles").select("tier_key, role").eq("id", user.id).single();
+  const { isProPlan, canCreateSite } = await import("@/lib/plan-gates");
+  const plan = isProPlan(profile?.tier_key ?? "", profile?.role) ? ("pro" as const) : ("free" as const);
+  if (!canCreateSite(plan, siteCount ?? 0)) return { error: "Upgrade to Pro to create more than 1 site" };
+
+  const title = fullCourse?.title ?? "Course";
+  const { data: site, error: siteError } = await supabase
+    .from("artist_sites")
+    .insert({ user_id: user.id, name: title, slug: slugify(title) })
+    .select("id, slug")
+    .single();
+  if (siteError || !site) return { error: siteError?.message ?? "Failed to create site" };
+
+  const { error: pagesError } = await supabase.from("site_pages").insert([
+    { user_id: user.id, site_id: site.id, title, slug: "home", page_type: "home", sort_order: 0 },
+    {
+      user_id: user.id,
+      site_id: site.id,
+      title: "Classroom",
+      slug: "learn",
+      page_type: "course_classroom",
+      sort_order: 1,
+      requires_course_enrollment: true,
+      gate_course_id: courseId,
+    } as never,
+  ]);
+  if (pagesError) {
+    await supabase.from("artist_sites").delete().eq("id", site.id);
+    return { error: pagesError.message };
+  }
+
+  await supabase.from("courses").update({ site_id: site.id }).eq("id", courseId);
+
+  revalidatePath(`/courses/${courseId}`);
+  return { siteId: site.id as string, siteSlug: site.slug as string };
+}
+
 export async function saveCourse(
   courseId: string,
   data: {

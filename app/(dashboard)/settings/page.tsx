@@ -4,6 +4,7 @@ import { NavVisibilityForm } from "@/components/settings/NavVisibilityForm";
 import { AccountForm } from "@/components/settings/AccountForm";
 import { AssistantConnections } from "@/components/settings/AssistantConnections";
 import { listAssistantConnections } from "@/lib/actions/assistant-connections";
+import { ConnectStripeButton } from "@/components/settings/ConnectStripeButton";
 
 export const metadata = { title: "Settings" };
 
@@ -15,7 +16,7 @@ export default async function SettingsPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: profile } = await (supabase as any)
     .from("profiles")
-    .select("display_name, username, hidden_nav_items")
+    .select("display_name, username, hidden_nav_items, stripe_connect_account_id, stripe_connect_charges_enabled")
     .eq("id", user!.id)
     .single();
 
@@ -45,6 +46,20 @@ export default async function SettingsPage() {
           Choose which sections show up in your menu.
         </p>
         <NavVisibilityForm initialHidden={(profile?.hidden_nav_items as string[] | null) ?? []} />
+      </div>
+
+      <div className="rounded-lg border border-[var(--border)] px-5 py-4">
+        <p className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wide mb-1">Payments</p>
+        <p className="text-sm text-[var(--muted-foreground)] mb-3">
+          Connect Stripe to sell courses — payments go directly to your own account.
+        </p>
+        {profile?.stripe_connect_charges_enabled ? (
+          <p className="text-sm text-green-600">Stripe is connected and ready to accept payments.</p>
+        ) : profile?.stripe_connect_account_id ? (
+          <ConnectStripeButton label="Finish Stripe setup" />
+        ) : (
+          <ConnectStripeButton />
+        )}
       </div>
 
       <div className="rounded-lg border border-[var(--border)] px-5 py-4">
