@@ -62,7 +62,7 @@ export default async function SitePageEditPage({
         personal: personalTemplates,
         promoted: [],
       }}
-      courses={courses.filter((c) => c.status === "published" && c.price_cents).map((c) => ({ id: c.id, title: c.title, priceCents: c.price_cents }))}
+      courses={courses.filter((c) => c.status === "published").map((c) => ({ id: c.id, title: c.title, priceCents: c.price_cents }))}
     />
   );
 }

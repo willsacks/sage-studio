@@ -8,9 +8,15 @@ const appUrl = () => process.env.NEXT_PUBLIC_APP_URL ?? "https://sagestudio.org"
 /** Mirrors app/api/guild-checkout/route.ts's shape, but the price is
  * per-course (courses.price_cents) rather than a static Stripe Price, and
  * the payment is a destination charge — money goes straight to the
- * creator's own Connect account, not Sage Studio's. */
+ * creator's own Connect account, not Sage Studio's.
+ *
+ * A free course (price_cents null/0) skips Stripe entirely — some
+ * courses are deliberately free, not an oversight to warn about. It
+ * still needs a real signed-in identity to enroll under (no email-
+ * capture UI exists outside of Stripe Checkout), so an anonymous
+ * visitor is asked to log in first instead. */
 export async function POST(request: NextRequest) {
-  const { courseId } = (await request.json()) as { courseId?: string };
+  const { courseId, redirectTo } = (await request.json()) as { courseId?: string; redirectTo?: string };
   if (!courseId) return NextResponse.json({ error: "courseId is required" }, { status: 400 });
 
   const admin = createAdminClient();
@@ -23,8 +29,31 @@ export async function POST(request: NextRequest) {
   if (!course || course.status !== "published") {
     return NextResponse.json({ error: "Course not found" }, { status: 404 });
   }
+
   if (!course.price_cents || course.price_cents <= 0) {
-    return NextResponse.json({ error: "This course doesn't have a price set" }, { status: 400 });
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ requiresLogin: true, loginUrl: `/login?next=${encodeURIComponent(redirectTo || `/my-courses/${course.id}`)}` });
+    }
+
+    // Enrollment inserts are normally course-owner-only (RLS) — a
+    // self-serve free enroll bypasses that the same way the Stripe
+    // webhook already does for a paid one, after confirming via the
+    // cookie-scoped client above that this really is the signed-in
+    // user, not an attacker-supplied id.
+    const { error: insertError } = await admin.from("enrollments").insert({
+      course_id: course.id,
+      user_id: user.id,
+      email: (user.email ?? "").toLowerCase(),
+      status: "accepted",
+      source: "manual",
+      price_paid_cents: 0,
+    });
+    if (insertError && insertError.code !== "23505") {
+      return NextResponse.json({ error: insertError.message }, { status: 500 });
+    }
+    return NextResponse.json({ redirectUrl: redirectTo || `/my-courses/${course.id}` });
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -62,7 +91,7 @@ export async function POST(request: NextRequest) {
         transfer_data: { destination: owner.stripe_connect_account_id },
       },
       metadata: { checkout_type: "course_enrollment", course_id: course.id },
-      success_url: `${appUrl()}/my-courses/${course.id}?enrolled=true`,
+      success_url: `${appUrl()}${redirectTo || `/my-courses/${course.id}`}?enrolled=true`,
       cancel_url: `${appUrl()}/my-courses`,
     });
     return NextResponse.json({ url: session.url });

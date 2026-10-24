@@ -1185,8 +1185,10 @@ function DiscographySettings({ data, update }: { data: DiscographyBlockData; upd
 
 /** Mirrors the Corner Nav page-link dropdown's pattern (siteContext read
  * via useBuilderStore, see that block's settings above) but for the
- * creator's own published, priced courses instead of site pages — the
- * first block settings panel needing that kind of picker for courses. */
+ * creator's own published courses instead of site pages — the first
+ * block settings panel needing that kind of picker for courses. Lists
+ * every published course, priced or free — a free course enrolls
+ * directly (no Stripe) via the same button, see CourseEnrollBlock.tsx. */
 function CourseEnrollSettings({ data, update }: { data: CourseEnrollBlockData; update: (d: Partial<CourseEnrollBlockData>) => void }) {
   const siteContext = useBuilderStore((s) => s.siteContext);
   const courses = siteContext?.courses ?? [];
@@ -1205,7 +1207,7 @@ function CourseEnrollSettings({ data, update }: { data: CourseEnrollBlockData; u
       <Field label="Course">
         {courses.length === 0 ? (
           <p className="text-xs text-[var(--muted-foreground)]">
-            No published, priced courses yet — set a price and publish a course first (Courses tab).
+            No published courses yet — publish one first (Courses tab).
           </p>
         ) : (
           <select
@@ -1215,7 +1217,7 @@ function CourseEnrollSettings({ data, update }: { data: CourseEnrollBlockData; u
           >
             <option value="">— choose a course —</option>
             {courses.map((c) => (
-              <option key={c.id} value={c.id}>{c.title}</option>
+              <option key={c.id} value={c.id}>{c.title}{typeof c.priceCents !== "number" ? " (Free)" : ""}</option>
             ))}
           </select>
         )}

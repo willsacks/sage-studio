@@ -7,7 +7,12 @@ import type { CourseEnrollBlockData } from "@/lib/types/builder";
 /** Mirrors PricingCardBlock.tsx's handleStripeCheckout shape, just posting
  * to /api/course-checkout instead of /api/checkout — that route resolves
  * the creator's Stripe Connect account and resolved platform fee itself,
- * so this component only ever needs a courseId. */
+ * so this component only ever needs a courseId. A free course (no price
+ * set — a deliberate choice, not every course has to be paid) skips
+ * Stripe entirely: the route enrolls the signed-in visitor directly and
+ * sends back a plain redirectUrl, or asks them to log in first if
+ * they're not signed in at all (no email-capture UI exists outside of
+ * Stripe Checkout, so a real identity is required either way). */
 export function CourseEnrollBlock({ data, isEditing }: { data: CourseEnrollBlockData; isEditing?: boolean }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,11 +26,19 @@ export function CourseEnrollBlock({ data, isEditing }: { data: CourseEnrollBlock
       const res = await fetch("/api/course-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ courseId: data.courseId }),
+        body: JSON.stringify({ courseId: data.courseId, redirectTo: window.location.pathname }),
       });
-      const json = (await res.json()) as { url?: string; error?: string };
+      const json = (await res.json()) as { url?: string; redirectUrl?: string; requiresLogin?: boolean; loginUrl?: string; error?: string };
       if (json.url) {
         window.location.href = json.url;
+        return;
+      }
+      if (json.requiresLogin && json.loginUrl) {
+        window.location.href = json.loginUrl;
+        return;
+      }
+      if (json.redirectUrl) {
+        window.location.href = json.redirectUrl;
         return;
       }
       setError(json.error ?? "Something went wrong");
