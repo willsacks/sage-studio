@@ -81,8 +81,13 @@ export async function createSiteForCourse(courseId: string) {
     .single();
   if (siteError || !site) return { error: siteError?.message ?? "Failed to create site" };
 
+  // Supabase's batch insert builds one statement whose column set is the
+  // union of every row's keys — a row that simply omits a column still
+  // gets an explicit NULL for it rather than falling back to the DB
+  // default, so requires_course_enrollment/gate_course_id must be given
+  // real values on BOTH rows, not left out of the "home" row.
   const { error: pagesError } = await supabase.from("site_pages").insert([
-    { user_id: user.id, site_id: site.id, title, slug: "home", page_type: "home", sort_order: 0 },
+    { user_id: user.id, site_id: site.id, title, slug: "home", page_type: "home", sort_order: 0, requires_course_enrollment: false, gate_course_id: null },
     {
       user_id: user.id,
       site_id: site.id,
